@@ -20,6 +20,24 @@ NoCode CV Trainer is a desktop application for Windows that lets you upload imag
 
 ---
 
+## Runs On Your Machine — No Cloud Required
+
+> **Your hardware does all the work.** NoCode CV Trainer runs entirely on your own computer — no internet connection needed during training, no data uploaded anywhere, no subscription, no API calls to external services.
+>
+> Training deep learning models is computationally intensive. Here's what to expect:
+>
+> | Hardware | Training Speed | Recommendation |
+> |---|---|---|
+> | **NVIDIA GPU (CUDA)** | Fast — minutes per epoch | Ideal for serious training |
+> | **CPU only** | Slow — can take hours per epoch | Fine for small datasets / testing |
+> | **AMD / Intel GPU** | Not accelerated | Falls back to CPU |
+>
+> The more images and epochs you train, the more CPU/GPU and RAM your machine will use. This is normal — close other heavy applications while training for best performance.
+>
+> On first use, YOLOv8 will download its base model weights (~130 MB) from the internet once. After that, everything runs offline.
+
+---
+
 ## Requirements
 
 | Requirement | Status | Notes |
