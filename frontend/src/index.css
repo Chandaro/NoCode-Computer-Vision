@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  --bg:        #09090b;
+  --surface:   #0f0f12;
+  --surface2:  #18181c;
+  --surface3:  #1f1f25;
+  --border:    #232329;
+  --border2:   #2e2e38;
+  --text:      #ececf0;
+  --text2:     #8c8c9e;
+  --text3:     #52525f;
+  --accent:    #5865f2;
+  --accent-h:  #4752e8;
+  --success:   #22c55e;
+  --danger:    #f87171;
+  --warn:      #fbbf24;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── Monospace (logs, metrics) ──────────────────────────────────────────── */
+code, pre, .mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ── Selection ──────────────────────────────────────────────────────────── */
+::selection { background: rgba(88, 101, 242, 0.3); }
+
+/* ── Focus ring ─────────────────────────────────────────────────────────── */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Recharts tweaks ────────────────────────────────────────────────────── */
+.recharts-cartesian-axis-tick-value { font-size: 11px; font-family: 'JetBrains Mono', monospace; }

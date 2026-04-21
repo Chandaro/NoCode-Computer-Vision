@@ -1,0 +1,37 @@
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv/
+
+# Database & user data
+backend/nocode_cv.db
+backend/uploads/
+backend/runs/
+
+# YOLO/PyTorch model weights (downloaded automatically at runtime)
+backend/*.pt
+backend/*.onnx
+backend/*.engine
+
+# Logs
+server.log
+*.log
+
+# User datasets
+Dataset/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Frontend build artifacts (keep dist/ — ships pre-built)
+frontend/node_modules/
+frontend/.vite/
