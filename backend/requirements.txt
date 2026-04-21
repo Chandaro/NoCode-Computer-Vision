@@ -15,6 +15,8 @@ ultralytics==8.1.34
 # whether you have a CUDA-capable GPU.  The installer handles this for you.
 #
 # Manual install (choose ONE):
-#   CPU only:   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-#   CUDA 11.8:  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-#   CUDA 12.x:  pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+#   CPU only:          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#   CUDA 11.8:         pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#   CUDA 12.0–12.4:    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+#   CUDA 12.5+ (RTX 40/50 series, Blackwell):
+#                      pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128

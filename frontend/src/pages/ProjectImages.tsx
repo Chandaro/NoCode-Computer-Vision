@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain } from 'lucide-react'
+import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Badge, Empty } from '../components/ui'
 import { Image as ImageIcon } from 'lucide-react'
@@ -8,9 +8,12 @@ import { Image as ImageIcon } from 'lucide-react'
 export default function ProjectImages() {
   const { id } = useParams<{ id: string }>()
   const projectId = Number(id)
-  const [project, setProject] = useState<Project | null>(null)
-  const [images, setImages]   = useState<ImageItem[]>([])
-  const [loading, setLoading] = useState(false)
+  const [project, setProject]   = useState<Project | null>(null)
+  const [images, setImages]     = useState<ImageItem[]>([])
+  const [loading, setLoading]   = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [selectMode, setSelectMode] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
@@ -41,6 +44,34 @@ export default function ProjectImages() {
     setImages(prev => prev.filter(i => i.id !== imgId))
   }
 
+  const toggleSelect = (imgId: number) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(imgId) ? next.delete(imgId) : next.add(imgId)
+      return next
+    })
+  }
+
+  const selectAll = () => setSelected(new Set(filteredImages.map(i => i.id)))
+  const deselectAll = () => setSelected(new Set())
+
+  const bulkDelete = async () => {
+    if (selected.size === 0) return
+    const confirmed = window.confirm(`Delete ${selected.size} image${selected.size > 1 ? 's' : ''}? This cannot be undone.`)
+    if (!confirmed) return
+    setDeleting(true)
+    try {
+      await api.delete(`/projects/${projectId}/images`, { data: { ids: Array.from(selected) } })
+      setImages(prev => prev.filter(i => !selected.has(i.id)))
+      setSelected(new Set())
+      setSelectMode(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const exitSelectMode = () => { setSelectMode(false); setSelected(new Set()) }
+
   const [filter, setFilter] = useState<'all'|'annotated'|'unannotated'|'corrupt'>('all')
 
   const annotated = images.filter(i => i.annotated).length
@@ -53,6 +84,8 @@ export default function ProjectImages() {
     if (filter === 'corrupt')     return img.is_corrupt
     return true
   })
+
+  const allFilteredSelected = filteredImages.length > 0 && filteredImages.every(i => selected.has(i.id))
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -103,21 +136,57 @@ export default function ProjectImages() {
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <Btn variant="ghost" size="sm"
-          href={`/api/projects/${projectId}/export/dataset?format=yolo`}>
-          ↓ YOLO
-        </Btn>
-        <Btn variant="ghost" size="sm"
-          href={`/api/projects/${projectId}/export/dataset?format=coco`}>
-          ↓ COCO
-        </Btn>
+        <Btn variant="ghost" size="sm" href={`/api/projects/${projectId}/export/dataset?format=yolo`}>↓ YOLO</Btn>
+        <Btn variant="ghost" size="sm" href={`/api/projects/${projectId}/export/dataset?format=coco`}>↓ COCO</Btn>
       </div>
 
-      {/* Upload bar */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        <Btn variant="primary" onClick={() => fileRef.current?.click()} disabled={loading}>
-          <Upload size={13} /> {loading ? 'Uploading…' : 'Upload Images'}
-        </Btn>
+      {/* Upload + select bar */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+        {!selectMode ? (
+          <>
+            <Btn variant="primary" onClick={() => fileRef.current?.click()} disabled={loading}>
+              <Upload size={13} /> {loading ? 'Uploading…' : 'Upload Images'}
+            </Btn>
+            {images.length > 0 && (
+              <Btn variant="secondary" onClick={() => setSelectMode(true)}>
+                <CheckSquare size={13} /> Select
+              </Btn>
+            )}
+          </>
+        ) : (
+          <>
+            <button onClick={allFilteredSelected ? deselectAll : selectAll}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface2)',
+                color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}>
+              {allFilteredSelected
+                ? <><CheckSquare size={13} /> Deselect all</>
+                : <><Square size={13} /> Select all</>}
+            </button>
+            {selected.size > 0 && (
+              <button onClick={bulkDelete} disabled={deleting}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                  border: '1px solid rgba(248,113,113,0.4)', borderRadius: 6,
+                  background: 'rgba(248,113,113,0.1)', color: 'var(--danger)',
+                  fontSize: 12, cursor: deleting ? 'wait' : 'pointer',
+                  opacity: deleting ? 0.6 : 1 }}>
+                <Trash2 size={13} />
+                {deleting ? 'Deleting…' : `Delete ${selected.size}`}
+              </button>
+            )}
+            <button onClick={exitSelectMode}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px',
+                border: '1px solid var(--border)', borderRadius: 6, background: 'transparent',
+                color: 'var(--text2)', fontSize: 12, cursor: 'pointer' }}>
+              <X size={13} /> Cancel
+            </button>
+            {selected.size > 0 && (
+              <span style={{ fontSize: 12, color: 'var(--text2)' }}>
+                {selected.size} selected
+              </span>
+            )}
+          </>
+        )}
         <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleUpload} />
       </div>
 
@@ -131,43 +200,63 @@ export default function ProjectImages() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
-          {filteredImages.map(img => (
-            <div key={img.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 8, overflow: 'hidden', position: 'relative' }}
-              onMouseEnter={e => e.currentTarget.querySelector<HTMLDivElement>('.overlay')!.style.opacity = '1'}
-              onMouseLeave={e => e.currentTarget.querySelector<HTMLDivElement>('.overlay')!.style.opacity = '0'}>
-              <img src={`/api/projects/${projectId}/images/${img.id}/file`} alt={img.original_name}
-                style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
+          {filteredImages.map(img => {
+            const isSelected = selected.has(img.id)
+            return (
+              <div key={img.id}
+                onClick={selectMode ? () => toggleSelect(img.id) : undefined}
+                style={{ background: 'var(--surface)', borderRadius: 8, overflow: 'hidden',
+                  position: 'relative', cursor: selectMode ? 'pointer' : 'default',
+                  border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                  boxShadow: isSelected ? '0 0 0 2px rgba(88,101,242,0.35)' : 'none',
+                  transition: 'border-color 0.1s, box-shadow 0.1s' }}
+                onMouseEnter={e => { if (!selectMode) e.currentTarget.querySelector<HTMLDivElement>('.overlay')!.style.opacity = '1' }}
+                onMouseLeave={e => { if (!selectMode) e.currentTarget.querySelector<HTMLDivElement>('.overlay')!.style.opacity = '0' }}>
 
-              {/* Status dot */}
-              <div style={{ position: 'absolute', top: 7, right: 7, width: 8, height: 8, borderRadius: '50%',
-                background: img.annotated ? 'var(--success)' : 'var(--surface3)',
-                border: '1.5px solid rgba(0,0,0,0.5)', boxShadow: '0 1px 3px rgba(0,0,0,0.5)' }} />
+                <img src={`/api/projects/${projectId}/images/${img.id}/file`} alt={img.original_name}
+                  style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
 
-              {/* Hover overlay */}
-              <div className="overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)',
-                opacity: 0, transition: 'opacity 0.15s', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', gap: 8 }}>
-                <button onClick={() => navigate(`/projects/${projectId}/annotate/${img.id}`)}
-                  style={{ padding: '7px 7px', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
-                    background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>
-                  <Pencil size={13} />
-                </button>
-                <button onClick={() => deleteImage(img.id)}
-                  style={{ padding: '7px 7px', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6,
-                    background: 'rgba(248,113,113,0.1)', color: 'var(--danger)', cursor: 'pointer' }}>
-                  <Trash2 size={13} />
-                </button>
+                {/* Select mode checkbox */}
+                {selectMode && (
+                  <div style={{ position: 'absolute', top: 7, left: 7,
+                    width: 18, height: 18, borderRadius: 4,
+                    background: isSelected ? 'var(--accent)' : 'rgba(0,0,0,0.55)',
+                    border: `2px solid ${isSelected ? 'var(--accent)' : 'rgba(255,255,255,0.5)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {isSelected && <span style={{ color: '#fff', fontSize: 11, lineHeight: 1 }}>✓</span>}
+                  </div>
+                )}
+
+                {/* Status dot */}
+                <div style={{ position: 'absolute', top: 7, right: 7, width: 8, height: 8, borderRadius: '50%',
+                  background: img.annotated ? 'var(--success)' : 'var(--surface3)',
+                  border: '1.5px solid rgba(0,0,0,0.5)', boxShadow: '0 1px 3px rgba(0,0,0,0.5)' }} />
+
+                {/* Hover overlay (non-select mode only) */}
+                <div className="overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)',
+                  opacity: 0, transition: 'opacity 0.15s', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', gap: 8 }}>
+                  <button onClick={() => navigate(`/projects/${projectId}/annotate/${img.id}`)}
+                    style={{ padding: '7px 7px', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
+                      background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>
+                    <Pencil size={13} />
+                  </button>
+                  <button onClick={() => deleteImage(img.id)}
+                    style={{ padding: '7px 7px', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6,
+                      background: 'rgba(248,113,113,0.1)', color: 'var(--danger)', cursor: 'pointer' }}>
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+
+                {/* Filename */}
+                <div style={{ padding: '6px 8px', borderTop: '1px solid var(--border)' }}>
+                  <p style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap',
+                    overflow: 'hidden', textOverflow: 'ellipsis' }}>{img.original_name}</p>
+                  {img.is_corrupt && <Badge color="red">corrupt</Badge>}
+                </div>
               </div>
-
-              {/* Filename */}
-              <div style={{ padding: '6px 8px', borderTop: '1px solid var(--border)' }}>
-                <p style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap',
-                  overflow: 'hidden', textOverflow: 'ellipsis' }}>{img.original_name}</p>
-                {img.is_corrupt && <Badge color="red">corrupt</Badge>}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

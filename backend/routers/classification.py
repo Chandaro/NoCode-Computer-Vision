@@ -112,7 +112,14 @@ def _run_classification(run_id: int, project_id: int, config: ClsConfig):
             dataset_dir, skipped = _build_cls_dataset(project_id, run_id, classes, session)
             push(f"✅ Dataset ready — {skipped} images skipped (no annotation)")
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        use_cuda = torch.cuda.is_available()
+        if use_cuda:
+            try:
+                torch.zeros(1).cuda()
+            except RuntimeError:
+                use_cuda = False
+                push("⚠️ CUDA detected but kernel incompatible — falling back to CPU")
+        device = torch.device("cuda" if use_cuda else "cpu")
         push(f"📦 Loading base model: {config.base_model}  |  device: {device}")
 
         # ── Transforms ────────────────────────────────────────────────────

@@ -146,3 +146,29 @@ def delete_image(project_id: int, image_id: int, session: Session = Depends(get_
     if os.path.exists(path):
         os.remove(path)
     return {"ok": True}
+
+
+class BulkDeleteBody(BaseModel):
+    ids: List[int]
+
+
+@router.delete("")
+def bulk_delete_images(
+    project_id: int,
+    body: BulkDeleteBody,
+    session: Session = Depends(get_session),
+):
+    deleted = 0
+    for image_id in body.ids:
+        img = session.get(Image, image_id)
+        if not img or img.project_id != project_id:
+            continue
+        path = os.path.join(UPLOAD_DIR, img.filename)
+        for ann in session.exec(select(Annotation).where(Annotation.image_id == image_id)).all():
+            session.delete(ann)
+        session.delete(img)
+        if os.path.exists(path):
+            os.remove(path)
+        deleted += 1
+    session.commit()
+    return {"deleted": deleted}

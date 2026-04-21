@@ -123,6 +123,14 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
 
         import torch
         device = "0" if torch.cuda.is_available() else "cpu"
+        # Verify CUDA actually works — torch.cuda.is_available() can return True
+        # even when the installed PyTorch CUDA version doesn't match the driver.
+        if device == "0":
+            try:
+                torch.zeros(1).cuda()
+            except RuntimeError:
+                device = "cpu"
+                push("⚠️ CUDA detected but kernel incompatible — falling back to CPU")
         push(f"📦 Loading base model: {config.model_base}  |  device: {'GPU (CUDA)' if device == '0' else 'CPU'}")
 
         if config.resume_run_id:

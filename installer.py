@@ -551,8 +551,10 @@ class Installer(tk.Tk):
             minor = int(cv.split(".")[1]) if "." in cv else 0
         except ValueError:
             return
-        if major >= 12:
-            self.torch_choice.set("cu124")   # best match for CUDA 12.x
+        if major > 12 or (major == 12 and minor >= 5):
+            self.torch_choice.set("cu128")   # CUDA 12.5+ → cu128 (Blackwell/RTX 50xx)
+        elif major == 12:
+            self.torch_choice.set("cu124")   # CUDA 12.0–12.4
         elif major == 11 and minor >= 8:
             self.torch_choice.set("cu118")
         else:
@@ -633,8 +635,10 @@ class Installer(tk.Tk):
              "No GPU required — slower training, smaller download (~250 MB)"),
             ("cu118", "CUDA 11.8",
              "Requires NVIDIA GPU + CUDA Toolkit 11.x installed on system"),
-            ("cu124", "CUDA 12.x  (12.1 – 12.8)",
-             "Requires NVIDIA GPU + CUDA Toolkit 12.x installed on system"),
+            ("cu124", "CUDA 12.x  (12.0 – 12.4)",
+             "Requires NVIDIA GPU + CUDA Toolkit 12.0–12.4"),
+            ("cu128", "CUDA 12.8  (RTX 40/50 series)",
+             "Required for Blackwell/Ada GPUs (RTX 50xx, RTX 40xx) — CUDA 12.5+"),
         ]
 
         # Tag which option is auto-selected so we can show a badge
@@ -834,23 +838,31 @@ class Installer(tk.Tk):
 
         # 2. Install PyTorch
         def do_torch():
-            # Check if already present in the venv
+            # Check if already present and working in the venv
             rc_chk, out_chk = run_cmd(
                 f"\"{VENV_PY}\" -c \"import torch; print(torch.__version__)\""
             )
             if rc_chk == 0 and torch_mode == "auto":
-                self._log(f"  ✓ torch {out_chk.strip()} already in venv, skipping.")
-                self.after(0, lambda: self._mark_step("install_torch", "skip"))
-                return True, ""
+                # Also verify CUDA actually works if GPU present
+                rc_cuda, _ = run_cmd(
+                    f"\"{VENV_PY}\" -c \"import torch; torch.zeros(1).cuda() if torch.cuda.is_available() else None; print('ok')\""
+                )
+                if rc_cuda == 0:
+                    self._log(f"  ✓ torch {out_chk.strip()} already in venv and working, skipping.")
+                    self.after(0, lambda: self._mark_step("install_torch", "skip"))
+                    return True, ""
+                self._log(f"  ⚠ torch {out_chk.strip()} found but CUDA test failed — reinstalling with correct variant.")
+                # Fall through to reinstall with selected mode
 
             urls = {
                 "cpu":   "https://download.pytorch.org/whl/cpu",
                 "cu118": "https://download.pytorch.org/whl/cu118",
                 "cu124": "https://download.pytorch.org/whl/cu124",
+                "cu128": "https://download.pytorch.org/whl/cu128",
             }
             url = urls.get(torch_mode, urls["cpu"]) if torch_mode != "auto" else urls["cpu"]
 
-            sizes = {"cpu": "~250 MB", "cu118": "~2.3 GB", "cu124": "~2.4 GB"}
+            sizes = {"cpu": "~250 MB", "cu118": "~2.3 GB", "cu124": "~2.4 GB", "cu128": "~2.8 GB"}
             size_hint = sizes.get(torch_mode, "~2.4 GB")
 
             self._log(f"  Downloading PyTorch ({torch_mode})  {size_hint}")
