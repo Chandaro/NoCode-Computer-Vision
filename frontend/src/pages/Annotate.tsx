@@ -130,6 +130,7 @@ export default function Annotate() {
   const [autoRunId,    setAutoRunId]    = useState('')
   const [autoConf,     setAutoConf]     = useState(0.25)
   const [autoLoading,  setAutoLoading]  = useState(false)
+  const [autoMsg,      setAutoMsg]      = useState<{text:string;ok:boolean}|null>(null)
 
   // ─── Load project + image list ────────��─────────────────────────────────
   useEffect(() => {
@@ -543,6 +544,7 @@ export default function Annotate() {
   const autoAnnotate = async () => {
     if (!currentImage || !autoRunId) return
     setAutoLoading(true)
+    setAutoMsg(null)
     try {
       const res = await api.post(
         `/projects/${projectId}/images/${currentImage.id}/auto-annotate`,
@@ -554,7 +556,13 @@ export default function Annotate() {
         const merged = [...shapesRef.current, ...suggested]
         setShapes(merged)
         snapshotHistory(merged)
+        setAutoMsg({ text: `+${suggested.length} annotation${suggested.length > 1 ? 's' : ''} added`, ok: true })
+      } else {
+        setAutoMsg({ text: 'No objects detected — try lowering the confidence threshold', ok: false })
       }
+    } catch (err: unknown) {
+      const msg = (err as {response?: {data?: {detail?: string}}})?.response?.data?.detail ?? 'Auto-annotate failed'
+      setAutoMsg({ text: msg, ok: false })
     } finally {
       setAutoLoading(false)
     }
@@ -830,6 +838,12 @@ export default function Annotate() {
                     opacity: autoLoading ? 0.6 : 1 }}>
                   {autoLoading ? 'Running…' : '⚡ Auto-Annotate'}
                 </button>
+                {autoMsg && (
+                  <p style={{ fontSize: 10, margin: 0, lineHeight: 1.4,
+                    color: autoMsg.ok ? '#22c55e' : '#f97316' }}>
+                    {autoMsg.text}
+                  </p>
+                )}
               </div>
             </div>
           )}

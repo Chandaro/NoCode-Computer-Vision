@@ -39,9 +39,14 @@ async def detection_infer(
         tmp_path = tmp.name
 
     try:
+        import torch
         from ultralytics import YOLO
+        device = "0" if torch.cuda.is_available() else "cpu"
         model = YOLO(run.model_path)
-        results = model.predict(tmp_path, conf=conf, iou=iou, verbose=False)
+        try:
+            results = model.predict(tmp_path, conf=conf, iou=iou, verbose=False, device=device)
+        except RuntimeError:
+            results = model.predict(tmp_path, conf=conf, iou=iou, verbose=False, device="cpu")
         r = results[0]
         ih, iw = r.orig_shape
 
@@ -163,9 +168,14 @@ async def auto_annotate(
     if not os.path.exists(img_path):
         raise HTTPException(404, "Image file not found")
 
+    import torch
     from ultralytics import YOLO
+    device = "0" if torch.cuda.is_available() else "cpu"
     model = YOLO(run.model_path)
-    results = model.predict(img_path, conf=conf, verbose=False)
+    try:
+        results = model.predict(img_path, conf=conf, verbose=False, device=device)
+    except RuntimeError:
+        results = model.predict(img_path, conf=conf, verbose=False, device="cpu")
     r = results[0]
 
     annotations = []
