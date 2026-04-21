@@ -1,10 +1,11 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
 from sqlmodel import Session
+from typing import Optional
 import tempfile, os, shutil
 from pathlib import Path
 
 from database import get_session
-from models import TrainingRun, ClassificationRun, Project
+from models import TrainingRun, ClassificationRun, Project, ExternalModel
 from models import Image as ImageModel
 
 router = APIRouter(tags=["inference"])
@@ -147,22 +148,36 @@ async def classification_infer(
 async def auto_annotate(
     project_id: int,
     image_id: int,
-    run_id: int,
+    run_id: Optional[int] = None,
+    external_model_id: Optional[int] = None,
     conf: float = 0.25,
     session: Session = Depends(get_session),
 ):
-    """Run detection model on a stored image; returns suggested annotations (not saved)."""
+    """Run a detection model on a stored image; returns suggested annotations (not saved).
+    Supply either run_id (trained run) or external_model_id (imported .pt file)."""
+    if run_id is None and external_model_id is None:
+        raise HTTPException(400, "Provide run_id or external_model_id")
+
     img_rec = session.get(ImageModel, image_id)
     if not img_rec or img_rec.project_id != project_id:
         raise HTTPException(404, "Image not found")
 
-    run = session.get(TrainingRun, run_id)
-    if not run or run.project_id != project_id:
-        raise HTTPException(404, "Run not found")
-    if run.status != "done":
-        raise HTTPException(400, "Run not complete")
-    if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, "Model not found")
+    # Resolve model path
+    if run_id is not None:
+        run = session.get(TrainingRun, run_id)
+        if not run or run.project_id != project_id:
+            raise HTTPException(404, "Run not found")
+        if run.status != "done":
+            raise HTTPException(400, "Run not complete")
+        model_path = run.model_path
+    else:
+        ext_model = session.get(ExternalModel, external_model_id)
+        if not ext_model:
+            raise HTTPException(404, "External model not found")
+        model_path = ext_model.model_path
+
+    if not model_path or not os.path.exists(model_path):
+        raise HTTPException(404, "Model file not found on disk")
 
     img_path = os.path.join(UPLOAD_DIR, img_rec.filename)
     if not os.path.exists(img_path):
@@ -171,12 +186,18 @@ async def auto_annotate(
     import torch
     from ultralytics import YOLO
     device = "0" if torch.cuda.is_available() else "cpu"
-    model = YOLO(run.model_path)
+    model = YOLO(model_path)
     try:
         results = model.predict(img_path, conf=conf, verbose=False, device=device)
     except RuntimeError:
         results = model.predict(img_path, conf=conf, verbose=False, device="cpu")
     r = results[0]
+
+    # Map YOLO class ids back to project classes when using a trained run
+    project_classes: list = []
+    if run_id is not None:
+        proj = session.get(Project, project_id)
+        project_classes = proj.classes if proj else []
 
     annotations = []
     for box in r.boxes:
@@ -184,6 +205,7 @@ async def auto_annotate(
         cls_id = int(box.cls[0])
         annotations.append({
             "class_id": cls_id,
+            "class_name": project_classes[cls_id] if cls_id < len(project_classes) else (r.names or {}).get(cls_id, f"cls{cls_id}"),
             "shape_type": "bbox",
             "x_center": round((x1n + x2n) / 2, 6),
             "y_center": round((y1n + y2n) / 2, 6),

@@ -5,7 +5,7 @@ import {
   MousePointer2, Square, Hexagon, Crosshair,
   ZoomIn, ZoomOut, Maximize2, Copy
 } from 'lucide-react'
-import api, { type AnnData, type ImageItem, type Project } from '../api'
+import api, { type AnnData, type ImageItem, type Project, type ExternalModel } from '../api'
 
 // ─── Constants ────────────────────────────────────────────���──────────────────
 const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#6366f1','#a855f7','#ec4899']
@@ -129,8 +129,10 @@ export default function Annotate() {
   const [trainingRuns, setTrainingRuns] = useState<{id:number;model_base:string;status:string}[]>([])
   const [autoRunId,    setAutoRunId]    = useState('')
   const [autoConf,     setAutoConf]     = useState(0.25)
-  const [autoLoading,  setAutoLoading]  = useState(false)
-  const [autoMsg,      setAutoMsg]      = useState<{text:string;ok:boolean}|null>(null)
+  const [autoLoading,    setAutoLoading]    = useState(false)
+  const [autoMsg,        setAutoMsg]        = useState<{text:string;ok:boolean}|null>(null)
+  const [externalModels, setExternalModels] = useState<ExternalModel[]>([])
+  const [importing,      setImporting]      = useState(false)
 
   // ─── Load project + image list ────────��─────────────────────────────────
   useEffect(() => {
@@ -138,7 +140,8 @@ export default function Annotate() {
       api.get(`/projects/${projectId}`),
       api.get(`/projects/${projectId}/images`),
       api.get(`/projects/${projectId}/training/runs`),
-    ]).then(([pRes, iRes, rRes]) => {
+      api.get('/models/external'),
+    ]).then(([pRes, iRes, rRes, extRes]) => {
       setProject(pRes.data)
       const imgs: ImageItem[] = iRes.data
       setImages(imgs)
@@ -147,7 +150,10 @@ export default function Annotate() {
       const doneRuns = (rRes.data as {id:number;model_base:string;status:string}[])
         .filter(r => r.status === 'done')
       setTrainingRuns(doneRuns)
-      if (doneRuns.length > 0) setAutoRunId(String(doneRuns[doneRuns.length - 1].id))
+      const ext: ExternalModel[] = extRes.data
+      setExternalModels(ext)
+      if (doneRuns.length > 0) setAutoRunId(`run:${doneRuns[doneRuns.length - 1].id}`)
+      else if (ext.length > 0) setAutoRunId(`ext:${ext[ext.length - 1].id}`)
     })
   }, [projectId, imageId])
 
@@ -540,16 +546,38 @@ export default function Annotate() {
     return hitShape(nx, ny) !== null ? 'move' : 'default'
   }
 
+  // ─── Import external model ────────────────────────────────────────────────
+  const importModel = async (file: File) => {
+    setImporting(true)
+    try {
+      const form = new FormData()
+      form.append('name', file.name.replace('.pt', ''))
+      form.append('file', file)
+      const res = await api.post('/models/external', form)
+      setExternalModels(prev => [...prev, res.data])
+      setAutoRunId(`ext:${res.data.id}`)
+      setAutoMsg({ text: `Imported: ${res.data.name}`, ok: true })
+    } catch {
+      setAutoMsg({ text: 'Import failed — make sure it is a valid .pt file', ok: false })
+    } finally {
+      setImporting(false)
+    }
+  }
+
   // ─── Auto-annotate ────────────────────────────────────────────────────────
   const autoAnnotate = async () => {
     if (!currentImage || !autoRunId) return
     setAutoLoading(true)
     setAutoMsg(null)
+    const [kind, rawId] = autoRunId.split(':')
+    const params: Record<string, unknown> = { conf: autoConf }
+    if (kind === 'run') params.run_id = rawId
+    else params.external_model_id = rawId
     try {
       const res = await api.post(
         `/projects/${projectId}/images/${currentImage.id}/auto-annotate`,
         null,
-        { params: { run_id: autoRunId, conf: autoConf } }
+        { params }
       )
       const suggested = (res.data.annotations as AnnData[]).map(apiToShape)
       if (suggested.length > 0) {
@@ -807,18 +835,45 @@ export default function Annotate() {
             </div>
           </div>
           {/* Auto-annotate */}
-          {trainingRuns.length > 0 && (
+          {(true) && (
             <div style={sidePanel}>
               <p style={sideLabel}>Auto-Annotate</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 <select value={autoRunId} onChange={e => setAutoRunId(e.target.value)}
+                  disabled={trainingRuns.length === 0 && externalModels.length === 0}
                   style={{ width: '100%', padding: '5px 8px', background: 'var(--surface2)',
                     border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text)',
-                    fontSize: 11, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}>
-                  {trainingRuns.map(r => (
-                    <option key={r.id} value={r.id}>#{r.id} {r.model_base}</option>
-                  ))}
+                    fontSize: 11, fontFamily: 'inherit', outline: 'none',
+                    cursor: trainingRuns.length === 0 && externalModels.length === 0 ? 'default' : 'pointer',
+                    opacity: trainingRuns.length === 0 && externalModels.length === 0 ? 0.4 : 1 }}>
+                  {trainingRuns.length === 0 && externalModels.length === 0 && (
+                    <option value="">No models — import one below</option>
+                  )}
+                  {trainingRuns.length > 0 && (
+                    <optgroup label="Trained models">
+                      {trainingRuns.map(r => (
+                        <option key={r.id} value={`run:${r.id}`}>#{r.id} {r.model_base}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {externalModels.length > 0 && (
+                    <optgroup label="Imported models">
+                      {externalModels.map(m => (
+                        <option key={m.id} value={`ext:${m.id}`}>{m.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
+                {/* Import external model */}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: importing ? 'wait' : 'pointer' }}>
+                  <input type="file" accept=".pt" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) importModel(f); e.target.value = '' }} />
+                  <span style={{ flex: 1, padding: '5px 8px', background: 'var(--surface2)',
+                    border: '1px solid var(--border)', borderRadius: 5, fontSize: 10,
+                    color: 'var(--text2)', textAlign: 'center' }}>
+                    {importing ? 'Importing…' : '+ Import .pt model'}
+                  </span>
+                </label>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                     <span style={{ fontSize: 10, color: 'var(--text2)' }}>Conf</span>
@@ -830,7 +885,7 @@ export default function Annotate() {
                     onChange={e => setAutoConf(Number(e.target.value))}
                     style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }} />
                 </div>
-                <button onClick={autoAnnotate} disabled={autoLoading || !autoRunId}
+                <button onClick={autoAnnotate} disabled={autoLoading || !autoRunId || (trainingRuns.length === 0 && externalModels.length === 0)}
                   style={{ padding: '6px 0', background: 'var(--accent)',
                     border: '1px solid var(--accent)', borderRadius: 5,
                     color: '#fff', fontSize: 11, fontFamily: 'inherit',

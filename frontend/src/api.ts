@@ -73,6 +73,13 @@ export interface ClsInferResult {
   top5: ClsPrediction[]
 }
 
+export interface ExternalModel {
+  id: number
+  name: string
+  model_path: string
+  created_at: string
+}
+
 export interface EvalData {
   run_id: number
   model_base: string

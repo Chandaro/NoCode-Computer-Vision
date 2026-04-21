@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from database import create_db
 from routers import projects, images, annotations, training
-from routers import analytics, evaluation, export, classification, infer
+from routers import analytics, evaluation, export, classification, infer, external_models
 
 app = FastAPI(title="NoCode CV Trainer")
 
@@ -49,6 +49,7 @@ api.include_router(export.router)
 api.include_router(export.dataset_router)
 api.include_router(classification.router)
 api.include_router(infer.router)
+api.include_router(external_models.router)
 app.include_router(api)
 
 

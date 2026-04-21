@@ -66,6 +66,13 @@ class TrainingRun(SQLModel, table=True):
     aug_config_json: str = "{}"
 
 
+class ExternalModel(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    model_path: str
+    created_at: str = ""
+
+
 class ClassificationRun(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="project.id")
