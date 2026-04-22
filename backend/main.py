@@ -13,6 +13,8 @@ from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from database import create_db
+# Import all models so SQLModel.metadata knows every table before create_db() runs
+import models as _models  # noqa: F401
 from routers import projects, images, annotations, training
 from routers import analytics, evaluation, export, classification, infer, external_models
 

@@ -860,12 +860,16 @@ class Installer(tk.Tk):
                 "cu124": "https://download.pytorch.org/whl/cu124",
                 "cu128": "https://download.pytorch.org/whl/cu128",
             }
-            url = urls.get(torch_mode, urls["cpu"]) if torch_mode != "auto" else urls["cpu"]
+            # Resolve "auto" to the hardware-detected variant (set by _auto_select_torch)
+            effective_mode = self.torch_choice.get() if torch_mode == "auto" else torch_mode
+            if effective_mode == "auto":
+                effective_mode = "cpu"   # fallback if detection never ran
+            url = urls.get(effective_mode, urls["cpu"])
 
             sizes = {"cpu": "~250 MB", "cu118": "~2.3 GB", "cu124": "~2.4 GB", "cu128": "~2.8 GB"}
-            size_hint = sizes.get(torch_mode, "~2.4 GB")
+            size_hint = sizes.get(effective_mode, "~2.4 GB")
 
-            self._log(f"  Downloading PyTorch ({torch_mode})  {size_hint}")
+            self._log(f"  Downloading PyTorch ({effective_mode})  {size_hint}")
             self._log(f"  This may take several minutes — please wait…")
             self._log(f"  Index: {url}")
             self._log("")

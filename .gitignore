@@ -19,6 +19,9 @@ backend/*.pt
 backend/*.onnx
 backend/*.engine
 
+# User-imported external models
+backend/external_models/
+
 # Logs
 server.log
 *.log
