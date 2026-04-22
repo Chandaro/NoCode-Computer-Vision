@@ -7,8 +7,9 @@ pillow==11.1.0
 aiofiles==24.1.0
 
 # ─── Computer Vision ──────────────────────────────────────────────────────────
-ultralytics>=8.3.0
-# torchvision is pulled in automatically by ultralytics
+ultralytics==8.4.41
+# torchvision is pulled in automatically by ultralytics (do NOT add it here — the
+# installer installs the correct CUDA build separately and pins it via constraints)
 
 # ─── PyTorch ──────────────────────────────────────────────────────────────────
 # NOTE: PyTorch is NOT listed here because the correct variant depends on

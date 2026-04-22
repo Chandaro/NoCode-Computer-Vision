@@ -909,27 +909,71 @@ class Installer(tk.Tk):
         # 3. Install backend
         def do_backend():
             req = os.path.join(BACKEND, "requirements.txt")
+
+            # ── Step 3a: upgrade pip itself first ────────────────────────────
+            self._log("  Upgrading pip…")
+            run_cmd(f'"{VENV_PY}" -m pip install --upgrade pip --quiet')
+
+            # ── Step 3b: build a constraints file that pins torch/torchvision ─
+            # This prevents ultralytics from downgrading the CUDA build we just
+            # installed to a plain CPU wheel from PyPI.
+            constraints_path = os.path.join(BACKEND, "_torch_constraints.txt")
+            try:
+                lines = []
+                for pkg in ("torch", "torchvision"):
+                    rc_s, out_s = run_cmd(f'"{VENV_PIP}" show {pkg}')
+                    if rc_s == 0:
+                        for l in out_s.splitlines():
+                            if l.startswith("Version:"):
+                                ver = l.split(":", 1)[1].strip()
+                                lines.append(f"{pkg}=={ver}")
+                                break
+                with open(constraints_path, "w") as cf:
+                    cf.write("\n".join(lines) + "\n")
+                self._log(f"  Pinned: {', '.join(lines)}")
+                constraint_flag = f'--constraint "{constraints_path}"'
+            except Exception as e:
+                self._log(f"  ⚠ Could not write constraints ({e}) — proceeding without pin")
+                constraint_flag = ""
+
+            # ── Step 3c: install requirements ────────────────────────────────
             self._log("  Installing backend libraries…")
+            error_lines = []
 
             def on_line(line):
                 low = line.lower()
+                # Always capture error lines for display on failure
+                if any(k in low for k in ("error", "could not", "no matching", "failed")):
+                    error_lines.append(line.strip())
                 if any(k in low for k in (
                     "downloading", "installing", "successfully", "error",
-                    "requirement already", "collected"
+                    "requirement already", "collected", "could not", "no matching"
                 )):
                     disp = line.strip()
                     if len(disp) > 90:
                         disp = disp[:87] + "…"
                     self._log(f"  {disp}")
 
-            cmd = f"\"{VENV_PIP}\" install -r \"{req}\" --no-warn-script-location"
+            cmd = (f'"{VENV_PIP}" install -r "{req}" {constraint_flag} '
+                   f'--no-warn-script-location')
             rc, _ = run_cmd_stream(cmd, cwd=BACKEND, line_cb=on_line)
+
+            # Clean up temporary constraints file
+            try:
+                os.remove(constraints_path)
+            except Exception:
+                pass
+
             if rc == 0:
                 self._log("  ✓ Backend libraries installed.")
+            else:
+                self._log("  ❌ Backend install failed. Error details:")
+                for el in error_lines[-10:]:   # show last 10 error lines
+                    self._log(f"     {el}")
             return rc == 0, ""
 
         if not step("install_backend", do_backend):
-            self._log("❌ Backend dependency install failed.", ERROR)
+            self._log("❌ Backend dependency install failed. See error lines above.", ERROR)
             return
 
         # 4. npm install
