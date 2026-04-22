@@ -196,15 +196,17 @@ class LauncherWindow(tk.Tk):
                                if platform.system() == "Windows" else 0),
             )
         except Exception as e:
-            self._set_status("✗", "Failed to start server", str(e)[:60], ERROR)
+            self._set_status("✗", "Failed to start server", str(e)[:120], ERROR)
             return
 
-        # Poll health endpoint
-        for attempt in range(40):          # up to 20 s
+        # Poll health endpoint — up to 60 s (torch import alone can take 10 s on slow machines)
+        MAX_ATTEMPTS = 120
+        for attempt in range(MAX_ATTEMPTS):
             time.sleep(0.5)
             if self._server_proc.poll() is not None:
-                self._set_status("✗", "Server crashed on startup",
-                                 "Check requirements are installed", ERROR)
+                # Server exited — read last lines of log for the real error
+                error_hint = self._read_log_tail(log_path, lines=6)
+                self._set_status("✗", "Server crashed on startup", error_hint, ERROR)
                 return
             try:
                 with _req.urlopen(HEALTH, timeout=2) as resp:
@@ -212,18 +214,27 @@ class LauncherWindow(tk.Tk):
                         self._running = True
                         self._set_status("✓", "Server is running",
                                          APP_URL, SUCCESS, ready=True)
-                        # Open browser automatically
                         self.after(400, lambda: webbrowser.open(APP_URL))
                         return
             except Exception:
                 pass
-            # Update sub text with attempt count
             self.after(0, lambda a=attempt+1:
-                       self.status_sub.config(text=f"Waiting… ({a}/40)"))
+                       self.status_sub.config(text=f"Starting… ({a}/{MAX_ATTEMPTS})"))
 
         self._set_status("⚠", "Server taking too long",
                          "Try clicking Open Browser manually", WARN, ready=True)
         self._running = True
+
+    @staticmethod
+    def _read_log_tail(log_path: str, lines: int = 6) -> str:
+        """Return the last N non-empty lines of a log file, or a fallback hint."""
+        try:
+            with open(log_path, encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            tail = [l for l in content.splitlines() if l.strip()][-lines:]
+            return "\n".join(tail) if tail else f"See {log_path}"
+        except Exception:
+            return f"See server.log in the app folder"
 
     def _stop_server(self):
         if self._server_proc and self._server_proc.poll() is None:
