@@ -88,6 +88,100 @@ const DEFAULT_PARAMS: Record<LayerType, Record<string, number>> = {
   linear:      { out_features: 128 },
 }
 
+// ── Architecture presets ──────────────────────────────────────────────────────
+
+function mkLayer(type: LayerType, params: Record<string, number> = {}): Layer {
+  return { id: uid(), type, params: { ...DEFAULT_PARAMS[type], ...params } }
+}
+
+const PRESETS = [
+  {
+    name: 'Minimal',
+    color: '#6b7280',
+    desc: 'Tiny 1-block CNN — best for quick experiments',
+    make: () => [
+      mkLayer('conv2d', { filters: 16 }),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('flatten'),
+      mkLayer('linear', { out_features: 64 }),
+    ],
+  },
+  {
+    name: 'LeNet',
+    color: '#5865f2',
+    desc: 'Classic 2-conv-block, solid baseline',
+    make: () => [
+      mkLayer('conv2d', { filters: 16 }),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('conv2d', { filters: 32 }),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('flatten'),
+      mkLayer('linear', { out_features: 128 }),
+    ],
+  },
+  {
+    name: 'VGG-mini',
+    color: '#f97316',
+    desc: '3 deep conv blocks — good accuracy on complex images',
+    make: () => [
+      mkLayer('conv2d', { filters: 32 }),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('conv2d', { filters: 64 }),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('conv2d', { filters: 128 }),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('flatten'),
+      mkLayer('linear', { out_features: 256 }),
+      mkLayer('relu'),
+      mkLayer('linear', { out_features: 128 }),
+    ],
+  },
+  {
+    name: 'BN Net',
+    color: '#22c55e',
+    desc: 'Conv + BatchNorm — faster, more stable training',
+    make: () => [
+      mkLayer('conv2d', { filters: 32 }),
+      mkLayer('batchnorm2d'),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('conv2d', { filters: 64 }),
+      mkLayer('batchnorm2d'),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('flatten'),
+      mkLayer('linear', { out_features: 128 }),
+    ],
+  },
+  {
+    name: 'RegNet',
+    color: '#eab308',
+    desc: 'BN + Dropout — strong regularization, avoids overfitting',
+    make: () => [
+      mkLayer('conv2d', { filters: 32 }),
+      mkLayer('batchnorm2d'),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('conv2d', { filters: 64 }),
+      mkLayer('batchnorm2d'),
+      mkLayer('relu'),
+      mkLayer('maxpool2d'),
+      mkLayer('flatten'),
+      mkLayer('dropout', { p: 0.4 }),
+      mkLayer('linear', { out_features: 128 }),
+      mkLayer('relu'),
+      mkLayer('dropout', { p: 0.25 }),
+      mkLayer('linear', { out_features: 64 }),
+    ],
+  },
+]
+
 const DEFAULT_LAYERS: Layer[] = [
   { id: 'l1', type: 'conv2d',   params: { filters: 16, kernel_size: 3, stride: 1, padding: 1 } },
   { id: 'l2', type: 'relu',     params: {} },
@@ -1694,8 +1788,6 @@ export default function CustomModel() {
   // allShapes[0] = input, allShapes[i+1] = output of layers[i]
   const totalParams = estimateParams(layers, inputH, inputW)
 
-  const selectedLayer = layers.find(l => l.id === selectedId) ?? null
-
   // Status badge color
   const statusColor = (s: string): 'green' | 'yellow' | 'red' | 'gray' | 'blue' => {
     if (s === 'done')    return 'green'
@@ -1740,11 +1832,11 @@ export default function CustomModel() {
       <div style={{ flex: 1, display: 'flex', gap: 8, overflow: 'hidden', minHeight: 0 }}>
 
         {/* ── Left panel: Layer Editor ───────────────────────────────────── */}
-        <div style={{ ...panelStyle, width: 220, flexShrink: 0 }}>
+        <div style={{ ...panelStyle, width: 256, flexShrink: 0 }}>
           {sectionLabel('Model')}
 
           {/* Model name */}
-          <div style={{ padding: '0 10px 8px' }}>
+          <div style={{ padding: '0 10px 6px' }}>
             <input
               value={modelName}
               onChange={e => setModelName(e.target.value)}
@@ -1753,7 +1845,7 @@ export default function CustomModel() {
                 width: '100%', padding: '5px 8px',
                 background: 'var(--surface2)', border: '1px solid var(--border)',
                 borderRadius: 5, color: 'var(--text)', fontSize: 12,
-                fontFamily: 'inherit',
+                fontFamily: 'inherit', boxSizing: 'border-box',
               }}
             />
           </div>
@@ -1771,114 +1863,155 @@ export default function CustomModel() {
                   style={{
                     width: '100%', padding: '4px 6px',
                     background: 'var(--surface2)', border: '1px solid var(--border)',
-                    borderRadius: 4, color: 'var(--text)', fontSize: 12,
+                    borderRadius: 4, color: 'var(--text)', fontSize: 12, boxSizing: 'border-box',
                   }}
                 />
               </div>
             ))}
           </div>
 
-          {sectionLabel('Layers')}
+          {/* ── Presets ──────────────────────────────────────────────────────── */}
+          {sectionLabel('Presets')}
+          <div style={{ padding: '0 8px 10px', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {PRESETS.map(p => (
+              <button
+                key={p.name}
+                title={p.desc}
+                onClick={() => {
+                  if (window.confirm(`Load "${p.name}" architecture?\nCurrent layers will be replaced.\n\n${p.desc}`)) {
+                    setLayers(p.make()); setSelectedId(null)
+                  }
+                }}
+                style={{
+                  padding: '3px 9px', borderRadius: 20,
+                  background: `${p.color}18`,
+                  border: `1px solid ${p.color}50`,
+                  color: p.color, fontSize: 10, cursor: 'pointer',
+                  fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                  letterSpacing: '0.02em', transition: 'all 0.12s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = `${p.color}35` }}
+                onMouseLeave={e => { e.currentTarget.style.background = `${p.color}18` }}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
 
-          {/* Layer list */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '0 6px' }}>
-            {/* Input node */}
+          {/* ── Architecture block stack ──────────────────────────────────────── */}
+          {sectionLabel('Architecture')}
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 8px', display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+
+            {/* INPUT block */}
             <div style={{
+              background: 'rgba(139,139,154,0.08)',
+              border: '1.5px solid rgba(139,139,154,0.22)',
+              borderLeft: '4px solid #8b8b9a',
+              borderRadius: 7, padding: '6px 9px',
               display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 6px', borderRadius: 5, marginBottom: 2,
-              background: 'var(--surface2)',
             }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: LAYER_CSS.input, flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: 'var(--text2)', flex: 1 }}>input</span>
-              <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'monospace' }}>
-                {`${3}×${inputH}×${inputW}`}
-              </span>
+              <span style={{ fontSize: 9, fontWeight: 800, color: '#8b8b9a', letterSpacing: '0.1em', flex: 1, fontFamily: 'JetBrains Mono, monospace' }}>INPUT</span>
+              <span style={{ fontSize: 9, color: 'rgba(140,140,160,0.65)', fontFamily: 'monospace' }}>{`3×${inputH}×${inputW}`}</span>
             </div>
 
             {layers.map((layer, index) => {
-              const outShape = allShapes[index + 1]
-              const valid    = isValidShape(outShape)
+              const outShape   = allShapes[index + 1]
+              const valid      = isValidShape(outShape)
               const isSelected = layer.id === selectedId
-              const shapeStr  = !valid ? '⚠ invalid'
+              const color      = valid ? (LAYER_CSS[layer.type] ?? '#8b8b9a') : '#ef4444'
+              const shapeStr   = !valid ? '⚠ invalid'
                 : outShape.length === 1 ? `${outShape[0]}`
                 : `${outShape[0]}×${outShape[1]}×${outShape[2]}`
+              const desc = LAYER_DESCRIPTIONS[layer.type]
 
               return (
-                <div
-                  key={layer.id}
-                  onClick={() => setSelectedId(isSelected ? null : layer.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '5px 6px', borderRadius: 5, marginBottom: 2,
-                    cursor: 'pointer',
-                    background: isSelected ? 'rgba(88,101,242,0.12)' : 'transparent',
-                    border: `1px solid ${isSelected ? 'var(--accent)' : 'transparent'}`,
-                    transition: 'background 0.1s',
-                  }}
-                >
-                  <span style={{
-                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                    background: valid ? (LAYER_CSS[layer.type] ?? '#8b8b9a') : '#ef4444',
-                  }} />
-                  <span style={{ fontSize: 11, color: valid ? 'var(--text)' : 'var(--danger)', flex: 1, minWidth: 0 }}>
-                    {LAYER_DISPLAY[layer.type] ?? layer.type}
-                  </span>
-                  <span style={{ fontSize: 9, color: valid ? 'var(--text3)' : 'var(--danger)', fontFamily: 'monospace', maxWidth: 55, textAlign: 'right' }}>
-                    {shapeStr}
-                  </span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <button
-                      onClick={e => { e.stopPropagation(); moveLayer(index, -1) }}
-                      disabled={index === 0}
-                      style={{ fontSize: 8, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 2px', lineHeight: 1 }}
-                    >▲</button>
-                    <button
-                      onClick={e => { e.stopPropagation(); moveLayer(index, 1) }}
-                      disabled={index === layers.length - 1}
-                      style={{ fontSize: 8, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 2px', lineHeight: 1 }}
-                    >▼</button>
+                <div key={layer.id}>
+                  {/* Connector */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 14 }}>
+                    <div style={{ width: 1.5, flex: 1, background: `linear-gradient(${LAYER_CSS[layers[Math.max(0,index-1)]?.type] ?? color}, ${color})`, opacity: 0.55 }} />
+                    <svg width="7" height="4" viewBox="0 0 7 4" style={{ display: 'block', opacity: 0.6 }}>
+                      <polygon points="3.5,4 0,0 7,0" fill={color} />
+                    </svg>
                   </div>
-                  <button
-                    onClick={e => { e.stopPropagation(); deleteLayer(layer.id) }}
-                    style={{ fontSize: 10, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}
-                  >✕</button>
+
+                  {/* Block */}
+                  <div
+                    onClick={() => setSelectedId(isSelected ? null : layer.id)}
+                    style={{
+                      background: isSelected ? `${color}1c` : `${color}09`,
+                      border: `1.5px solid ${isSelected ? color + 'bb' : color + '30'}`,
+                      borderLeft: `4px solid ${color}`,
+                      borderRadius: 7,
+                      padding: '7px 8px',
+                      cursor: 'pointer',
+                      transition: 'all 0.14s',
+                      boxShadow: isSelected ? `0 0 0 2px ${color}22, 0 2px 12px ${color}18` : 'none',
+                    }}
+                  >
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700,
+                        color: valid ? color : 'var(--danger)', flex: 1,
+                        fontFamily: 'JetBrains Mono, monospace', letterSpacing: '-0.01em',
+                      }}>
+                        {LAYER_DISPLAY[layer.type] ?? layer.type}
+                      </span>
+                      <span style={{ fontSize: 9, color: valid ? 'rgba(155,155,175,0.7)' : 'var(--danger)', fontFamily: 'monospace', maxWidth: 52, textAlign: 'right' }}>
+                        {shapeStr}
+                      </span>
+                      {/* Controls */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginLeft: 1, flexShrink: 0 }}>
+                        <button onClick={e => { e.stopPropagation(); moveLayer(index, -1) }} disabled={index === 0}
+                          style={{ width: 16, height: 16, fontSize: 8, color: 'var(--text3)', background: 'none', border: 'none', cursor: index === 0 ? 'default' : 'pointer', padding: 0, opacity: index === 0 ? 0.3 : 0.75, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
+                        <button onClick={e => { e.stopPropagation(); moveLayer(index, 1) }} disabled={index === layers.length - 1}
+                          style={{ width: 16, height: 16, fontSize: 8, color: 'var(--text3)', background: 'none', border: 'none', cursor: index === layers.length - 1 ? 'default' : 'pointer', padding: 0, opacity: index === layers.length - 1 ? 0.3 : 0.75, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
+                        <button onClick={e => { e.stopPropagation(); deleteLayer(layer.id) }}
+                          style={{ width: 16, height: 16, fontSize: 9, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: 0.65, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                      </div>
+                    </div>
+
+                    {/* Expanded: description + params */}
+                    {isSelected && (
+                      <div style={{ marginTop: 8, paddingTop: 7, borderTop: `1px solid ${color}28` }}>
+                        {desc && (
+                          <div style={{ marginBottom: 8, padding: '6px 8px', background: `${color}0e`, borderRadius: 5, borderLeft: `2px solid ${color}80` }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 3 }}>{desc.label}</p>
+                            <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.55, marginBottom: 3 }}>{desc.what}</p>
+                            <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4 }}>{desc.analogy}</p>
+                          </div>
+                        )}
+                        <ParamEditor layer={layer} onChange={params => updateLayerParams(layer.id, params)} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             })}
-          </div>
 
-          {/* Param editor for selected layer */}
-          {selectedLayer && (
-            <div style={{ borderTop: '1px solid var(--border)', padding: '8px 10px', flexShrink: 0 }}>
-              {/* Educational description card */}
-              {LAYER_DESCRIPTIONS[selectedLayer.type] && (() => {
-                const desc = LAYER_DESCRIPTIONS[selectedLayer.type]
-                const color = LAYER_CSS[selectedLayer.type] ?? 'var(--accent)'
-                return (
-                  <div style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${color}40`,
-                    borderLeft: `3px solid ${color}`,
-                    borderRadius: 5, padding: '8px 10px', marginBottom: 10,
-                  }}>
-                    <p style={{ fontSize: 11, color, fontWeight: 700, marginBottom: 5 }}>{desc.label}</p>
-                    <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.55, marginBottom: 5 }}>{desc.what}</p>
-                    <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5, marginBottom: 5 }}>
-                      <span style={{ color: 'var(--text2)', fontWeight: 600 }}>Why: </span>{desc.why}
-                    </p>
-                    <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5 }}>{desc.analogy}</p>
-                  </div>
-                )
-              })()}
-              <p style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                {LAYER_DISPLAY[selectedLayer.type] ?? selectedLayer.type} params
-              </p>
-              <ParamEditor
-                layer={selectedLayer}
-                onChange={params => updateLayerParams(selectedLayer.id, params)}
-              />
+            {/* Connector to OUTPUT */}
+            {layers.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 14 }}>
+                <div style={{ width: 1.5, flex: 1, background: 'linear-gradient(rgba(139,139,154,0.4), #22c55e)', opacity: 0.55 }} />
+                <svg width="7" height="4" viewBox="0 0 7 4" style={{ display: 'block', opacity: 0.6 }}>
+                  <polygon points="3.5,4 0,0 7,0" fill="#22c55e" />
+                </svg>
+              </div>
+            )}
+
+            {/* OUTPUT block */}
+            <div style={{
+              background: 'rgba(34,197,94,0.07)',
+              border: '1.5px solid rgba(34,197,94,0.25)',
+              borderLeft: '4px solid #22c55e',
+              borderRadius: 7, padding: '6px 9px',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <span style={{ fontSize: 9, fontWeight: 800, color: '#22c55e', letterSpacing: '0.1em', flex: 1, fontFamily: 'JetBrains Mono, monospace' }}>OUTPUT</span>
+              <span style={{ fontSize: 9, color: 'rgba(34,197,94,0.6)', fontFamily: 'monospace' }}>{numClasses} classes</span>
             </div>
-          )}
+          </div>
 
           {/* Total params */}
           <div style={{ borderTop: '1px solid var(--border)', padding: '6px 10px', flexShrink: 0 }}>
