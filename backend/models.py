@@ -87,3 +87,29 @@ class ClassificationRun(SQLModel, table=True):
     run_dir: str = ""
     results_json: str = "{}"       # top1_acc, val_loss, per_class metrics
     created_at: str = ""
+
+
+# ── Conv Builder models ────────────────────────────────────────────────────────
+
+class CustomModelConfig(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id")
+    name: str = Field(default="My Model")
+    layers_json: str = Field(default="[]")
+    input_h: int = Field(default=64)
+    input_w: int = Field(default=64)
+    created_at: str = Field(default="")
+
+
+class CustomTrainingRun(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    config_id: int = Field(default=0)
+    project_id: int = Field(foreign_key="project.id")
+    status: str = Field(default="pending")
+    epochs: int = Field(default=20)
+    batch: int = Field(default=32)
+    lr: float = Field(default=0.001)
+    model_path: str = Field(default="")
+    run_dir: str = Field(default="")
+    results_json: str = Field(default="{}")
+    created_at: str = Field(default="")

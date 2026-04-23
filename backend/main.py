@@ -17,6 +17,7 @@ from database import create_db
 import models as _models  # noqa: F401
 from routers import projects, images, annotations, training
 from routers import analytics, evaluation, export, classification, infer, external_models
+from routers import custom as custom_router
 
 app = FastAPI(title="NoCode CV Trainer")
 
@@ -52,6 +53,7 @@ api.include_router(export.dataset_router)
 api.include_router(classification.router)
 api.include_router(infer.router)
 api.include_router(external_models.router)
+api.include_router(custom_router.router)
 app.include_router(api)
 
 

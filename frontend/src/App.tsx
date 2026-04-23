@@ -7,6 +7,7 @@ import Train from './pages/Train'
 import Analytics from './pages/Analytics'
 import Evaluation from './pages/Evaluation'
 import Classification from './pages/Classification'
+import CustomModel from './pages/CustomModel'
 
 function Nav() {
   return (
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="/projects/:id/analytics"         element={<Analytics />} />
             <Route path="/projects/:id/eval/:runId"       element={<Evaluation />} />
             <Route path="/projects/:id/classify"          element={<Classification />} />
+            <Route path="/projects/:id/custom"            element={<CustomModel />} />
           </Routes>
         </main>
       </div>

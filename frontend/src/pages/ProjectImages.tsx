@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X } from 'lucide-react'
+import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Badge, Empty } from '../components/ui'
 import { Image as ImageIcon } from 'lucide-react'
@@ -99,6 +99,9 @@ export default function ProjectImages() {
           </Btn>
           <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/classify`)}>
             <Brain size={13} /> Classify
+          </Btn>
+          <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/custom`)}>
+            <Cpu size={13} /> Conv Builder
           </Btn>
           <Btn variant="primary" size="sm" onClick={() => navigate(`/projects/${projectId}/train`)}>
             <Zap size={13} strokeWidth={2.5} /> Detect & Train
