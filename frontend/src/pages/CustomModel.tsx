@@ -217,163 +217,235 @@ function buildScene(
   layers: Layer[],
   inputH: number,
   inputW: number,
+  particlesRef: React.MutableRefObject<THREE.Mesh[]>,
+  numClasses: number,
 ) {
-  // Remove all previous objects
   while (scene.children.length > 0) scene.remove(scene.children[0])
+  particlesRef.current = []
 
-  const shapes = computeAllShapes(layers, inputH, inputW)
-  // shapes[0] = input, shapes[i+1] = output of layers[i]
-  // We display shapes[0..shapes.length-1] as "feature map slots"
-  // Between slot i and slot i+1 there is layers[i]
+  // Global lighting
+  scene.add(new THREE.AmbientLight(0x0a0a1a, 6))
+  const sun = new THREE.DirectionalLight(0xffffff, 0.5)
+  sun.position.set(4, 10, 6)
+  scene.add(sun)
 
+  // Depth fog
+  scene.fog = new THREE.FogExp2(0x0d0d0f, 0.016)
+
+  const shapes   = computeAllShapes(layers, inputH, inputW)
   const MAX_PLANES = 10
-  const NORM_MAX   = 1.5  // max plane size in world units
+  const NORM_MAX   = 1.4
+  const BOX_DEPTH  = 0.055
 
   for (let si = 0; si < shapes.length; si++) {
-    const shape = shapes[si]
-    const z     = -si * SPACING
-
-    // Determine layer type for color
-    let layerType = si === 0 ? 'input' : layers[si - 1].type
-    const colorHex = LAYER_COLORS[layerType] ?? 0x8b8b9a
-    const colorCSS = LAYER_CSS[layerType] ?? '#8b8b9a'
-    const valid = isValidShape(shape)
+    const shape     = shapes[si]
+    const z         = -si * SPACING
+    const layerType = si === 0 ? 'input' : layers[si - 1].type
+    const colorHex  = LAYER_COLORS[layerType] ?? 0x8b8b9a
+    const colorCSS  = LAYER_CSS[layerType]    ?? '#8b8b9a'
+    const valid     = isValidShape(shape)
 
     if (!valid) {
-      // Red error marker
-      const geo = new THREE.BoxGeometry(0.4, 0.4, 0.4)
-      const mat = new THREE.MeshBasicMaterial({ color: 0xef4444, wireframe: true })
+      const geo  = new THREE.BoxGeometry(0.5, 0.5, 0.5)
+      const mat  = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xef4444, emissiveIntensity: 0.9 })
       const mesh = new THREE.Mesh(geo, mat)
       mesh.position.set(0, 0, z)
       scene.add(mesh)
       continue
     }
 
-    if (shape.length === 1) {
-      // 1D shape (after flatten/linear) — draw tall thin rectangle
-      const N      = shape[0]
-      const height = Math.min(N / 64 * 2, 3)
-      const width  = 0.15
+    // Colored point light per layer — illuminates nearby planes
+    const pl = new THREE.PointLight(colorHex, 1.8, 7)
+    pl.position.set(0.6, 0.4, z)
+    scene.add(pl)
 
-      const geo = new THREE.PlaneGeometry(width, height)
-      const mat = new THREE.MeshBasicMaterial({
-        color:       colorHex,
-        transparent: true,
-        opacity:     0.35,
-        side:        THREE.DoubleSide,
+    if (shape.length === 1) {
+      const N      = shape[0]
+      const height = Math.min(N / 64 * 2.2, 3.4)
+      const width  = 0.2
+
+      const geo = new THREE.BoxGeometry(width, height, BOX_DEPTH)
+      const mat = new THREE.MeshStandardMaterial({
+        color: colorHex, emissive: colorHex, emissiveIntensity: 0.55,
+        transparent: true, opacity: 0.88, roughness: 0.2, metalness: 0.7,
       })
       const mesh = new THREE.Mesh(geo, mat)
       mesh.position.set(0, 0, z)
       scene.add(mesh)
 
-      const edgesGeo = new THREE.EdgesGeometry(geo)
-      const edgesMat = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.7 })
-      const edges    = new THREE.LineSegments(edgesGeo, edgesMat)
-      edges.position.copy(mesh.position)
-      scene.add(edges)
+      const edgesGeo  = new THREE.EdgesGeometry(geo)
+      const edgesMesh = new THREE.LineSegments(edgesGeo,
+        new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 1.0 }))
+      edgesMesh.position.copy(mesh.position)
+      scene.add(edgesMesh)
 
-      // Label
-      const labelText = si === 0 ? 'input' : layers[si - 1].type
-      const shapeText = `${N}`
-      const sprite    = makeLabel(labelText, shapeText, colorCSS)
-      sprite.position.set(0, -(height / 2) - 0.5, z)
+      const labelType = si === 0 ? 'input' : layers[si - 1].type
+      const sprite    = makeLabel(LAYER_DISPLAY[labelType] ?? labelType, `${N}`, colorCSS)
+      sprite.position.set(0, -(height / 2) - 0.62, z)
       scene.add(sprite)
 
     } else {
-      // 3D shape [C, H, W]
       const [C, H, W] = shape
       const maxDim    = Math.max(H, W, 1)
-      const scale     = NORM_MAX / maxDim
-      const planeH    = H * scale
-      const planeW    = W * scale
+      const sc        = NORM_MAX / maxDim
+      const planeH    = H * sc
+      const planeW    = W * sc
       const nPlanes   = Math.min(C, MAX_PLANES)
 
       for (let pi = 0; pi < nPlanes; pi++) {
-        const ox  = pi * 0.06
-        const oy  = pi * 0.02
-        const oz  = pi * 0.05
-        const opacity = 0.08 + (pi / nPlanes) * 0.18
+        const t   = nPlanes > 1 ? pi / (nPlanes - 1) : 0
+        const ox  = pi * 0.09
+        const oy  = pi * 0.032
+        const oz  = pi * 0.075
 
-        const geo     = new THREE.PlaneGeometry(planeW, planeH)
-        const tex     = makeFeatureMapTexture(colorHex)
-        const mat     = new THREE.MeshBasicMaterial({
-          map:         tex,
-          color:       colorHex,
-          transparent: true,
-          opacity,
-          side:        THREE.DoubleSide,
+        const geo = new THREE.BoxGeometry(planeW, planeH, BOX_DEPTH)
+        const mat = new THREE.MeshStandardMaterial({
+          color: colorHex, emissive: colorHex,
+          emissiveIntensity: 0.18 + t * 0.45,
+          transparent: true, opacity: 0.14 + t * 0.38,
+          roughness: 0.15, metalness: 0.55, side: THREE.DoubleSide,
         })
         const mesh = new THREE.Mesh(geo, mat)
         mesh.position.set(ox, oy, z + oz)
         scene.add(mesh)
 
-        // Wireframe edges
         const edgesGeo = new THREE.EdgesGeometry(geo)
-        const edgesMat = new THREE.LineBasicMaterial({
-          color:       colorHex,
-          transparent: true,
-          opacity:     0.5,
-        })
-        const edges = new THREE.LineSegments(edgesGeo, edgesMat)
+        const edges    = new THREE.LineSegments(edgesGeo,
+          new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.35 + t * 0.6 }))
         edges.position.copy(mesh.position)
         scene.add(edges)
       }
 
-      // Label
-      const labelType  = si === 0 ? 'input' : layers[si - 1].type
-      const shapeText  = shape.length === 3 ? `${C}×${H}×${W}` : `${shape[0]}`
-      const sprite     = makeLabel(labelType, shapeText, colorCSS)
-      sprite.position.set(0, -(planeH / 2) - 0.55, z)
+      const labelType = si === 0 ? 'input' : layers[si - 1].type
+      const shapeText = `${C}×${H}×${W}`
+      const sprite    = makeLabel(LAYER_DISPLAY[labelType] ?? labelType, shapeText, colorCSS)
+      sprite.position.set(0, -(planeH / 2) - 0.65, z)
       scene.add(sprite)
     }
 
-    // Connector lines to previous slot
-    if (si > 0) {
-      const prevShape = shapes[si - 1]
-      const prevZ     = -(si - 1) * SPACING
+    // Connectors + flowing particles to previous slot
+    if (si > 0 && isValidShape(shapes[si - 1]) && valid) {
+      const prevShape    = shapes[si - 1]
+      const prevZ        = -(si - 1) * SPACING
       const connColorHex = LAYER_COLORS[layers[si - 1].type] ?? 0x8b8b9a
 
-      if (isValidShape(prevShape) && valid) {
-        const getPlaneDims = (sh: number[]) => {
-          if (sh.length === 1) return { w: 0.15, h: Math.min(sh[0] / 64 * 2, 3) }
-          const [, H2, W2] = sh
-          const maxD = Math.max(H2, W2, 1)
-          const sc   = NORM_MAX / maxD
-          return { w: W2 * sc, h: H2 * sc }
-        }
-        const prev = getPlaneDims(prevShape)
-        const curr = getPlaneDims(shape)
+      const getPlaneDims = (sh: number[]) => {
+        if (sh.length === 1) return { w: 0.2, h: Math.min(sh[0] / 64 * 2.2, 3.4) }
+        const [, H2, W2] = sh
+        const maxD = Math.max(H2, W2, 1)
+        const s    = NORM_MAX / maxD
+        return { w: W2 * s, h: H2 * s }
+      }
+      const prev = getPlaneDims(prevShape)
+      const curr = getPlaneDims(shape)
 
-        const corners: [THREE.Vector3, THREE.Vector3][] = [
-          [
-            new THREE.Vector3(-prev.w / 2, -prev.h / 2, prevZ),
-            new THREE.Vector3(-curr.w / 2, -curr.h / 2, z),
-          ],
-          [
-            new THREE.Vector3( prev.w / 2, -prev.h / 2, prevZ),
-            new THREE.Vector3( curr.w / 2, -curr.h / 2, z),
-          ],
-          [
-            new THREE.Vector3(-prev.w / 2,  prev.h / 2, prevZ),
-            new THREE.Vector3(-curr.w / 2,  curr.h / 2, z),
-          ],
-          [
-            new THREE.Vector3( prev.w / 2,  prev.h / 2, prevZ),
-            new THREE.Vector3( curr.w / 2,  curr.h / 2, z),
-          ],
-        ]
+      const corners: [THREE.Vector3, THREE.Vector3][] = [
+        [new THREE.Vector3(-prev.w / 2, -prev.h / 2, prevZ), new THREE.Vector3(-curr.w / 2, -curr.h / 2, z)],
+        [new THREE.Vector3( prev.w / 2, -prev.h / 2, prevZ), new THREE.Vector3( curr.w / 2, -curr.h / 2, z)],
+        [new THREE.Vector3(-prev.w / 2,  prev.h / 2, prevZ), new THREE.Vector3(-curr.w / 2,  curr.h / 2, z)],
+        [new THREE.Vector3( prev.w / 2,  prev.h / 2, prevZ), new THREE.Vector3( curr.w / 2,  curr.h / 2, z)],
+      ]
+      for (const [a, b] of corners) {
+        const geo = new THREE.BufferGeometry().setFromPoints([a, b])
+        scene.add(new THREE.Line(geo,
+          new THREE.LineBasicMaterial({ color: connColorHex, transparent: true, opacity: 0.28 })))
+      }
 
-        for (const [a, b] of corners) {
-          const geo  = new THREE.BufferGeometry().setFromPoints([a, b])
-          const mat  = new THREE.LineBasicMaterial({
-            color:       connColorHex,
-            transparent: true,
-            opacity:     0.15,
-          })
-          scene.add(new THREE.Line(geo, mat))
+      // Animated signal particles
+      const pGeo = new THREE.SphereGeometry(0.048, 7, 7)
+      const pMat = new THREE.MeshStandardMaterial({
+        color: connColorHex, emissive: connColorHex,
+        emissiveIntensity: 1.8, roughness: 0.0, metalness: 1.0,
+      })
+      for (let p = 0; p < 4; p++) {
+        const particle      = new THREE.Mesh(pGeo, pMat)
+        particle.userData   = {
+          startZ: prevZ, endZ: z,
+          progress: p / 4,
+          speed: 0.006 + Math.random() * 0.003,
+          xPhase: Math.random() * Math.PI * 2,
+          yPhase: Math.random() * Math.PI * 2,
         }
+        scene.add(particle)
+        particlesRef.current.push(particle)
       }
     }
+  }
+
+  // ── Output classifier head (always appended by backend) ───────────────────
+  const outColorHex = 0x22c55e
+  const outColorCSS = '#22c55e'
+  const lastShape   = shapes[shapes.length - 1]
+  const outZ        = -shapes.length * SPACING
+  const outHeight   = Math.min(numClasses / 4 * 0.8, 3.4)
+  const outWidth    = 0.2
+
+  const outPl = new THREE.PointLight(outColorHex, 2.0, 7)
+  outPl.position.set(0.6, 0.4, outZ)
+  scene.add(outPl)
+
+  const outGeo  = new THREE.BoxGeometry(outWidth, outHeight, BOX_DEPTH)
+  const outMat  = new THREE.MeshStandardMaterial({
+    color: outColorHex, emissive: outColorHex, emissiveIntensity: 0.7,
+    transparent: true, opacity: 0.9, roughness: 0.15, metalness: 0.75,
+  })
+  const outMesh = new THREE.Mesh(outGeo, outMat)
+  outMesh.position.set(0, 0, outZ)
+  scene.add(outMesh)
+
+  const outEdgesGeo  = new THREE.EdgesGeometry(outGeo)
+  const outEdgesMesh = new THREE.LineSegments(outEdgesGeo,
+    new THREE.LineBasicMaterial({ color: outColorHex, transparent: true, opacity: 1.0 }))
+  outEdgesMesh.position.copy(outMesh.position)
+  scene.add(outEdgesMesh)
+
+  const outSprite = makeLabel('output', `${numClasses} classes`, outColorCSS)
+  outSprite.position.set(0, -(outHeight / 2) - 0.62, outZ)
+  scene.add(outSprite)
+
+  // Connector + particles from last user layer to output
+  if (isValidShape(lastShape)) {
+    const prevZ        = -(shapes.length - 1) * SPACING
+    const connColorHex = layers.length > 0 ? (LAYER_COLORS[layers[layers.length - 1].type] ?? outColorHex) : outColorHex
+
+    const getPlaneDims = (sh: number[]) => {
+      if (sh.length === 1) return { w: 0.2, h: Math.min(sh[0] / 64 * 2.2, 3.4) }
+      const [, H2, W2] = sh
+      const maxD = Math.max(H2, W2, 1)
+      const s    = NORM_MAX / maxD
+      return { w: W2 * s, h: H2 * s }
+    }
+    const prev = getPlaneDims(lastShape)
+    const curr = { w: outWidth, h: outHeight }
+
+    const corners: [THREE.Vector3, THREE.Vector3][] = [
+      [new THREE.Vector3(-prev.w / 2, -prev.h / 2, prevZ), new THREE.Vector3(-curr.w / 2, -curr.h / 2, outZ)],
+      [new THREE.Vector3( prev.w / 2, -prev.h / 2, prevZ), new THREE.Vector3( curr.w / 2, -curr.h / 2, outZ)],
+      [new THREE.Vector3(-prev.w / 2,  prev.h / 2, prevZ), new THREE.Vector3(-curr.w / 2,  curr.h / 2, outZ)],
+      [new THREE.Vector3( prev.w / 2,  prev.h / 2, prevZ), new THREE.Vector3( curr.w / 2,  curr.h / 2, outZ)],
+    ]
+    for (const [a, b] of corners) {
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]),
+        new THREE.LineBasicMaterial({ color: outColorHex, transparent: true, opacity: 0.28 })))
+    }
+
+    const pGeo2 = new THREE.SphereGeometry(0.048, 7, 7)
+    const pMat2 = new THREE.MeshStandardMaterial({
+      color: outColorHex, emissive: outColorHex, emissiveIntensity: 1.8, roughness: 0, metalness: 1,
+    })
+    for (let p = 0; p < 4; p++) {
+      const particle    = new THREE.Mesh(pGeo2, pMat2)
+      particle.userData = {
+        startZ: prevZ, endZ: outZ,
+        progress: p / 4,
+        speed: 0.006 + Math.random() * 0.003,
+        xPhase: Math.random() * Math.PI * 2,
+        yPhase: Math.random() * Math.PI * 2,
+      }
+      scene.add(particle)
+      particlesRef.current.push(particle)
+    }
+    void connColorHex
   }
 }
 
@@ -460,6 +532,7 @@ export default function CustomModel() {
   const [modelName, setModelName] = useState('My Model')
   const [savedConfig, setSavedConfig] = useState<CustomConfig | null>(null)
   const [loading, setLoading] = useState(false)
+  const [numClasses, setNumClasses] = useState(2)
 
   // Selected layer
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -477,14 +550,16 @@ export default function CustomModel() {
   const [showAddMenu, setShowAddMenu] = useState(false)
 
   // Three.js refs
-  const canvasRef    = useRef<HTMLDivElement>(null)
-  const rendererRef  = useRef<THREE.WebGLRenderer | null>(null)
-  const sceneRef     = useRef<THREE.Scene | null>(null)
-  const cameraRef    = useRef<THREE.PerspectiveCamera | null>(null)
-  const animFrameRef = useRef<number>(0)
+  const canvasRef       = useRef<HTMLDivElement>(null)
+  const rendererRef     = useRef<THREE.WebGLRenderer | null>(null)
+  const sceneRef        = useRef<THREE.Scene | null>(null)
+  const cameraRef       = useRef<THREE.PerspectiveCamera | null>(null)
+  const animFrameRef    = useRef<number>(0)
+  const particlesRef    = useRef<THREE.Mesh[]>([])
+  const cameraUpdateRef = useRef<() => void>(() => {})
 
-  // Orbit state
-  const orbitRef = useRef({ theta: 0.5, phi: 1.0, radius: 10, dragging: false, lastX: 0, lastY: 0 })
+  // Orbit state — slightly dramatic angle by default
+  const orbitRef = useRef({ theta: 0.45, phi: 0.88, radius: 11, dragging: false, lastX: 0, lastY: 0 })
 
   // Debounce timer
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -500,6 +575,7 @@ export default function CustomModel() {
           api.get(`/projects/${projectId}/custom/configs`),
         ])
         setProjectName(pRes.data.name)
+        setNumClasses(pRes.data.classes?.length ?? 2)
         const cfgs: CustomConfig[] = cfgRes.data
         if (cfgs.length > 0) {
           const cfg = cfgs[cfgs.length - 1]
@@ -554,17 +630,36 @@ export default function CustomModel() {
     renderer.setPixelRatio(window.devicePixelRatio)
     renderer.setSize(w, h)
     renderer.setClearColor(0x0d0d0f, 1)
+    renderer.toneMapping        = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.3
     container.appendChild(renderer.domElement)
     rendererRef.current = renderer
 
     const scene = new THREE.Scene()
     sceneRef.current = scene
 
-    const camera = new THREE.PerspectiveCamera(60, w / h, 0.01, 500)
+    const camera = new THREE.PerspectiveCamera(58, w / h, 0.01, 500)
     cameraRef.current = camera
 
     const animate = () => {
       animFrameRef.current = requestAnimationFrame(animate)
+
+      // Slow auto-rotate when user is not dragging
+      if (!orbitRef.current.dragging) {
+        orbitRef.current.theta += 0.004
+        cameraUpdateRef.current()
+      }
+
+      // Animate signal particles along connections
+      for (const particle of particlesRef.current) {
+        const { startZ, endZ, speed, xPhase, yPhase } = particle.userData
+        particle.userData.progress = (particle.userData.progress + speed) % 1
+        const t = easeInOut(particle.userData.progress)
+        particle.position.z = startZ + (endZ - startZ) * t
+        particle.position.x = Math.sin(particle.userData.progress * Math.PI * 2 + xPhase) * 0.08
+        particle.position.y = Math.sin(particle.userData.progress * Math.PI     + yPhase) * 0.12
+      }
+
       renderer.render(scene, camera)
     }
     animate()
@@ -592,10 +687,10 @@ export default function CustomModel() {
   // Rebuild scene when layers / input size change
   useEffect(() => {
     if (!sceneRef.current || !cameraRef.current) return
-    buildScene(sceneRef.current, layers, inputH, inputW)
+    buildScene(sceneRef.current, layers, inputH, inputW, particlesRef, numClasses)
     updateCamera()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layers, inputH, inputW])
+  }, [layers, inputH, inputW, numClasses])
 
   // ── Camera orbit ──────────────────────────────────────────────────────────
 
@@ -603,7 +698,7 @@ export default function CustomModel() {
     const camera = cameraRef.current
     if (!camera) return
     const { theta, phi, radius } = orbitRef.current
-    const totalSlots = layers.length + 1
+    const totalSlots = layers.length + 2  // +1 input, +1 output head
     const target = new THREE.Vector3(0, 0, -(totalSlots - 1) * SPACING / 2)
     camera.position.set(
       target.x + radius * Math.sin(phi) * Math.sin(theta),
@@ -612,6 +707,11 @@ export default function CustomModel() {
     )
     camera.lookAt(target)
   }, [layers.length])
+
+  // Keep cameraUpdateRef current so the animation loop can call it without stale closure
+  useEffect(() => {
+    cameraUpdateRef.current = updateCamera
+  }, [updateCamera])
 
   // Re-run when layers.length changes
   useEffect(() => { updateCamera() }, [layers.length, updateCamera])
@@ -986,7 +1086,7 @@ export default function CustomModel() {
           {/* Reset view button */}
           <button
             onClick={() => {
-              orbitRef.current = { ...orbitRef.current, theta: 0.5, phi: 1.0, radius: 10 }
+              orbitRef.current = { ...orbitRef.current, theta: 0.45, phi: 0.88, radius: 11 }
               updateCamera()
             }}
             style={{
