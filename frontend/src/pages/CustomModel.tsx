@@ -1277,6 +1277,17 @@ export default function CustomModel() {
   // Orbit state — slightly dramatic angle by default
   const orbitRef = useRef({ theta: 0.45, phi: 0.88, radius: 11, dragging: false, lastX: 0, lastY: 0 })
 
+  // Free-fly camera (Blender/UE style)
+  const [flyMode, setFlyMode] = useState(false)
+  const flyModeRef = useRef(false)
+  const flyRef = useRef({
+    yaw: Math.PI,
+    pitch: -0.15,
+    pos: new THREE.Vector3(0, 1.5, 8),
+    keys: new Set<string>(),
+    speed: 0.12,
+  })
+
   // Debounce timer
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -1360,10 +1371,27 @@ export default function CustomModel() {
     const animate = () => {
       animFrameRef.current = requestAnimationFrame(animate)
 
-      // Slow auto-rotate when user is not dragging and auto-rotate is on
-      if (!orbitRef.current.dragging && autoRotateRef.current) {
-        orbitRef.current.theta += 0.004
-        cameraUpdateRef.current()
+      if (flyModeRef.current) {
+        // Free-fly movement
+        const { yaw, pitch, pos, keys, speed } = flyRef.current
+        const cosP = Math.cos(pitch), sinP = Math.sin(pitch)
+        const sinY = Math.sin(yaw),   cosY = Math.cos(yaw)
+        const forward = new THREE.Vector3(cosP * sinY, sinP, cosP * cosY)
+        const right   = new THREE.Vector3(Math.sin(yaw - Math.PI / 2), 0, Math.cos(yaw - Math.PI / 2))
+        if (keys.has('w') || keys.has('arrowup'))    pos.addScaledVector(forward,  speed)
+        if (keys.has('s') || keys.has('arrowdown'))  pos.addScaledVector(forward, -speed)
+        if (keys.has('a') || keys.has('arrowleft'))  pos.addScaledVector(right,   -speed)
+        if (keys.has('d') || keys.has('arrowright')) pos.addScaledVector(right,    speed)
+        if (keys.has('e'))                           pos.y += speed
+        if (keys.has('q'))                           pos.y -= speed
+        camera.position.copy(pos)
+        camera.lookAt(pos.clone().add(forward))
+      } else {
+        // Orbit auto-rotate
+        if (!orbitRef.current.dragging && autoRotateRef.current) {
+          orbitRef.current.theta += 0.004
+          cameraUpdateRef.current()
+        }
       }
 
       // Animate signal particles along connections
@@ -1425,6 +1453,75 @@ export default function CustomModel() {
     camera.lookAt(target)
   }, [layers.length])
 
+  // ── Free-fly camera ────────────────────────────────────────────────────────
+
+  const enterFlyMode = useCallback(() => {
+    const cam = cameraRef.current
+    if (!cam) return
+    // Sync position + orientation from current orbit camera
+    flyRef.current.pos.copy(cam.position)
+    const dir = new THREE.Vector3()
+    cam.getWorldDirection(dir)
+    flyRef.current.yaw   = Math.atan2(dir.x, dir.z)
+    flyRef.current.pitch = Math.asin(Math.max(-1, Math.min(1, dir.y)))
+    flyRef.current.keys.clear()
+    flyModeRef.current = true
+    setFlyMode(true)
+    canvasRef.current?.requestPointerLock()
+  }, [])
+
+  const exitFlyMode = useCallback(() => {
+    flyModeRef.current = false
+    flyRef.current.keys.clear()
+    setFlyMode(false)
+    if (document.pointerLockElement) document.exitPointerLock()
+  }, [])
+
+  // Fly mode: keyboard + pointer-lock mouse look
+  useEffect(() => {
+    if (!flyMode) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      flyRef.current.keys.add(e.key.toLowerCase())
+      if (e.key === 'Escape') exitFlyMode()
+      // Prevent WASD from scrolling the page
+      if (['w','a','s','d','q','e','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase()))
+        e.preventDefault()
+    }
+    const onKeyUp = (e: KeyboardEvent) => flyRef.current.keys.delete(e.key.toLowerCase())
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (document.pointerLockElement !== canvasRef.current) return
+      flyRef.current.yaw  -= e.movementX * 0.002
+      flyRef.current.pitch = Math.max(-Math.PI / 2 + 0.05,
+        Math.min(Math.PI / 2 - 0.05, flyRef.current.pitch - e.movementY * 0.002))
+    }
+
+    const onPointerLockChange = () => {
+      if (!document.pointerLockElement) exitFlyMode()
+    }
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      flyRef.current.speed = Math.max(0.02, Math.min(1.5, flyRef.current.speed * (e.deltaY > 0 ? 1.15 : 0.87)))
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('pointerlockchange', onPointerLockChange)
+    canvasRef.current?.addEventListener('wheel', onWheel, { passive: false })
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('pointerlockchange', onPointerLockChange)
+      canvasRef.current?.removeEventListener('wheel', onWheel)
+      flyRef.current.keys.clear()
+    }
+  }, [flyMode, exitFlyMode])
+
   // 2D diagram: redraw whenever layers, input size, mode, or view switches to 2D
   useEffect(() => {
     if (viewDim !== '2d' || !canvas2DRef.current) return
@@ -1455,12 +1552,13 @@ export default function CustomModel() {
     if (!container) return
 
     const onDown = (e: MouseEvent) => {
+      if (flyModeRef.current) return
       orbitRef.current.dragging = true
       orbitRef.current.lastX    = e.clientX
       orbitRef.current.lastY    = e.clientY
     }
     const onMove = (e: MouseEvent) => {
-      if (!orbitRef.current.dragging) return
+      if (flyModeRef.current || !orbitRef.current.dragging) return
       const dx = e.clientX - orbitRef.current.lastX
       const dy = e.clientY - orbitRef.current.lastY
       orbitRef.current.lastX  = e.clientX
@@ -1883,18 +1981,33 @@ export default function CustomModel() {
             {viewDim === '3d' && <>
               <button
                 onClick={() => { const n = !autoRotate; setAutoRotate(n); autoRotateRef.current = n }}
+                disabled={flyMode}
                 style={{
                   padding: '4px 10px', borderRadius: 5,
-                  background: autoRotate ? 'rgba(88,101,242,0.25)' : 'rgba(15,15,18,0.85)',
-                  border: `1px solid ${autoRotate ? 'var(--accent)' : 'var(--border2)'}`,
-                  color: autoRotate ? 'var(--accent)' : 'var(--text2)',
-                  fontSize: 11, cursor: 'pointer', backdropFilter: 'blur(4px)',
+                  background: autoRotate && !flyMode ? 'rgba(88,101,242,0.25)' : 'rgba(15,15,18,0.85)',
+                  border: `1px solid ${autoRotate && !flyMode ? 'var(--accent)' : 'var(--border2)'}`,
+                  color: autoRotate && !flyMode ? 'var(--accent)' : 'var(--text2)',
+                  fontSize: 11, cursor: flyMode ? 'default' : 'pointer',
+                  backdropFilter: 'blur(4px)', opacity: flyMode ? 0.4 : 1,
                 }}
               >
                 {autoRotate ? '⟳ Auto-rotate' : '⟳ Rotate off'}
               </button>
               <button
-                onClick={() => { orbitRef.current = { ...orbitRef.current, theta: 0.45, phi: 0.88, radius: 11 }; updateCamera() }}
+                onClick={() => flyMode ? exitFlyMode() : enterFlyMode()}
+                style={{
+                  padding: '4px 10px', borderRadius: 5,
+                  background: flyMode ? 'rgba(34,197,94,0.25)' : 'rgba(15,15,18,0.85)',
+                  border: `1px solid ${flyMode ? '#22c55e' : 'var(--border2)'}`,
+                  color: flyMode ? '#22c55e' : 'var(--text2)',
+                  fontSize: 11, cursor: 'pointer', backdropFilter: 'blur(4px)',
+                }}
+                title="Free fly — WASD move · mouse look · Q/E up/down · scroll speed · Esc exit"
+              >
+                {flyMode ? '✈ Exit Fly' : '✈ Fly Mode'}
+              </button>
+              <button
+                onClick={() => { if (flyMode) exitFlyMode(); orbitRef.current = { ...orbitRef.current, theta: 0.45, phi: 0.88, radius: 11 }; updateCamera() }}
                 style={{
                   padding: '4px 10px', borderRadius: 5,
                   background: 'rgba(15,15,18,0.85)', border: '1px solid var(--border2)',
@@ -1912,7 +2025,9 @@ export default function CustomModel() {
             fontSize: 10, color: 'rgba(140,140,158,0.5)',
             pointerEvents: 'none',
           }}>
-            {viewDim === '3d' ? 'Drag to orbit · Scroll to zoom' : 'Architecture diagram — 2D view'}
+            {viewDim === '2d' ? 'Architecture diagram — 2D view'
+              : flyMode ? 'WASD move · mouse look · Q/E up/down · scroll speed · Esc exit'
+              : 'Drag to orbit · Scroll to zoom · ✈ Fly Mode to move freely'}
           </div>
         </div>
 
