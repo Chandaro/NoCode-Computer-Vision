@@ -153,8 +153,10 @@ def get_run(project_id: int, run_id: int, session: Session = Depends(get_session
 # ── Dataset builder ────────────────────────────────────────────────────────────
 
 def _build_custom_dataset(project_id: int, run_id: int, classes: list,
-                           input_h: int, input_w: int, session: Session) -> tuple[str, int]:
-    """Build ImageFolder layout resized to input_h×input_w."""
+                           input_h: int, input_w: int, session: Session) -> tuple[str, int, dict]:
+    """Build ImageFolder layout resized to input_h×input_w.
+    Returns (dataset_dir, total_skipped, skip_reason_counts).
+    """
     from PIL import Image as PILImage
 
     dataset_dir = os.path.join(RUNS_DIR, f"custom_dataset_{project_id}_{run_id}")
@@ -171,21 +173,23 @@ def _build_custom_dataset(project_id: int, run_id: int, classes: list,
     n_val = max(1, int(len(images) * 0.2))
     val_ids = {img.id for img in images[:n_val]}
 
-    skipped = 0
+    reasons = {"no_annotation": 0, "class_id_out_of_range": 0, "file_not_found": 0, "corrupt": 0}
+    placed  = 0
+
     for img in images:
         anns = session.exec(select(Annotation).where(Annotation.image_id == img.id)).all()
         if not anns:
-            skipped += 1
+            reasons["no_annotation"] += 1
             continue
         cls_id = anns[0].class_id
         if cls_id >= len(classes):
-            skipped += 1
+            reasons["class_id_out_of_range"] += 1
             continue
         cls_name = classes[cls_id].replace("/", "_").replace("\\", "_")
         split    = "val" if img.id in val_ids else "train"
         src      = os.path.join(UPLOAD_DIR, img.filename)
         if not os.path.exists(src):
-            skipped += 1
+            reasons["file_not_found"] += 1
             continue
 
         try:
@@ -193,11 +197,13 @@ def _build_custom_dataset(project_id: int, run_id: int, classes: list,
             pil = pil.resize((input_w, input_h), PILImage.BILINEAR)
             dst = os.path.join(dataset_dir, split, cls_name, img.filename + ".jpg")
             pil.save(dst, "JPEG")
+            placed += 1
         except Exception:
-            skipped += 1
+            reasons["corrupt"] += 1
             continue
 
-    return dataset_dir, skipped
+    total_skipped = sum(reasons.values())
+    return dataset_dir, total_skipped, reasons, placed
 
 
 # ── PyTorch model builder ──────────────────────────────────────────────────────
@@ -320,10 +326,27 @@ def _run_custom_training(run_id: int, project_id: int, config_id: int,
             session.add(run); session.commit()
 
             push("Building dataset…")
-            dataset_dir, skipped = _build_custom_dataset(
+            dataset_dir, skipped, reasons, placed = _build_custom_dataset(
                 project_id, run_id, classes, input_h, input_w, session
             )
-            push(f"Dataset ready — {skipped} images skipped")
+            push(f"Dataset ready — {placed} images placed, {skipped} skipped")
+            if reasons["no_annotation"] > 0:
+                push(f"  ⚠ {reasons['no_annotation']} images have no annotation (open Annotate and label them)")
+            if reasons["file_not_found"] > 0:
+                push(f"  ⚠ {reasons['file_not_found']} image files missing from uploads folder")
+            if reasons["class_id_out_of_range"] > 0:
+                push(f"  ⚠ {reasons['class_id_out_of_range']} annotations have a class_id that doesn't match project classes")
+            if reasons["corrupt"] > 0:
+                push(f"  ⚠ {reasons['corrupt']} images could not be opened (corrupt files)")
+            if placed == 0:
+                hint = []
+                if reasons["no_annotation"] == skipped:
+                    hint.append("None of your images have annotations. Go to the Annotate page and draw at least one bounding box per image to assign a class label.")
+                elif reasons["file_not_found"] == skipped:
+                    hint.append("Image files are missing from the uploads folder. Try re-uploading your images.")
+                else:
+                    hint.append(f"Breakdown: {reasons}")
+                raise ValueError("No images could be placed into the dataset. " + " ".join(hint))
 
         # CUDA detection
         use_cuda = torch.cuda.is_available()

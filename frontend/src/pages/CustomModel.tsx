@@ -273,10 +273,471 @@ function easeInOut(t: number): number {
   return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
 }
 
+// ── Real image processing pipeline for 2D Activations view ──────────────────
+
+function createBaseImage(size: number): HTMLCanvasElement {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')!
+
+  const sky = ctx.createLinearGradient(0, 0, 0, size * 0.45)
+  sky.addColorStop(0, '#1a3a6e'); sky.addColorStop(1, '#4a90d9')
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, size, size * 0.45)
+
+  const gnd = ctx.createLinearGradient(0, size * 0.45, 0, size)
+  gnd.addColorStop(0, '#4a7c3f'); gnd.addColorStop(1, '#2d4a1e')
+  ctx.fillStyle = gnd; ctx.fillRect(0, size * 0.45, size, size)
+
+  ctx.fillStyle = '#c0784a'; ctx.fillRect(size * 0.3, size * 0.3, size * 0.4, size * 0.25)
+  ctx.fillStyle = '#8b3a2a'
+  ctx.beginPath(); ctx.moveTo(size * 0.25, size * 0.3)
+  ctx.lineTo(size * 0.5, size * 0.08); ctx.lineTo(size * 0.75, size * 0.3)
+  ctx.closePath(); ctx.fill()
+
+  ctx.fillStyle = '#f0d080'
+  ctx.fillRect(size * 0.38, size * 0.37, size * 0.09, size * 0.09)
+  ctx.fillRect(size * 0.53, size * 0.37, size * 0.09, size * 0.09)
+  ctx.fillStyle = '#4a2010'; ctx.fillRect(size * 0.44, size * 0.42, size * 0.12, size * 0.13)
+
+  ctx.fillStyle = '#ffe066'
+  ctx.beginPath(); ctx.arc(size * 0.12, size * 0.12, size * 0.06, 0, Math.PI * 2); ctx.fill()
+  return c
+}
+
+function cloneCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas')
+  c.width = src.width; c.height = src.height
+  c.getContext('2d')!.drawImage(src, 0, 0)
+  return c
+}
+
+function applyConv2dOp(src: HTMLCanvasElement, kernelIdx: number): HTMLCanvasElement {
+  const W = src.width, H = src.height
+  const inp = src.getContext('2d')!.getImageData(0, 0, W, H).data
+  const kernels = [
+    [-1, 0, 1, -2, 0, 2, -1, 0, 1],   // Sobel-X
+    [-1, -2, -1, 0, 0, 0, 1, 2, 1],   // Sobel-Y
+    [0, -1, 0, -1, 4, -1, 0, -1, 0],  // Laplacian
+    [0, -1, 0, -1, 5, -1, 0, -1, 0],  // Sharpen
+    [-2, -1, 0, -1, 1, 1, 0, 1, 2],   // Emboss
+  ]
+  const kernel = kernels[kernelIdx % kernels.length]
+  const dst = document.createElement('canvas')
+  dst.width = W; dst.height = H
+  const dstCtx = dst.getContext('2d')!
+  const dstData = dstCtx.createImageData(W, H)
+  const out = dstData.data
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let r = 0, g = 0, b = 0
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const px = Math.max(0, Math.min(W - 1, x + kx))
+          const py = Math.max(0, Math.min(H - 1, y + ky))
+          const ki = (ky + 1) * 3 + (kx + 1)
+          const pi = (py * W + px) * 4
+          r += inp[pi] * kernel[ki]; g += inp[pi+1] * kernel[ki]; b += inp[pi+2] * kernel[ki]
+        }
+      }
+      const i = (y * W + x) * 4
+      out[i] = Math.max(0, Math.min(255, r + 128))
+      out[i+1] = Math.max(0, Math.min(255, g + 128))
+      out[i+2] = Math.max(0, Math.min(255, b + 128))
+      out[i+3] = 255
+    }
+  }
+  dstCtx.putImageData(dstData, 0, 0)
+  return dst
+}
+
+function applyReLUOp(src: HTMLCanvasElement): HTMLCanvasElement {
+  const W = src.width, H = src.height
+  const inp = src.getContext('2d')!.getImageData(0, 0, W, H).data
+  const dst = document.createElement('canvas')
+  dst.width = W; dst.height = H
+  const dstCtx = dst.getContext('2d')!
+  const dstData = dstCtx.createImageData(W, H)
+  const out = dstData.data
+  for (let i = 0; i < inp.length; i += 4) {
+    out[i]   = inp[i]   > 128 ? inp[i]   : 0
+    out[i+1] = inp[i+1] > 128 ? inp[i+1] : 0
+    out[i+2] = inp[i+2] > 128 ? inp[i+2] : 0
+    out[i+3] = 255
+  }
+  dstCtx.putImageData(dstData, 0, 0)
+  return dst
+}
+
+function applyGELUOp(src: HTMLCanvasElement): HTMLCanvasElement {
+  const W = src.width, H = src.height
+  const inp = src.getContext('2d')!.getImageData(0, 0, W, H).data
+  const dst = document.createElement('canvas')
+  dst.width = W; dst.height = H
+  const dstCtx = dst.getContext('2d')!
+  const dstData = dstCtx.createImageData(W, H)
+  const out = dstData.data
+  for (let i = 0; i < inp.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const x = (inp[i+c] / 128) - 1
+      const gelu = x * 0.5 * (1 + Math.tanh(0.7978845 * (x + 0.044715 * x ** 3)))
+      out[i+c] = Math.max(0, Math.min(255, (gelu + 1) * 128))
+    }
+    out[i+3] = 255
+  }
+  dstCtx.putImageData(dstData, 0, 0)
+  return dst
+}
+
+function applySigmoidOp(src: HTMLCanvasElement): HTMLCanvasElement {
+  const W = src.width, H = src.height
+  const inp = src.getContext('2d')!.getImageData(0, 0, W, H).data
+  const dst = document.createElement('canvas')
+  dst.width = W; dst.height = H
+  const dstCtx = dst.getContext('2d')!
+  const dstData = dstCtx.createImageData(W, H)
+  const out = dstData.data
+  for (let i = 0; i < inp.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const x = (inp[i+c] / 128) - 1
+      const sig = 1 / (1 + Math.exp(-x * 4))
+      out[i+c] = Math.max(0, Math.min(255, sig * 255))
+    }
+    out[i+3] = 255
+  }
+  dstCtx.putImageData(dstData, 0, 0)
+  return dst
+}
+
+function applyMaxPoolOp(src: HTMLCanvasElement, stride: number): HTMLCanvasElement {
+  const W = src.width, H = src.height
+  const inp = src.getContext('2d')!.getImageData(0, 0, W, H).data
+  const dW = Math.max(1, Math.floor(W / stride)), dH = Math.max(1, Math.floor(H / stride))
+  const dst = document.createElement('canvas'); dst.width = dW; dst.height = dH
+  const dstCtx = dst.getContext('2d')!
+  const dstData = dstCtx.createImageData(dW, dH); const out = dstData.data
+  for (let y = 0; y < dH; y++) {
+    for (let x = 0; x < dW; x++) {
+      let mR = 0, mG = 0, mB = 0
+      for (let ky = 0; ky < stride; ky++) for (let kx = 0; kx < stride; kx++) {
+        const pi = (Math.min(H-1, y*stride+ky) * W + Math.min(W-1, x*stride+kx)) * 4
+        mR = Math.max(mR, inp[pi]); mG = Math.max(mG, inp[pi+1]); mB = Math.max(mB, inp[pi+2])
+      }
+      const i = (y * dW + x) * 4
+      out[i] = mR; out[i+1] = mG; out[i+2] = mB; out[i+3] = 255
+    }
+  }
+  dstCtx.putImageData(dstData, 0, 0)
+  const res = document.createElement('canvas'); res.width = W; res.height = H
+  const rctx = res.getContext('2d')!; rctx.imageSmoothingEnabled = false
+  rctx.drawImage(dst, 0, 0, W, H); return res
+}
+
+function applyAvgPoolOp(src: HTMLCanvasElement, stride: number): HTMLCanvasElement {
+  const W = src.width, H = src.height
+  const inp = src.getContext('2d')!.getImageData(0, 0, W, H).data
+  const dW = Math.max(1, Math.floor(W / stride)), dH = Math.max(1, Math.floor(H / stride))
+  const dst = document.createElement('canvas'); dst.width = dW; dst.height = dH
+  const dstCtx = dst.getContext('2d')!
+  const dstData = dstCtx.createImageData(dW, dH); const out = dstData.data
+  const n = stride * stride
+  for (let y = 0; y < dH; y++) {
+    for (let x = 0; x < dW; x++) {
+      let sR = 0, sG = 0, sB = 0
+      for (let ky = 0; ky < stride; ky++) for (let kx = 0; kx < stride; kx++) {
+        const pi = (Math.min(H-1, y*stride+ky) * W + Math.min(W-1, x*stride+kx)) * 4
+        sR += inp[pi]; sG += inp[pi+1]; sB += inp[pi+2]
+      }
+      const i = (y * dW + x) * 4
+      out[i] = sR/n; out[i+1] = sG/n; out[i+2] = sB/n; out[i+3] = 255
+    }
+  }
+  dstCtx.putImageData(dstData, 0, 0)
+  const res = document.createElement('canvas'); res.width = W; res.height = H
+  const rctx = res.getContext('2d')!; rctx.imageSmoothingEnabled = true
+  rctx.drawImage(dst, 0, 0, W, H); return res
+}
+
+function applyBatchNormOp(src: HTMLCanvasElement): HTMLCanvasElement {
+  const W = src.width, H = src.height
+  const inp = src.getContext('2d')!.getImageData(0, 0, W, H).data
+  const N = W * H
+  const mean = [0, 0, 0]
+  for (let i = 0; i < inp.length; i += 4) { mean[0] += inp[i]; mean[1] += inp[i+1]; mean[2] += inp[i+2] }
+  mean[0] /= N; mean[1] /= N; mean[2] /= N
+  const variance = [0, 0, 0]
+  for (let i = 0; i < inp.length; i += 4) {
+    variance[0] += (inp[i]-mean[0])**2; variance[1] += (inp[i+1]-mean[1])**2; variance[2] += (inp[i+2]-mean[2])**2
+  }
+  const std = variance.map(v => Math.sqrt(v / N) + 1e-5)
+  const dst = document.createElement('canvas'); dst.width = W; dst.height = H
+  const dstCtx = dst.getContext('2d')!
+  const dstData = dstCtx.createImageData(W, H); const out = dstData.data
+  for (let i = 0; i < inp.length; i += 4) {
+    for (let c = 0; c < 3; c++) out[i+c] = Math.max(0, Math.min(255, ((inp[i+c]-mean[c])/std[c]) * 40 + 128))
+    out[i+3] = 255
+  }
+  dstCtx.putImageData(dstData, 0, 0); return dst
+}
+
+function applyDropoutOp(src: HTMLCanvasElement, p: number, seed: number): HTMLCanvasElement {
+  const W = src.width, H = src.height
+  const inp = src.getContext('2d')!.getImageData(0, 0, W, H).data
+  let _s = seed ^ 0xdeadbeef
+  const rng = () => {
+    _s |= 0; _s = _s + 0x6D2B79F5 | 0
+    let t = Math.imul(_s ^ (_s >>> 15), 1 | _s)
+    t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  const dst = document.createElement('canvas'); dst.width = W; dst.height = H
+  const dstCtx = dst.getContext('2d')!
+  const dstData = dstCtx.createImageData(W, H); const out = dstData.data
+  for (let i = 0; i < inp.length; i += 4) {
+    const drop = rng() < p
+    out[i] = drop ? 0 : inp[i]; out[i+1] = drop ? 0 : inp[i+1]
+    out[i+2] = drop ? 0 : inp[i+2]; out[i+3] = 255
+  }
+  dstCtx.putImageData(dstData, 0, 0); return dst
+}
+
+function buildActivationSequence(layers: Layer[], numClasses: number): HTMLCanvasElement[] {
+  const SIZE = 64
+  const canvases: HTMLCanvasElement[] = []
+  let current = createBaseImage(SIZE)
+  canvases.push(cloneCanvas(current))
+
+  let convIdx = 0
+  for (const layer of layers) {
+    switch (layer.type) {
+      case 'conv2d':    current = applyConv2dOp(current, convIdx++); break
+      case 'relu':      current = applyReLUOp(current); break
+      case 'gelu':      current = applyGELUOp(current); break
+      case 'sigmoid':   current = applySigmoidOp(current); break
+      case 'maxpool2d': current = applyMaxPoolOp(current, layer.params.stride ?? layer.params.kernel_size ?? 2); break
+      case 'avgpool2d': current = applyAvgPoolOp(current, layer.params.stride ?? layer.params.kernel_size ?? 2); break
+      case 'batchnorm2d': current = applyBatchNormOp(current); break
+      case 'dropout':   current = applyDropoutOp(current, layer.params.p ?? 0.5, convIdx * 37); break
+      case 'flatten': {
+        const flat = document.createElement('canvas'); flat.width = SIZE; flat.height = SIZE
+        const fctx = flat.getContext('2d')!
+        fctx.fillStyle = '#04040a'; fctx.fillRect(0, 0, SIZE, SIZE)
+        for (let s = 0; s < 4; s++) fctx.drawImage(current, 0, s * SIZE / 4, SIZE, SIZE / 4)
+        current = flat; break
+      }
+      case 'linear': {
+        const lin = document.createElement('canvas'); lin.width = SIZE; lin.height = SIZE
+        const lctx = lin.getContext('2d')!
+        lctx.fillStyle = '#04040a'; lctx.fillRect(0, 0, SIZE, SIZE)
+        const srcD = current.getContext('2d')!.getImageData(0, 0, current.width, current.height).data
+        const nBars = Math.min(layer.params.out_features ?? 128, 48)
+        for (let n = 0; n < nBars; n++) {
+          const pIdx = Math.floor(n / nBars * srcD.length / 4) * 4
+          const avg = (srcD[pIdx] + srcD[pIdx+1] + srcD[pIdx+2]) / 3
+          const barH = (avg / 255) * (SIZE - 6)
+          const bx = (n / nBars) * SIZE; const bw = SIZE / nBars
+          lctx.fillStyle = `rgb(${srcD[pIdx]},${srcD[pIdx+1]},${srcD[pIdx+2]})`
+          lctx.fillRect(bx, SIZE - barH - 3, Math.max(1, bw - 0.5), barH)
+        }
+        current = lin; break
+      }
+      default: current = cloneCanvas(current)
+    }
+    canvases.push(cloneCanvas(current))
+  }
+
+  // Output node: softmax probability bars
+  const out = document.createElement('canvas'); out.width = SIZE; out.height = SIZE
+  const octx = out.getContext('2d')!
+  octx.fillStyle = '#04040a'; octx.fillRect(0, 0, SIZE, SIZE)
+  const bw = SIZE / numClasses
+  for (let c = 0; c < numClasses; c++) {
+    const v = c === 0 ? 0.82 : 0.04 + Math.sin(c * 1.3) * 0.04 + 0.04
+    octx.fillStyle = `hsl(${(c / numClasses) * 280 + 120},70%,52%)`
+    octx.fillRect(c * bw + 1, SIZE * (1 - v) - 2, bw - 2, SIZE * v)
+  }
+  canvases.push(out)
+  return canvases
+}
+
+// ── 2D architecture diagram renderer ─────────────────────────────────────────
+
+function draw2DScene(
+  canvas: HTMLCanvasElement,
+  layers: Layer[],
+  inputH: number,
+  inputW: number,
+  numClasses: number,
+  activationCanvases: HTMLCanvasElement[] | null = null,
+) {
+  const ctx  = canvas.getContext('2d')!
+  const CW   = canvas.width
+  const CH   = canvas.height
+
+  ctx.fillStyle = '#0d0d0f'
+  ctx.fillRect(0, 0, CW, CH)
+
+  const shapes   = [...computeAllShapes(layers, inputH, inputW), [numClasses]]
+  const N        = shapes.length
+  const CENTER_Y = CH * 0.44
+  const MAX_VIS_H = CH * 0.52
+  const PLANE_W   = 20
+  const DX        = 3.8   // depth offset per channel-plane, x
+  const DY        = -2.8  // depth offset per channel-plane, y
+  const MAX_PL    = 9
+  const MARGIN    = 44
+
+  // ── Compute visual params ────────────────────────────────────────────────────
+  const vis = shapes.map((shape, i) => {
+    const layerType = i === 0 ? 'input' : i <= layers.length ? layers[i - 1].type : 'output'
+    const color     = layerType === 'output' ? '#22c55e' : (LAYER_CSS[layerType] ?? '#8b8b9a')
+    const label     = layerType === 'output' ? 'output' : (LAYER_DISPLAY[layerType] ?? layerType)
+
+    if (!isValidShape(shape)) return { visH: 20, nPl: 1, color, label, shapeStr: '⚠', layerType }
+
+    let visH: number, nPl: number, shapeStr: string
+    if (shape.length === 3) {
+      const [C, H, W] = shape
+      visH     = Math.max(18, Math.min((Math.max(H, W) / inputH) * MAX_VIS_H * 1.6, MAX_VIS_H))
+      nPl      = Math.min(C, MAX_PL)
+      shapeStr = `${C}×${H}×${W}`
+    } else {
+      visH     = Math.max(18, Math.min((shape[0] / 128) * MAX_VIS_H, MAX_VIS_H))
+      nPl      = 1
+      shapeStr = `${shape[0]}`
+    }
+    return { visH, nPl, color, label, shapeStr, layerType }
+  })
+
+  // ── Horizontal layout ────────────────────────────────────────────────────────
+  const blobW    = vis.map(v => PLANE_W + (v.nPl - 1) * DX)
+  const totalBW  = blobW.reduce((a, b) => a + b, 0)
+  const gap      = Math.max(14, (CW - 2 * MARGIN - totalBW) / Math.max(N - 1, 1))
+  const blobX: number[] = []
+  let cx = MARGIN
+  for (let i = 0; i < N; i++) { blobX.push(cx); cx += blobW[i] + gap }
+
+  // ── Draw trapezoid connectors (behind blobs) ─────────────────────────────────
+  for (let i = 1; i < N; i++) {
+    const pv = vis[i - 1], cv = vis[i]
+    const x1 = blobX[i - 1] + PLANE_W
+    const x2 = blobX[i]
+    if (x2 <= x1 + 2) continue
+    const connColor = cv.layerType === 'output' ? '#22c55e' : (LAYER_CSS[cv.layerType] ?? '#8b8b9a')
+
+    ctx.beginPath()
+    ctx.moveTo(x1, CENTER_Y - pv.visH / 2)
+    ctx.lineTo(x2, CENTER_Y - cv.visH / 2)
+    ctx.lineTo(x2, CENTER_Y + cv.visH / 2)
+    ctx.lineTo(x1, CENTER_Y + pv.visH / 2)
+    ctx.closePath()
+    const grd = ctx.createLinearGradient(x1, 0, x2, 0)
+    grd.addColorStop(0, connColor + '28')
+    grd.addColorStop(1, connColor + '10')
+    ctx.fillStyle = grd
+    ctx.fill()
+    ctx.strokeStyle = connColor + '44'
+    ctx.lineWidth = 0.5
+    ctx.stroke()
+  }
+
+  // ── Draw blobs ───────────────────────────────────────────────────────────────
+  for (let i = 0; i < N; i++) {
+    const { visH, nPl, color } = vis[i]
+    const x = blobX[i]
+
+    // Top cap
+    if (nPl > 1) {
+      const lox = (nPl - 1) * DX, loy = (nPl - 1) * DY
+      ctx.beginPath()
+      ctx.moveTo(x,          CENTER_Y - visH / 2)
+      ctx.lineTo(x + PLANE_W, CENTER_Y - visH / 2)
+      ctx.lineTo(x + PLANE_W + lox, CENTER_Y - visH / 2 + loy)
+      ctx.lineTo(x + lox,          CENTER_Y - visH / 2 + loy)
+      ctx.closePath()
+      ctx.fillStyle = color + '25'
+      ctx.fill()
+      ctx.strokeStyle = color + '55'
+      ctx.lineWidth = 0.8
+      ctx.stroke()
+
+      // Right cap
+      ctx.beginPath()
+      ctx.moveTo(x + PLANE_W,       CENTER_Y - visH / 2)
+      ctx.lineTo(x + PLANE_W + lox, CENTER_Y - visH / 2 + loy)
+      ctx.lineTo(x + PLANE_W + lox, CENTER_Y + visH / 2 + loy)
+      ctx.lineTo(x + PLANE_W,       CENTER_Y + visH / 2)
+      ctx.closePath()
+      ctx.fillStyle = color + '1a'
+      ctx.fill()
+      ctx.strokeStyle = color + '44'
+      ctx.stroke()
+    }
+
+    // Planes back → front
+    for (let pi = nPl - 1; pi >= 0; pi--) {
+      const ox      = pi * DX
+      const oy      = pi * DY
+      const t       = nPl > 1 ? pi / (nPl - 1) : 0
+      const isFront = pi === 0
+      const px      = x + ox
+      const py      = CENTER_Y - visH / 2 + oy
+
+      ctx.shadowColor = isFront ? color : 'transparent'
+      ctx.shadowBlur  = isFront ? 12 : 0
+
+      const actCanvas = activationCanvases?.[i]
+      if (actCanvas && isFront) {
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(px, py, PLANE_W, visH)
+        ctx.clip()
+        ctx.globalAlpha = 0.94
+        ctx.drawImage(actCanvas, px, py, PLANE_W, visH)
+        ctx.globalAlpha = 1.0
+        ctx.restore()
+      } else {
+        const grd = ctx.createLinearGradient(px, py, px + PLANE_W, py + visH)
+        const a1  = isFront ? 'cc' : (0x30 + Math.floor(t * 0x40)).toString(16).padStart(2, '0')
+        const a2  = isFront ? '88' : (0x20 + Math.floor(t * 0x30)).toString(16).padStart(2, '0')
+        grd.addColorStop(0, color + a1)
+        grd.addColorStop(1, color + a2)
+        ctx.fillStyle = grd
+        ctx.fillRect(px, py, PLANE_W, visH)
+      }
+
+      ctx.shadowBlur  = 0
+      ctx.strokeStyle = color + (isFront ? 'ee' : '40')
+      ctx.lineWidth   = isFront ? 1.2 : 0.5
+      ctx.strokeRect(px, py, PLANE_W, visH)
+    }
+  }
+
+  // ── Labels ───────────────────────────────────────────────────────────────────
+  for (let i = 0; i < N; i++) {
+    const { visH, nPl, color, label, shapeStr } = vis[i]
+    const lx = blobX[i] + PLANE_W / 2 + ((nPl - 1) * DX) / 2
+    const ly = CENTER_Y + visH / 2 + 18
+
+    ctx.font      = 'bold 10px "JetBrains Mono", monospace'
+    ctx.fillStyle = color
+    ctx.textAlign = 'center'
+    ctx.shadowColor = color
+    ctx.shadowBlur  = 6
+    ctx.fillText(label, lx, ly)
+    ctx.shadowBlur  = 0
+
+    ctx.font      = '9px "JetBrains Mono", monospace'
+    ctx.fillStyle = 'rgba(140,140,160,0.65)'
+    ctx.fillText(shapeStr, lx, ly + 13)
+  }
+}
+
 // ── Educational texture generator ─────────────────────────────────────────────
 // Each texture visually simulates what that layer type does to the data.
+// makeLayerTextureCanvas returns the raw canvas (shared by 2D and 3D views).
+// makeLayerTexture wraps it as a Three.js texture for the 3D renderer.
 
-function makeLayerTexture(layerType: string, colorHex: number, seed: number): THREE.CanvasTexture {
+function makeLayerTextureCanvas(layerType: string, colorHex: number, seed: number): HTMLCanvasElement {
   const S = 64
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = S
@@ -437,7 +898,11 @@ function makeLayerTexture(layerType: string, colorHex: number, seed: number): TH
     }
   }
 
-  return new THREE.CanvasTexture(canvas)
+  return canvas
+}
+
+function makeLayerTexture(layerType: string, colorHex: number, seed: number): THREE.CanvasTexture {
+  return new THREE.CanvasTexture(makeLayerTextureCanvas(layerType, colorHex, seed))
 }
 
 // ── Three.js scene builder ────────────────────────────────────────────────────
@@ -450,6 +915,7 @@ function buildScene(
   particlesRef: React.MutableRefObject<THREE.Mesh[]>,
   numClasses: number,
   viewMode: 'color' | 'image',
+  activationCanvases: HTMLCanvasElement[] | null = null,
 ) {
   while (scene.children.length > 0) scene.remove(scene.children[0])
   particlesRef.current = []
@@ -530,7 +996,14 @@ function buildScene(
         const oz  = pi * 0.075
 
         const geo = new THREE.BoxGeometry(planeW, planeH, BOX_DEPTH)
-        const mat = viewMode === 'image'
+        const actCanvas = activationCanvases?.[si]
+        const mat = (viewMode === 'image' && actCanvas)
+          ? new THREE.MeshBasicMaterial({
+              map: new THREE.CanvasTexture(actCanvas),
+              transparent: true, opacity: 0.2 + t * 0.7,
+              side: THREE.DoubleSide,
+            })
+          : viewMode === 'image'
           ? new THREE.MeshBasicMaterial({
               map: makeLayerTexture(layerType, colorHex, si * 100 + pi),
               transparent: true, opacity: 0.2 + t * 0.7,
@@ -798,6 +1271,8 @@ export default function CustomModel() {
   const [autoRotate, setAutoRotate] = useState(true)
   const autoRotateRef = useRef(true)
   const [viewMode, setViewMode] = useState<'color' | 'image'>('color')
+  const [viewDim,  setViewDim]  = useState<'3d' | '2d'>('3d')
+  const canvas2DRef = useRef<HTMLCanvasElement>(null)
 
   // Orbit state — slightly dramatic angle by default
   const orbitRef = useRef({ theta: 0.45, phi: 0.88, radius: 11, dragging: false, lastX: 0, lastY: 0 })
@@ -928,7 +1403,8 @@ export default function CustomModel() {
   // Rebuild scene when layers / input size change
   useEffect(() => {
     if (!sceneRef.current || !cameraRef.current) return
-    buildScene(sceneRef.current, layers, inputH, inputW, particlesRef, numClasses, viewMode)
+    const activations = viewMode === 'image' ? buildActivationSequence(layers, numClasses) : null
+    buildScene(sceneRef.current, layers, inputH, inputW, particlesRef, numClasses, viewMode, activations)
     updateCamera()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layers, inputH, inputW, numClasses, viewMode])
@@ -948,6 +1424,21 @@ export default function CustomModel() {
     )
     camera.lookAt(target)
   }, [layers.length])
+
+  // 2D diagram: redraw whenever layers, input size, mode, or view switches to 2D
+  useEffect(() => {
+    if (viewDim !== '2d' || !canvas2DRef.current) return
+    const c   = canvas2DRef.current
+    const par = c.parentElement!
+    const w   = par.clientWidth  || 800
+    const h   = par.clientHeight || 420
+    c.width   = w
+    c.height  = h
+    if (w > 0 && h > 0) {
+      const activations = viewMode === 'image' ? buildActivationSequence(layers, numClasses) : null
+      draw2DScene(c, layers, inputH, inputW, numClasses, activations)
+    }
+  }, [viewDim, layers, inputH, inputW, numClasses, viewMode])
 
   // Keep cameraUpdateRef current so the animation loop can call it without stale closure
   useEffect(() => {
@@ -1357,12 +1848,25 @@ export default function CustomModel() {
           </div>
         </div>
 
-        {/* ── Center: Three.js Canvas ─────────────────────────────────────── */}
+        {/* ── Center: Canvas (3D or 2D) ───────────────────────────────────── */}
         <div style={{ flex: 1, position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: '#0d0d0f' }}>
-          <div ref={canvasRef} style={{ width: '100%', height: '100%', cursor: 'grab' }} />
+          <div ref={canvasRef} style={{ width: '100%', height: '100%', cursor: 'grab', display: viewDim === '3d' ? 'block' : 'none' }} />
+          <canvas ref={canvas2DRef} style={{ width: '100%', height: '100%', display: viewDim === '2d' ? 'block' : 'none' }} />
 
           {/* Canvas controls */}
           <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => setViewDim(v => v === '3d' ? '2d' : '3d')}
+              style={{
+                padding: '4px 10px', borderRadius: 5,
+                background: viewDim === '2d' ? 'rgba(168,85,247,0.25)' : 'rgba(15,15,18,0.85)',
+                border: `1px solid ${viewDim === '2d' ? '#a855f7' : 'var(--border2)'}`,
+                color: viewDim === '2d' ? '#a855f7' : 'var(--text2)',
+                fontSize: 11, cursor: 'pointer', backdropFilter: 'blur(4px)',
+              }}
+            >
+              {viewDim === '3d' ? '▦ 2D View' : '⬡ 3D View'}
+            </button>
             <button
               onClick={() => setViewMode(v => v === 'color' ? 'image' : 'color')}
               style={{
@@ -1376,36 +1880,30 @@ export default function CustomModel() {
             >
               {viewMode === 'image' ? '◉ Activations' : '◎ Activations'}
             </button>
-            <button
-              onClick={() => {
-                const next = !autoRotate
-                setAutoRotate(next)
-                autoRotateRef.current = next
-              }}
-              style={{
-                padding: '4px 10px', borderRadius: 5,
-                background: autoRotate ? 'rgba(88,101,242,0.25)' : 'rgba(15,15,18,0.85)',
-                border: `1px solid ${autoRotate ? 'var(--accent)' : 'var(--border2)'}`,
-                color: autoRotate ? 'var(--accent)' : 'var(--text2)',
-                fontSize: 11, cursor: 'pointer', backdropFilter: 'blur(4px)',
-              }}
-            >
-              {autoRotate ? '⟳ Auto-rotate' : '⟳ Rotate off'}
-            </button>
-            <button
-              onClick={() => {
-                orbitRef.current = { ...orbitRef.current, theta: 0.45, phi: 0.88, radius: 11 }
-                updateCamera()
-              }}
-              style={{
-                padding: '4px 10px', borderRadius: 5,
-                background: 'rgba(15,15,18,0.85)', border: '1px solid var(--border2)',
-                color: 'var(--text2)', fontSize: 11, cursor: 'pointer',
-                backdropFilter: 'blur(4px)',
-              }}
-            >
-              Reset View
-            </button>
+            {viewDim === '3d' && <>
+              <button
+                onClick={() => { const n = !autoRotate; setAutoRotate(n); autoRotateRef.current = n }}
+                style={{
+                  padding: '4px 10px', borderRadius: 5,
+                  background: autoRotate ? 'rgba(88,101,242,0.25)' : 'rgba(15,15,18,0.85)',
+                  border: `1px solid ${autoRotate ? 'var(--accent)' : 'var(--border2)'}`,
+                  color: autoRotate ? 'var(--accent)' : 'var(--text2)',
+                  fontSize: 11, cursor: 'pointer', backdropFilter: 'blur(4px)',
+                }}
+              >
+                {autoRotate ? '⟳ Auto-rotate' : '⟳ Rotate off'}
+              </button>
+              <button
+                onClick={() => { orbitRef.current = { ...orbitRef.current, theta: 0.45, phi: 0.88, radius: 11 }; updateCamera() }}
+                style={{
+                  padding: '4px 10px', borderRadius: 5,
+                  background: 'rgba(15,15,18,0.85)', border: '1px solid var(--border2)',
+                  color: 'var(--text2)', fontSize: 11, cursor: 'pointer', backdropFilter: 'blur(4px)',
+                }}
+              >
+                Reset View
+              </button>
+            </>}
           </div>
 
           {/* Help hint */}
@@ -1414,7 +1912,7 @@ export default function CustomModel() {
             fontSize: 10, color: 'rgba(140,140,158,0.5)',
             pointerEvents: 'none',
           }}>
-            Drag to orbit · Scroll to zoom
+            {viewDim === '3d' ? 'Drag to orbit · Scroll to zoom' : 'Architecture diagram — 2D view'}
           </div>
         </div>
 
