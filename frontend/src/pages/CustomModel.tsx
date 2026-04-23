@@ -183,6 +183,69 @@ const LAYER_DISPLAY: Record<string, string> = {
   linear: 'linear (FC)',
 }
 
+const LAYER_DESCRIPTIONS: Record<string, { label: string; what: string; why: string; analogy: string }> = {
+  conv2d: {
+    label: 'Convolutional Layer',
+    what: 'Slides a small learnable filter (kernel) over the image, computing dot products at each position to detect local patterns.',
+    why: 'Each filter learns to detect one feature — edges, curves, textures. More filters = richer feature extraction.',
+    analogy: '🔍 Like scanning a photo with a magnifying glass that lights up when it sees a specific shape.',
+  },
+  batchnorm2d: {
+    label: 'Batch Normalization',
+    what: 'Normalizes each batch of activations to have zero mean and unit variance, then scales and shifts with learned parameters.',
+    why: 'Prevents exploding/vanishing gradients, allows higher learning rates, and speeds up training significantly.',
+    analogy: '⚖️ Like a referee ensuring all players play at the same energy level before each round.',
+  },
+  maxpool2d: {
+    label: 'Max Pooling',
+    what: 'Divides the feature map into small windows and keeps only the maximum value from each window.',
+    why: 'Reduces spatial size, cuts computation, and makes features robust to small shifts/translations.',
+    analogy: '📸 Like thumbnail-ing an image — keeps the most prominent signal and throws away fine detail.',
+  },
+  avgpool2d: {
+    label: 'Average Pooling',
+    what: 'Like max pooling but takes the average of values in each window instead of the maximum.',
+    why: 'Produces smoother feature maps. Often used in the final stage before classification.',
+    analogy: '🌫️ Like blurring a photo — takes a soft summary of a region rather than the sharpest peak.',
+  },
+  relu: {
+    label: 'ReLU Activation',
+    what: 'Sets all negative values to zero, keeps positive values unchanged: f(x) = max(0, x).',
+    why: 'Adds non-linearity so the network can learn complex patterns. Simple yet very effective.',
+    analogy: '💡 Like a switch — neuron is "silent" when negative, "fires" when positive.',
+  },
+  gelu: {
+    label: 'GELU Activation',
+    what: 'A smooth, differentiable approximation of ReLU that slightly activates for small negative values.',
+    why: 'Used in modern architectures (BERT, GPT). Tends to train slightly better than ReLU.',
+    analogy: '🎚️ A smoother dimmer switch instead of a hard on/off toggle.',
+  },
+  sigmoid: {
+    label: 'Sigmoid Activation',
+    what: 'Squashes any input to a value between 0 and 1 using f(x) = 1 / (1 + e⁻ˣ).',
+    why: 'Useful for binary classification outputs. Rarely used in hidden layers due to vanishing gradients.',
+    analogy: '📊 Like a confidence meter that always reads between 0% and 100%.',
+  },
+  dropout: {
+    label: 'Dropout',
+    what: 'Randomly zeros out a fraction (p) of neurons during training. Disabled at inference time.',
+    why: 'Prevents overfitting by forcing the network not to rely on any single neuron.',
+    analogy: '🎲 Like randomly benching players during practice — the team learns to work without any one star.',
+  },
+  flatten: {
+    label: 'Flatten',
+    what: 'Reshapes a 3D tensor (Channels × Height × Width) into a single 1D vector.',
+    why: 'Required to bridge spatial feature maps with fully connected layers.',
+    analogy: '📄 Like unrolling a folded map into a single long strip.',
+  },
+  linear: {
+    label: 'Fully Connected (Linear)',
+    what: 'Every input neuron connects to every output neuron with a learned weight.',
+    why: 'Combines all extracted features to make a final decision or produce class scores.',
+    analogy: '🗳️ Like a committee vote — every piece of evidence contributes to the final answer.',
+  },
+}
+
 // ── Three.js: create label sprite ─────────────────────────────────────────────
 
 function makeLabel(text1: string, text2: string, color: string): THREE.Sprite {
@@ -210,6 +273,173 @@ function easeInOut(t: number): number {
   return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
 }
 
+// ── Educational texture generator ─────────────────────────────────────────────
+// Each texture visually simulates what that layer type does to the data.
+
+function makeLayerTexture(layerType: string, colorHex: number, seed: number): THREE.CanvasTexture {
+  const S = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = S
+  const ctx = canvas.getContext('2d')!
+  const r = (colorHex >> 16) & 0xff
+  const g = (colorHex >> 8)  & 0xff
+  const b =  colorHex        & 0xff
+
+  // Seeded deterministic RNG (mulberry32)
+  let _s = seed ^ 0xdeadbeef
+  const rng = () => {
+    _s |= 0; _s = _s + 0x6D2B79F5 | 0
+    let t = Math.imul(_s ^ (_s >>> 15), 1 | _s)
+    t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+
+  ctx.fillStyle = '#04040a'
+  ctx.fillRect(0, 0, S, S)
+
+  switch (layerType) {
+    case 'input': {
+      // Simulate a natural image: sky/object/ground gradient with texture
+      const gy = ctx.createLinearGradient(0, 0, 0, S)
+      gy.addColorStop(0,    'rgba(25,70,160,1)')
+      gy.addColorStop(0.35, 'rgba(70,170,70,1)')
+      gy.addColorStop(0.65, 'rgba(90,130,50,1)')
+      gy.addColorStop(1,    'rgba(55,35,15,1)')
+      ctx.fillStyle = gy
+      ctx.fillRect(0, 0, S, S)
+      for (let i = 0; i < 500; i++) {
+        const x = rng() * S, y = rng() * S, v = (rng() - 0.5) * 0.4
+        ctx.fillStyle = `rgba(${Math.min(255, 128 + v * 255 | 0)},${Math.min(255, 100 + v * 200 | 0)},${Math.min(255, 40 + v * 100 | 0)},0.2)`
+        ctx.fillRect(x, y, 2, 2)
+      }
+      break
+    }
+    case 'conv2d': {
+      // Gabor-like edge-detection activation map
+      const angle = rng() * Math.PI, freq = 4 + rng() * 4
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x += 2) {
+          const nx = x / S - 0.5, ny = y / S - 0.5
+          const v = Math.sin(freq * (nx * Math.cos(angle) + ny * Math.sin(angle)) * Math.PI * 6) * 0.5 + 0.5
+          const pv = Math.pow(v, 1.8)
+          if (pv > 0.05) {
+            ctx.fillStyle = `rgba(${r * pv | 0},${g * pv | 0},${b * pv | 0},${0.2 + pv * 0.8})`
+            ctx.fillRect(x, y, 2, 1)
+          }
+        }
+      }
+      break
+    }
+    case 'relu': {
+      // ReLU zeros negatives — sparse bright patches on dark
+      const angle = rng() * Math.PI, freq = 4 + rng() * 4
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x += 2) {
+          const nx = x / S - 0.5, ny = y / S - 0.5
+          const raw = Math.sin(freq * (nx * Math.cos(angle) + ny * Math.sin(angle)) * Math.PI * 6)
+          const v = Math.max(0, raw)   // ReLU: kill negatives
+          if (v > 0.05) {
+            ctx.fillStyle = `rgba(${r * v | 0},${g * v | 0},${b * v | 0},${v * 0.95})`
+            ctx.fillRect(x, y, 2, 1)
+          }
+        }
+      }
+      break
+    }
+    case 'maxpool2d': {
+      // Blocky pixels — spatial compression with bright "winner" highlights
+      const bs = 8
+      for (let by = 0; by < S; by += bs) {
+        for (let bx = 0; bx < S; bx += bs) {
+          const v = 0.25 + rng() * 0.75
+          ctx.fillStyle = `rgba(${r * v | 0},${g * v | 0},${b * v | 0},${0.5 + v * 0.4})`
+          ctx.fillRect(bx + 1, by + 1, bs - 2, bs - 2)
+          // Max pixel highlight
+          ctx.fillStyle = 'rgba(255,255,255,0.45)'
+          ctx.fillRect(bx + (rng() * (bs - 3) | 0), by + (rng() * (bs - 3) | 0), 2, 2)
+        }
+      }
+      break
+    }
+    case 'avgpool2d': {
+      // Smooth blurry blocks — averaging effect
+      const bs = 7
+      for (let by = 0; by < S; by += bs) {
+        for (let bx = 0; bx < S; bx += bs) {
+          const v = 0.2 + rng() * 0.55
+          for (let dy = 0; dy < bs; dy++) {
+            for (let dx = 0; dx < bs; dx++) {
+              const d = Math.sqrt((dx - bs/2)**2 + (dy - bs/2)**2) / bs
+              const lv = v * (1 - d * 0.4)
+              ctx.fillStyle = `rgba(${r * lv | 0},${g * lv | 0},${b * lv | 0},0.7)`
+              ctx.fillRect(bx + dx, by + dy, 1, 1)
+            }
+          }
+        }
+      }
+      break
+    }
+    case 'batchnorm2d': {
+      // Normalized: even distribution across the full range
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+          const v = 0.15 + ((x + y) / (S * 2)) * 0.75
+          ctx.fillStyle = `rgba(${r * v | 0},${g * v | 0},${b * v | 0},0.8)`
+          ctx.fillRect(x, y, 1, 1)
+        }
+      }
+      break
+    }
+    case 'dropout': {
+      // ~50% neurons zeroed — visible sparse gaps
+      for (let y = 0; y < S; y += 3) {
+        for (let x = 0; x < S; x += 3) {
+          if (rng() > 0.5) {
+            const v = 0.4 + rng() * 0.6
+            ctx.fillStyle = `rgba(${Math.min(255, r * v * 2 | 0)},${Math.min(255, g * v * 2 | 0)},${Math.min(255, b * v * 2 | 0)},0.9)`
+            ctx.fillRect(x, y, 2, 2)
+          }
+        }
+      }
+      break
+    }
+    case 'sigmoid': {
+      // S-curve mapping: values squashed to (0,1) — horizontal gradient
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+          const raw = (x / S - 0.5) * 8
+          const v = 0.05 + (1 / (1 + Math.exp(-raw))) * 0.95
+          ctx.fillStyle = `rgba(${r * v | 0},${g * v | 0},${b * v | 0},0.85)`
+          ctx.fillRect(x, y, 1, 1)
+        }
+      }
+      break
+    }
+    case 'gelu': {
+      // GELU: similar to sigmoid but slightly asymmetric smooth curve
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+          const raw = (x / S - 0.5) * 8
+          const gelu = raw * 0.5 * (1 + Math.tanh(0.7978845 * (raw + 0.044715 * raw ** 3)))
+          const v = Math.max(0, Math.min(1, gelu / 4 + 0.5))
+          ctx.fillStyle = `rgba(${r * v | 0},${g * v | 0},${b * v | 0},0.85)`
+          ctx.fillRect(x, y, 1, 1)
+        }
+      }
+      break
+    }
+    default: {
+      for (let i = 0; i < S * S / 4; i++) {
+        const x = rng() * S, y = rng() * S, v = rng()
+        ctx.fillStyle = `rgba(${r * v | 0},${g * v | 0},${b * v | 0},0.6)`
+        ctx.fillRect(x, y, 2, 2)
+      }
+    }
+  }
+
+  return new THREE.CanvasTexture(canvas)
+}
+
 // ── Three.js scene builder ────────────────────────────────────────────────────
 
 function buildScene(
@@ -219,6 +449,7 @@ function buildScene(
   inputW: number,
   particlesRef: React.MutableRefObject<THREE.Mesh[]>,
   numClasses: number,
+  viewMode: 'color' | 'image',
 ) {
   while (scene.children.length > 0) scene.remove(scene.children[0])
   particlesRef.current = []
@@ -299,12 +530,18 @@ function buildScene(
         const oz  = pi * 0.075
 
         const geo = new THREE.BoxGeometry(planeW, planeH, BOX_DEPTH)
-        const mat = new THREE.MeshStandardMaterial({
-          color: colorHex, emissive: colorHex,
-          emissiveIntensity: 0.18 + t * 0.45,
-          transparent: true, opacity: 0.14 + t * 0.38,
-          roughness: 0.15, metalness: 0.55, side: THREE.DoubleSide,
-        })
+        const mat = viewMode === 'image'
+          ? new THREE.MeshBasicMaterial({
+              map: makeLayerTexture(layerType, colorHex, si * 100 + pi),
+              transparent: true, opacity: 0.2 + t * 0.7,
+              side: THREE.DoubleSide,
+            })
+          : new THREE.MeshStandardMaterial({
+              color: colorHex, emissive: colorHex,
+              emissiveIntensity: 0.18 + t * 0.45,
+              transparent: true, opacity: 0.14 + t * 0.38,
+              roughness: 0.15, metalness: 0.55, side: THREE.DoubleSide,
+            })
         const mesh = new THREE.Mesh(geo, mat)
         mesh.position.set(ox, oy, z + oz)
         scene.add(mesh)
@@ -548,6 +785,7 @@ export default function CustomModel() {
 
   // Add layer dropdown
   const [showAddMenu, setShowAddMenu] = useState(false)
+  const [hoveredAddType, setHoveredAddType] = useState<LayerType | null>(null)
 
   // Three.js refs
   const canvasRef       = useRef<HTMLDivElement>(null)
@@ -557,6 +795,9 @@ export default function CustomModel() {
   const animFrameRef    = useRef<number>(0)
   const particlesRef    = useRef<THREE.Mesh[]>([])
   const cameraUpdateRef = useRef<() => void>(() => {})
+  const [autoRotate, setAutoRotate] = useState(true)
+  const autoRotateRef = useRef(true)
+  const [viewMode, setViewMode] = useState<'color' | 'image'>('color')
 
   // Orbit state — slightly dramatic angle by default
   const orbitRef = useRef({ theta: 0.45, phi: 0.88, radius: 11, dragging: false, lastX: 0, lastY: 0 })
@@ -644,8 +885,8 @@ export default function CustomModel() {
     const animate = () => {
       animFrameRef.current = requestAnimationFrame(animate)
 
-      // Slow auto-rotate when user is not dragging
-      if (!orbitRef.current.dragging) {
+      // Slow auto-rotate when user is not dragging and auto-rotate is on
+      if (!orbitRef.current.dragging && autoRotateRef.current) {
         orbitRef.current.theta += 0.004
         cameraUpdateRef.current()
       }
@@ -687,10 +928,10 @@ export default function CustomModel() {
   // Rebuild scene when layers / input size change
   useEffect(() => {
     if (!sceneRef.current || !cameraRef.current) return
-    buildScene(sceneRef.current, layers, inputH, inputW, particlesRef, numClasses)
+    buildScene(sceneRef.current, layers, inputH, inputW, particlesRef, numClasses, viewMode)
     updateCamera()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layers, inputH, inputW, numClasses])
+  }, [layers, inputH, inputW, numClasses, viewMode])
 
   // ── Camera orbit ──────────────────────────────────────────────────────────
 
@@ -1020,6 +1261,26 @@ export default function CustomModel() {
           {/* Param editor for selected layer */}
           {selectedLayer && (
             <div style={{ borderTop: '1px solid var(--border)', padding: '8px 10px', flexShrink: 0 }}>
+              {/* Educational description card */}
+              {LAYER_DESCRIPTIONS[selectedLayer.type] && (() => {
+                const desc = LAYER_DESCRIPTIONS[selectedLayer.type]
+                const color = LAYER_CSS[selectedLayer.type] ?? 'var(--accent)'
+                return (
+                  <div style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${color}40`,
+                    borderLeft: `3px solid ${color}`,
+                    borderRadius: 5, padding: '8px 10px', marginBottom: 10,
+                  }}>
+                    <p style={{ fontSize: 11, color, fontWeight: 700, marginBottom: 5 }}>{desc.label}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.55, marginBottom: 5 }}>{desc.what}</p>
+                    <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5, marginBottom: 5 }}>
+                      <span style={{ color: 'var(--text2)', fontWeight: 600 }}>Why: </span>{desc.why}
+                    </p>
+                    <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5 }}>{desc.analogy}</p>
+                  </div>
+                )
+              })()}
               <p style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                 {LAYER_DISPLAY[selectedLayer.type] ?? selectedLayer.type} params
               </p>
@@ -1056,6 +1317,23 @@ export default function CustomModel() {
                 background: 'var(--surface2)', border: '1px solid var(--border2)',
                 borderRadius: 6, overflow: 'hidden', zIndex: 100,
               }}>
+                {/* Hover preview card */}
+                {hoveredAddType && LAYER_DESCRIPTIONS[hoveredAddType] && (
+                  <div style={{
+                    padding: '8px 10px', borderBottom: '1px solid var(--border)',
+                    background: 'var(--surface3)',
+                  }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: LAYER_CSS[hoveredAddType] ?? 'var(--accent)', marginBottom: 3 }}>
+                      {LAYER_DESCRIPTIONS[hoveredAddType].label}
+                    </p>
+                    <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5 }}>
+                      {LAYER_DESCRIPTIONS[hoveredAddType].what}
+                    </p>
+                    <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3, lineHeight: 1.4 }}>
+                      {LAYER_DESCRIPTIONS[hoveredAddType].analogy}
+                    </p>
+                  </div>
+                )}
                 {ALL_LAYER_TYPES.map(lt => (
                   <button
                     key={lt}
@@ -1067,8 +1345,8 @@ export default function CustomModel() {
                       color: 'var(--text)', fontSize: 12, cursor: 'pointer',
                       textAlign: 'left',
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface3)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface3)'; setHoveredAddType(lt) }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; setHoveredAddType(null) }}
                   >
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_CSS[lt] ?? '#8b8b9a', flexShrink: 0 }} />
                     {LAYER_DISPLAY[lt] ?? lt}
@@ -1083,22 +1361,52 @@ export default function CustomModel() {
         <div style={{ flex: 1, position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: '#0d0d0f' }}>
           <div ref={canvasRef} style={{ width: '100%', height: '100%', cursor: 'grab' }} />
 
-          {/* Reset view button */}
-          <button
-            onClick={() => {
-              orbitRef.current = { ...orbitRef.current, theta: 0.45, phi: 0.88, radius: 11 }
-              updateCamera()
-            }}
-            style={{
-              position: 'absolute', top: 10, right: 10,
-              padding: '4px 10px', borderRadius: 5,
-              background: 'rgba(15,15,18,0.85)', border: '1px solid var(--border2)',
-              color: 'var(--text2)', fontSize: 11, cursor: 'pointer',
-              backdropFilter: 'blur(4px)',
-            }}
-          >
-            Reset View
-          </button>
+          {/* Canvas controls */}
+          <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => setViewMode(v => v === 'color' ? 'image' : 'color')}
+              style={{
+                padding: '4px 10px', borderRadius: 5,
+                background: viewMode === 'image' ? 'rgba(251,146,60,0.25)' : 'rgba(15,15,18,0.85)',
+                border: `1px solid ${viewMode === 'image' ? '#fb923c' : 'var(--border2)'}`,
+                color: viewMode === 'image' ? '#fb923c' : 'var(--text2)',
+                fontSize: 11, cursor: 'pointer', backdropFilter: 'blur(4px)',
+              }}
+              title="Toggle between color blocks and educational activation textures"
+            >
+              {viewMode === 'image' ? '◉ Activations' : '◎ Activations'}
+            </button>
+            <button
+              onClick={() => {
+                const next = !autoRotate
+                setAutoRotate(next)
+                autoRotateRef.current = next
+              }}
+              style={{
+                padding: '4px 10px', borderRadius: 5,
+                background: autoRotate ? 'rgba(88,101,242,0.25)' : 'rgba(15,15,18,0.85)',
+                border: `1px solid ${autoRotate ? 'var(--accent)' : 'var(--border2)'}`,
+                color: autoRotate ? 'var(--accent)' : 'var(--text2)',
+                fontSize: 11, cursor: 'pointer', backdropFilter: 'blur(4px)',
+              }}
+            >
+              {autoRotate ? '⟳ Auto-rotate' : '⟳ Rotate off'}
+            </button>
+            <button
+              onClick={() => {
+                orbitRef.current = { ...orbitRef.current, theta: 0.45, phi: 0.88, radius: 11 }
+                updateCamera()
+              }}
+              style={{
+                padding: '4px 10px', borderRadius: 5,
+                background: 'rgba(15,15,18,0.85)', border: '1px solid var(--border2)',
+                color: 'var(--text2)', fontSize: 11, cursor: 'pointer',
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              Reset View
+            </button>
+          </div>
 
           {/* Help hint */}
           <div style={{
