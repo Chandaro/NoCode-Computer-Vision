@@ -1253,6 +1253,25 @@ function buildScene(
   }
 }
 
+// ── Compact params preview for collapsed blocks ───────────────────────────────
+
+function getParamsPreview(layer: Layer): string {
+  const p = layer.params
+  switch (layer.type) {
+    case 'conv2d':      return `${p.filters ?? 32}f · k${p.kernel_size ?? 3} · s${p.stride ?? 1} · p${p.padding ?? 1}`
+    case 'maxpool2d':
+    case 'avgpool2d':   return `kernel ${p.kernel_size ?? 2} · stride ${p.stride ?? 2}`
+    case 'linear':      return `→ ${p.out_features ?? 128} units`
+    case 'dropout':     return `p = ${(p.p ?? 0.5).toFixed(2)}`
+    case 'relu':        return 'max(0, x)'
+    case 'gelu':        return 'x · Φ(x)'
+    case 'sigmoid':     return '1 / (1 + e⁻ˣ)'
+    case 'batchnorm2d': return 'µ=0 · σ=1 per channel'
+    case 'flatten':     return 'C×H×W → flat vector'
+    default:            return ''
+  }
+}
+
 // ── Layer Param Editor ────────────────────────────────────────────────────────
 
 function ParamEditor({
@@ -1353,6 +1372,12 @@ export default function CustomModel() {
   // Add layer dropdown
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [hoveredAddType, setHoveredAddType] = useState<LayerType | null>(null)
+
+  // Drag-and-drop reorder state
+  const [dragIdx,     setDragIdx]     = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
+  const dragIdxRef  = useRef<number | null>(null)
+  const didDragRef  = useRef(false)
 
   // Three.js refs
   const canvasRef       = useRef<HTMLDivElement>(null)
@@ -1769,18 +1794,47 @@ export default function CustomModel() {
     setSelectedId(prev => prev === layerId ? null : prev)
   }
 
-  const moveLayer = (index: number, dir: -1 | 1) => {
-    setLayers(prev => {
-      const next = [...prev]
-      const target = index + dir
-      if (target < 0 || target >= next.length) return prev
-      ;[next[index], next[target]] = [next[target], next[index]]
-      return next
-    })
-  }
-
   const updateLayerParams = (layerId: string, params: Record<string, number>) => {
     setLayers(prev => prev.map(l => l.id === layerId ? { ...l, params } : l))
+  }
+
+  // ── Drag-and-drop handlers ────────────────────────────────────────────────
+
+  const onLayerDragStart = (e: React.DragEvent, index: number) => {
+    didDragRef.current = true
+    dragIdxRef.current = index
+    setDragIdx(index)
+    e.dataTransfer.effectAllowed = 'move'
+    // Dim the ghost image slightly
+    const el = e.currentTarget as HTMLElement
+    setTimeout(() => { el.style.opacity = '0.35' }, 0)
+  }
+
+  const onLayerDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverIdx !== index) setDragOverIdx(index)
+  }
+
+  const onLayerDrop = (e: React.DragEvent, toIndex: number) => {
+    e.preventDefault()
+    const from = dragIdxRef.current
+    if (from !== null && from !== toIndex) {
+      setLayers(prev => {
+        const next = [...prev]
+        const [item] = next.splice(from, 1)
+        next.splice(toIndex, 0, item)
+        return next
+      })
+    }
+    setDragIdx(null); setDragOverIdx(null); dragIdxRef.current = null
+    setTimeout(() => { didDragRef.current = false }, 60)
+  }
+
+  const onLayerDragEnd = (e: React.DragEvent) => {
+    ;(e.currentTarget as HTMLElement).style.opacity = ''
+    setDragIdx(null); setDragOverIdx(null); dragIdxRef.current = null
+    setTimeout(() => { didDragRef.current = false }, 60)
   }
 
   // Compute shapes for all layers (for display)
@@ -1832,228 +1886,234 @@ export default function CustomModel() {
       <div style={{ flex: 1, display: 'flex', gap: 8, overflow: 'hidden', minHeight: 0 }}>
 
         {/* ── Left panel: Layer Editor ───────────────────────────────────── */}
-        <div style={{ ...panelStyle, width: 256, flexShrink: 0 }}>
-          {sectionLabel('Model')}
+        <div style={{
+          width: 272, flexShrink: 0, display: 'flex', flexDirection: 'column',
+          background: '#09090f', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 10, overflow: 'hidden',
+        }}>
 
-          {/* Model name */}
-          <div style={{ padding: '0 10px 6px' }}>
+          {/* ── Header: model name + params + input size ────────────────────── */}
+          <div style={{ padding: '12px 13px 10px', borderBottom: '1px solid rgba(255,255,255,0.055)', flexShrink: 0 }}>
             <input
-              value={modelName}
-              onChange={e => setModelName(e.target.value)}
+              value={modelName} onChange={e => setModelName(e.target.value)}
               placeholder="Model name"
               style={{
-                width: '100%', padding: '5px 8px',
-                background: 'var(--surface2)', border: '1px solid var(--border)',
-                borderRadius: 5, color: 'var(--text)', fontSize: 12,
-                fontFamily: 'inherit', boxSizing: 'border-box',
+                width: '100%', background: 'transparent', border: 'none', outline: 'none',
+                color: 'rgba(225,225,235,0.92)', fontSize: 13, fontWeight: 600,
+                fontFamily: 'inherit', padding: 0, marginBottom: 6, display: 'block',
               }}
             />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10, color: 'rgba(100,100,125,0.85)', fontFamily: 'JetBrains Mono, monospace', flex: 1 }}>
+                {totalParams.toLocaleString()} params
+              </span>
+              {[['H', inputH, setInputH], ['W', inputW, setInputW]].map(([lbl, val, set]) => (
+                <div key={String(lbl)} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <span style={{ fontSize: 9, color: 'rgba(100,100,125,0.6)', letterSpacing: '0.05em' }}>{String(lbl)}</span>
+                  <input
+                    type="number" min={32} max={256} step={32}
+                    value={val as number}
+                    onChange={e => (set as React.Dispatch<React.SetStateAction<number>>)(Number(e.target.value))}
+                    style={{
+                      width: 38, padding: '3px 5px', textAlign: 'center',
+                      background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)',
+                      borderRadius: 4, color: 'rgba(200,200,218,0.9)', fontSize: 10,
+                      fontFamily: 'JetBrains Mono, monospace', outline: 'none',
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Input size */}
-          {sectionLabel('Input size')}
-          <div style={{ padding: '0 10px 8px', display: 'flex', gap: 6 }}>
-            {([['H', inputH, setInputH], ['W', inputW, setInputW]] as const).map(([lbl, val, setter]) => (
-              <div key={lbl} style={{ flex: 1 }}>
-                <label style={{ fontSize: 10, color: 'var(--text3)', display: 'block', marginBottom: 3 }}>{lbl}</label>
-                <input
-                  type="number" min={32} max={256} step={32}
-                  value={val}
-                  onChange={e => setter(Number(e.target.value))}
-                  style={{
-                    width: '100%', padding: '4px 6px',
-                    background: 'var(--surface2)', border: '1px solid var(--border)',
-                    borderRadius: 4, color: 'var(--text)', fontSize: 12, boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-            ))}
+          {/* ── Presets ─────────────────────────────────────────────────────── */}
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(100,100,125,0.6)', marginBottom: 7 }}>
+              Presets
+            </div>
+            <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 1 }}>
+              {PRESETS.map(p => (
+                <button key={p.name} title={p.desc}
+                  onClick={() => { if (window.confirm(`Load "${p.name}"?\n\n${p.desc}\n\nThis replaces your current layers.`)) { setLayers(p.make()); setSelectedId(null) } }}
+                  style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 5, background: `${p.color}14`, border: `1px solid ${p.color}2e`, color: p.color, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.02em', transition: 'all 0.12s' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `${p.color}2c`; e.currentTarget.style.borderColor = `${p.color}66` }}
+                  onMouseLeave={e => { e.currentTarget.style.background = `${p.color}14`; e.currentTarget.style.borderColor = `${p.color}2e` }}
+                >{p.name}</button>
+              ))}
+            </div>
           </div>
 
-          {/* ── Presets ──────────────────────────────────────────────────────── */}
-          {sectionLabel('Presets')}
-          <div style={{ padding: '0 8px 10px', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {PRESETS.map(p => (
-              <button
-                key={p.name}
-                title={p.desc}
-                onClick={() => {
-                  if (window.confirm(`Load "${p.name}" architecture?\nCurrent layers will be replaced.\n\n${p.desc}`)) {
-                    setLayers(p.make()); setSelectedId(null)
-                  }
-                }}
-                style={{
-                  padding: '3px 9px', borderRadius: 20,
-                  background: `${p.color}18`,
-                  border: `1px solid ${p.color}50`,
-                  color: p.color, fontSize: 10, cursor: 'pointer',
-                  fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-                  letterSpacing: '0.02em', transition: 'all 0.12s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = `${p.color}35` }}
-                onMouseLeave={e => { e.currentTarget.style.background = `${p.color}18` }}
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
-
-          {/* ── Architecture block stack ──────────────────────────────────────── */}
-          {sectionLabel('Architecture')}
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 8px', display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-
-            {/* INPUT block */}
-            <div style={{
-              background: 'rgba(139,139,154,0.08)',
-              border: '1.5px solid rgba(139,139,154,0.22)',
-              borderLeft: '4px solid #8b8b9a',
-              borderRadius: 7, padding: '6px 9px',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              <span style={{ fontSize: 9, fontWeight: 800, color: '#8b8b9a', letterSpacing: '0.1em', flex: 1, fontFamily: 'JetBrains Mono, monospace' }}>INPUT</span>
-              <span style={{ fontSize: 9, color: 'rgba(140,140,160,0.65)', fontFamily: 'monospace' }}>{`3×${inputH}×${inputW}`}</span>
+          {/* ── Architecture block stack ─────────────────────────────────────── */}
+          <div
+            style={{ flex: 1, overflowY: 'auto', padding: '10px 9px 14px', cursor: dragIdx !== null ? 'grabbing' : 'auto' }}
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => { e.preventDefault(); setDragIdx(null); setDragOverIdx(null); dragIdxRef.current = null }}
+          >
+            {/* INPUT terminal */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 7, border: '1px dashed rgba(139,139,154,0.16)', background: 'rgba(139,139,154,0.035)' }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#8b8b9a', flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(139,139,154,0.75)', letterSpacing: '0.09em', fontFamily: 'JetBrains Mono, monospace', flex: 1 }}>INPUT</span>
+              <span style={{ fontSize: 9, color: 'rgba(130,130,150,0.45)', fontFamily: 'monospace' }}>{`3×${inputH}×${inputW}`}</span>
             </div>
 
             {layers.map((layer, index) => {
-              const outShape   = allShapes[index + 1]
-              const valid      = isValidShape(outShape)
-              const isSelected = layer.id === selectedId
-              const color      = valid ? (LAYER_CSS[layer.type] ?? '#8b8b9a') : '#ef4444'
-              const shapeStr   = !valid ? '⚠ invalid'
+              const outShape     = allShapes[index + 1]
+              const valid        = isValidShape(outShape)
+              const isSelected   = layer.id === selectedId
+              const isDragging   = dragIdx === index
+              const isDropTarget = dragOverIdx === index && dragIdx !== null && dragIdx !== index
+              const color        = valid ? (LAYER_CSS[layer.type] ?? '#8b8b9a') : '#f87171'
+              const shapeStr     = !valid ? '⚠ bad'
                 : outShape.length === 1 ? `${outShape[0]}`
                 : `${outShape[0]}×${outShape[1]}×${outShape[2]}`
-              const desc = LAYER_DESCRIPTIONS[layer.type]
+              const desc         = LAYER_DESCRIPTIONS[layer.type]
 
               return (
                 <div key={layer.id}>
-                  {/* Connector */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 14 }}>
-                    <div style={{ width: 1.5, flex: 1, background: `linear-gradient(${LAYER_CSS[layers[Math.max(0,index-1)]?.type] ?? color}, ${color})`, opacity: 0.55 }} />
-                    <svg width="7" height="4" viewBox="0 0 7 4" style={{ display: 'block', opacity: 0.6 }}>
-                      <polygon points="3.5,4 0,0 7,0" fill={color} />
-                    </svg>
+                  {/* Connector spine + drop indicator */}
+                  <div style={{ position: 'relative', height: 12, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    {isDropTarget ? (
+                      <div style={{
+                        position: 'absolute', inset: '4px 6px',
+                        borderRadius: 2, height: 3,
+                        background: color,
+                        boxShadow: `0 0 14px ${color}, 0 0 6px ${color}`,
+                      }} />
+                    ) : (
+                      <div style={{ width: 1, height: '100%', background: `linear-gradient(${LAYER_CSS[layers[index - 1]?.type] ?? color}, ${color})`, opacity: 0.22 }} />
+                    )}
                   </div>
 
-                  {/* Block */}
+                  {/* Block card */}
                   <div
-                    onClick={() => setSelectedId(isSelected ? null : layer.id)}
+                    draggable
+                    onDragStart={e => onLayerDragStart(e, index)}
+                    onDragOver={e => onLayerDragOver(e, index)}
+                    onDrop={e => onLayerDrop(e, index)}
+                    onDragEnd={onLayerDragEnd}
                     style={{
-                      background: isSelected ? `${color}1c` : `${color}09`,
-                      border: `1.5px solid ${isSelected ? color + 'bb' : color + '30'}`,
-                      borderLeft: `4px solid ${color}`,
-                      borderRadius: 7,
-                      padding: '7px 8px',
-                      cursor: 'pointer',
-                      transition: 'all 0.14s',
-                      boxShadow: isSelected ? `0 0 0 2px ${color}22, 0 2px 12px ${color}18` : 'none',
+                      display: 'flex', borderRadius: 8, overflow: 'hidden',
+                      border: `1px solid ${isSelected ? color + '55' : 'rgba(255,255,255,0.055)'}`,
+                      background: isSelected
+                        ? `linear-gradient(120deg, ${color}14 0%, ${color}07 100%)`
+                        : isDragging ? 'rgba(255,255,255,0.015)' : 'rgba(255,255,255,0.028)',
+                      opacity: isDragging ? 0.22 : 1,
+                      boxShadow: isSelected ? `0 0 0 1px ${color}22, 0 4px 22px ${color}12` : 'none',
+                      transition: 'border-color 0.14s, box-shadow 0.14s, background 0.14s, opacity 0.14s',
                     }}
                   >
-                    {/* Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700,
-                        color: valid ? color : 'var(--danger)', flex: 1,
-                        fontFamily: 'JetBrains Mono, monospace', letterSpacing: '-0.01em',
-                      }}>
-                        {LAYER_DISPLAY[layer.type] ?? layer.type}
-                      </span>
-                      <span style={{ fontSize: 9, color: valid ? 'rgba(155,155,175,0.7)' : 'var(--danger)', fontFamily: 'monospace', maxWidth: 52, textAlign: 'right' }}>
-                        {shapeStr}
-                      </span>
-                      {/* Controls */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginLeft: 1, flexShrink: 0 }}>
-                        <button onClick={e => { e.stopPropagation(); moveLayer(index, -1) }} disabled={index === 0}
-                          style={{ width: 16, height: 16, fontSize: 8, color: 'var(--text3)', background: 'none', border: 'none', cursor: index === 0 ? 'default' : 'pointer', padding: 0, opacity: index === 0 ? 0.3 : 0.75, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
-                        <button onClick={e => { e.stopPropagation(); moveLayer(index, 1) }} disabled={index === layers.length - 1}
-                          style={{ width: 16, height: 16, fontSize: 8, color: 'var(--text3)', background: 'none', border: 'none', cursor: index === layers.length - 1 ? 'default' : 'pointer', padding: 0, opacity: index === layers.length - 1 ? 0.3 : 0.75, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
-                        <button onClick={e => { e.stopPropagation(); deleteLayer(layer.id) }}
-                          style={{ width: 16, height: 16, fontSize: 9, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: 0.65, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-                      </div>
+                    {/* Drag handle */}
+                    <div
+                      style={{
+                        width: 22, flexShrink: 0, cursor: 'grab',
+                        background: `${color}0c`,
+                        borderRight: '1px solid rgba(255,255,255,0.04)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                      title="Drag to reorder"
+                    >
+                      <svg width="8" height="12" viewBox="0 0 8 12" fill="none">
+                        {([[2,1],[6,1],[2,5],[6,5],[2,9],[6,9]] as [number,number][]).map(([cx,cy],i) => (
+                          <circle key={i} cx={cx} cy={cy} r="1.25" fill={`${color}55`} />
+                        ))}
+                      </svg>
                     </div>
 
-                    {/* Expanded: description + params */}
-                    {isSelected && (
-                      <div style={{ marginTop: 8, paddingTop: 7, borderTop: `1px solid ${color}28` }}>
-                        {desc && (
-                          <div style={{ marginBottom: 8, padding: '6px 8px', background: `${color}0e`, borderRadius: 5, borderLeft: `2px solid ${color}80` }}>
-                            <p style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 3 }}>{desc.label}</p>
-                            <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.55, marginBottom: 3 }}>{desc.what}</p>
-                            <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4 }}>{desc.analogy}</p>
-                          </div>
-                        )}
-                        <ParamEditor layer={layer} onChange={params => updateLayerParams(layer.id, params)} />
+                    {/* Accent bar */}
+                    <div style={{ width: 2.5, flexShrink: 0, background: `linear-gradient(to bottom, ${color}, ${color}55)` }} />
+
+                    {/* Content */}
+                    <div
+                      style={{ flex: 1, padding: '8px 9px 7px', minWidth: 0, cursor: dragIdx !== null ? 'grabbing' : 'pointer' }}
+                      onClick={() => { if (didDragRef.current) return; setSelectedId(isSelected ? null : layer.id) }}
+                    >
+                      {/* Row 1 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '-0.02em', fontFamily: 'JetBrains Mono, monospace', lineHeight: 1, color: valid ? color : '#f87171', flex: 1, minWidth: 0 }}>
+                          {LAYER_DISPLAY[layer.type] ?? layer.type}
+                        </span>
+                        <span style={{ fontSize: 9, letterSpacing: '-0.02em', fontFamily: 'monospace', lineHeight: 1, color: valid ? 'rgba(130,130,150,0.55)' : '#f87171', flexShrink: 0 }}>
+                          {shapeStr}
+                        </span>
+                        <button
+                          onClick={e => { e.stopPropagation(); deleteLayer(layer.id) }}
+                          style={{ width: 15, height: 15, flexShrink: 0, background: 'none', border: 'none', padding: 0, color: 'rgba(200,70,70,0.4)', cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 3, transition: 'color 0.12s' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f87171' }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(200,70,70,0.4)' }}
+                        >✕</button>
                       </div>
-                    )}
+
+                      {/* Row 2: params preview */}
+                      {!isSelected && (
+                        <div style={{ fontSize: 9, marginTop: 3, color: `${color}55`, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+                          {getParamsPreview(layer)}
+                        </div>
+                      )}
+
+                      {/* Expanded: desc + param editor */}
+                      {isSelected && (
+                        <div style={{ marginTop: 9, paddingTop: 8, borderTop: `1px solid ${color}18` }}>
+                          {desc && (
+                            <div style={{ marginBottom: 9, padding: '7px 9px', background: `${color}0b`, borderRadius: 5, borderLeft: `2.5px solid ${color}60` }}>
+                              <p style={{ fontSize: 10, fontWeight: 700, color: `${color}ee`, marginBottom: 4 }}>{desc.label}</p>
+                              <p style={{ fontSize: 10, color: 'rgba(150,150,172,0.8)', lineHeight: 1.55, marginBottom: 4 }}>{desc.what}</p>
+                              <p style={{ fontSize: 10, color: `${color}80`, lineHeight: 1.4 }}>{desc.analogy}</p>
+                            </div>
+                          )}
+                          <ParamEditor layer={layer} onChange={params => updateLayerParams(layer.id, params)} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
             })}
 
-            {/* Connector to OUTPUT */}
+            {/* Connector to output */}
             {layers.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: 14 }}>
-                <div style={{ width: 1.5, flex: 1, background: 'linear-gradient(rgba(139,139,154,0.4), #22c55e)', opacity: 0.55 }} />
-                <svg width="7" height="4" viewBox="0 0 7 4" style={{ display: 'block', opacity: 0.6 }}>
-                  <polygon points="3.5,4 0,0 7,0" fill="#22c55e" />
-                </svg>
+              <div style={{ height: 12, display: 'flex', justifyContent: 'center' }}>
+                <div style={{ width: 1, height: '100%', background: 'linear-gradient(rgba(100,100,120,0.25), rgba(34,197,94,0.35))' }} />
               </div>
             )}
 
-            {/* OUTPUT block */}
-            <div style={{
-              background: 'rgba(34,197,94,0.07)',
-              border: '1.5px solid rgba(34,197,94,0.25)',
-              borderLeft: '4px solid #22c55e',
-              borderRadius: 7, padding: '6px 9px',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              <span style={{ fontSize: 9, fontWeight: 800, color: '#22c55e', letterSpacing: '0.1em', flex: 1, fontFamily: 'JetBrains Mono, monospace' }}>OUTPUT</span>
-              <span style={{ fontSize: 9, color: 'rgba(34,197,94,0.6)', fontFamily: 'monospace' }}>{numClasses} classes</span>
+            {/* OUTPUT terminal */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 7, border: '1px dashed rgba(34,197,94,0.18)', background: 'rgba(34,197,94,0.04)' }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(34,197,94,0.75)', letterSpacing: '0.09em', fontFamily: 'JetBrains Mono, monospace', flex: 1 }}>OUTPUT</span>
+              <span style={{ fontSize: 9, color: 'rgba(34,197,94,0.45)', fontFamily: 'monospace' }}>{numClasses} classes</span>
             </div>
           </div>
 
-          {/* Total params */}
-          <div style={{ borderTop: '1px solid var(--border)', padding: '6px 10px', flexShrink: 0 }}>
-            <p style={{ fontSize: 10, color: 'var(--text3)' }}>
-              Est. params: <span style={{ color: 'var(--text)', fontFamily: 'monospace' }}>{totalParams.toLocaleString()}</span>
-            </p>
-          </div>
-
-          {/* Add layer button */}
-          <div style={{ padding: '8px 10px', borderTop: '1px solid var(--border)', flexShrink: 0, position: 'relative' }}>
+          {/* ── Add layer footer ─────────────────────────────────────────────── */}
+          <div style={{ padding: '8px 9px', borderTop: '1px solid rgba(255,255,255,0.055)', flexShrink: 0, position: 'relative' }}>
             <button
               onClick={() => setShowAddMenu(prev => !prev)}
               style={{
-                width: '100%', padding: '6px', borderRadius: 5,
-                background: 'var(--surface2)', border: '1px solid var(--border2)',
-                color: 'var(--text2)', fontSize: 12, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                width: '100%', padding: '7px', borderRadius: 6,
+                background: showAddMenu ? 'rgba(88,101,242,0.15)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${showAddMenu ? 'rgba(88,101,242,0.4)' : 'rgba(255,255,255,0.09)'}`,
+                color: showAddMenu ? 'var(--accent)' : 'rgba(180,180,200,0.7)',
+                fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                transition: 'all 0.12s',
               }}
             >
-              + Add Layer
+              <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add Layer
             </button>
             {showAddMenu && (
               <div style={{
-                position: 'absolute', bottom: '100%', left: 10, right: 10,
-                background: 'var(--surface2)', border: '1px solid var(--border2)',
-                borderRadius: 6, overflow: 'hidden', zIndex: 100,
+                position: 'absolute', bottom: 'calc(100% + 4px)', left: 9, right: 9,
+                background: '#0f0f1a', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8, overflow: 'hidden', zIndex: 100,
+                boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
               }}>
-                {/* Hover preview card */}
                 {hoveredAddType && LAYER_DESCRIPTIONS[hoveredAddType] && (
-                  <div style={{
-                    padding: '8px 10px', borderBottom: '1px solid var(--border)',
-                    background: 'var(--surface3)',
-                  }}>
+                  <div style={{ padding: '9px 11px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: `${LAYER_CSS[hoveredAddType]}0e` }}>
                     <p style={{ fontSize: 10, fontWeight: 700, color: LAYER_CSS[hoveredAddType] ?? 'var(--accent)', marginBottom: 3 }}>
                       {LAYER_DESCRIPTIONS[hoveredAddType].label}
                     </p>
-                    <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5 }}>
-                      {LAYER_DESCRIPTIONS[hoveredAddType].what}
-                    </p>
-                    <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3, lineHeight: 1.4 }}>
-                      {LAYER_DESCRIPTIONS[hoveredAddType].analogy}
-                    </p>
+                    <p style={{ fontSize: 10, color: 'rgba(140,140,165,0.75)', lineHeight: 1.5, marginBottom: 3 }}>{LAYER_DESCRIPTIONS[hoveredAddType].what}</p>
+                    <p style={{ fontSize: 10, color: 'rgba(120,120,145,0.65)', lineHeight: 1.4 }}>{LAYER_DESCRIPTIONS[hoveredAddType].analogy}</p>
                   </div>
                 )}
                 {ALL_LAYER_TYPES.map(lt => (
@@ -2061,17 +2121,21 @@ export default function CustomModel() {
                     key={lt}
                     onClick={() => addLayer(lt)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 7,
-                      width: '100%', padding: '6px 10px',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      width: '100%', padding: '7px 11px',
                       background: 'transparent', border: 'none',
-                      color: 'var(--text)', fontSize: 12, cursor: 'pointer',
-                      textAlign: 'left',
+                      color: 'rgba(200,200,218,0.85)', fontSize: 11, cursor: 'pointer',
+                      textAlign: 'left', transition: 'background 0.1s',
+                      fontFamily: 'inherit',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface3)'; setHoveredAddType(lt) }}
+                    onMouseEnter={e => { e.currentTarget.style.background = `${LAYER_CSS[lt]}14`; setHoveredAddType(lt) }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; setHoveredAddType(null) }}
                   >
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_CSS[lt] ?? '#8b8b9a', flexShrink: 0 }} />
-                    {LAYER_DISPLAY[lt] ?? lt}
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: LAYER_CSS[lt] ?? '#8b8b9a', flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{LAYER_DISPLAY[lt] ?? lt}</span>
+                    <span style={{ fontSize: 9, color: 'rgba(100,100,125,0.6)', fontFamily: 'JetBrains Mono, monospace' }}>
+                      {Object.keys(DEFAULT_PARAMS[lt]).length > 0 ? Object.entries(DEFAULT_PARAMS[lt]).map(([k, v]) => `${k}=${v}`).join(' ') : 'no params'}
+                    </span>
                   </button>
                 ))}
               </div>
