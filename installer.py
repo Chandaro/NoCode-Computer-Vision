@@ -810,9 +810,11 @@ class Installer(tk.Tk):
         def step(key, fn):
             nonlocal done
             self.after(0, lambda: self._mark_step(key, "running"))
-            ok, msg = fn()
+            result = fn()
+            ok    = result[0]
+            # Functions may return (ok, msg, "skip") to show ⤼ instead of ✓
+            state = result[2] if len(result) > 2 else ("done" if ok else "error")
             done += 1
-            state = "done" if ok else "error"
             self.after(0, lambda s=state, k=key: self._mark_step(k, s))
             self._advance_progress()
             return ok
@@ -823,9 +825,9 @@ class Installer(tk.Tk):
                 # Verify it's functional — a copied venv has broken paths
                 rc_test, _ = run_cmd(f'"{VENV_PY}" -c "import sys; print(sys.version)"')
                 if rc_test == 0:
-                    self._log("  ✓ Existing venv found, reusing.")
-                    return True, ""
-                self._log("  ⚠ Existing venv is broken (wrong machine?), recreating…")
+                    self._log("  ✓ Existing venv found and working — reusing.")
+                    return True, "", "skip"
+                self._log("  ⚠ Existing venv is broken (moved/copied?), recreating…")
                 shutil.rmtree(VENV_DIR, ignore_errors=True)
             self._log("  Creating virtual environment…")
             rc, out = run_cmd(f'"{sys.executable}" -m venv "{VENV_DIR}"')
@@ -849,8 +851,7 @@ class Installer(tk.Tk):
                 )
                 if rc_cuda == 0:
                     self._log(f"  ✓ torch {out_chk.strip()} already in venv and working, skipping.")
-                    self.after(0, lambda: self._mark_step("install_torch", "skip"))
-                    return True, ""
+                    return True, "", "skip"
                 self._log(f"  ⚠ torch {out_chk.strip()} found but CUDA test failed — reinstalling with correct variant.")
                 # Fall through to reinstall with selected mode
 
@@ -981,22 +982,25 @@ class Installer(tk.Tk):
 
         def do_npm():
             if dist_ready:
-                self._log("  ✓ Pre-built frontend detected, skipping npm install.")
-                self.after(0, lambda: self._mark_step("install_frontend", "skip"))
-                return True, ""
-            if os.path.isdir(os.path.join(FRONTEND, "node_modules")):
-                self._log("  ✓ node_modules exists, skipping npm install.")
-                self.after(0, lambda: self._mark_step("install_frontend", "skip"))
-                return True, ""
-            self._log("  Running npm install — downloading packages…")
+                self._log("  ✓ Pre-built frontend detected — skipping npm install.")
+                return True, "", "skip"
+
+            already = os.path.isdir(os.path.join(FRONTEND, "node_modules"))
+            if already:
+                self._log("  node_modules found — verifying packages (npm install is fast when up-to-date)…")
+            else:
+                self._log("  Downloading npm packages — first install may take a minute…")
 
             def on_npm(line):
-                if line.strip():
-                    self._log(f"  {line[:90]}")
+                low = line.lower()
+                if any(k in low for k in ("added", "updated", "removed", "audited",
+                                          "warn", "error", "npm error")):
+                    if line.strip():
+                        self._log(f"  {line.strip()[:90]}")
 
             rc, _ = run_cmd_stream("npm install", cwd=FRONTEND, line_cb=on_npm)
             if rc == 0:
-                self._log("  ✓ npm packages installed.")
+                self._log("  ✓ npm packages ready.")
             return rc == 0, ""
 
         if not step("install_frontend", do_npm):
@@ -1006,9 +1010,8 @@ class Installer(tk.Tk):
         # 5. Build frontend
         def do_build():
             if dist_ready:
-                self._log("  ✓ Pre-built frontend detected, skipping build step.")
-                self.after(0, lambda: self._mark_step("build_frontend", "skip"))
-                return True, ""
+                self._log("  ✓ Pre-built frontend detected — skipping build step.")
+                return True, "", "skip"
             self._log("  Compiling frontend (TypeScript + Vite)…")
 
             def on_build(line):
@@ -1035,8 +1038,7 @@ class Installer(tk.Tk):
         # 7. Desktop shortcut
         def do_shortcut():
             if not want_shortcut:
-                self.after(0, lambda: self._mark_step("shortcut", "skip"))
-                return True, ""
+                return True, "", "skip"
             launcher_bat = os.path.join(ROOT_DIR, "NoCode CV.bat")
             ok = create_desktop_shortcut(launcher_bat)
             return ok, ""
