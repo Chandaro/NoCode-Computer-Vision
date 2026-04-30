@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hen Chandaro — AI & Backend Developer</title>
+  <style>
+    :root {
+      --bg:      #0d0d0f;
+      --surf:    #16161a;
+      --surf2:   #1e1e24;
+      --border:  rgba(255,255,255,0.07);
+      --accent:  #5865f2;
+      --accent2: #4752c4;
+      --glow:    rgba(88,101,242,0.28);
+      --txt:     #e2e2e2;
+      --txt2:    #8b8b9a;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--txt);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Canvas ── */
+    #bg {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 0; pointer-events: none;
+    }
+
+    .wrapper { position: relative; z-index: 1; }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 48px;
+      background: rgba(13,13,15,0.75);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-size: 15px; font-weight: 800; color: var(--txt);
+      text-decoration: none; letter-spacing: -0.03em;
+    }
+    .nav-logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 28px; list-style: none; }
+    .nav-links a {
+      color: var(--txt2); text-decoration: none;
+      font-size: 13px; font-weight: 500; transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--txt); }
+    .nav-cta {
+      padding: 8px 18px; background: var(--accent); color: #fff;
+      text-decoration: none; border-radius: 6px;
+      font-size: 13px; font-weight: 600;
+      transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+    }
+    .nav-cta:hover {
+      background: var(--accent2); transform: translateY(-1px);
+      box-shadow: 0 4px 20px var(--glow);
+    }
+
+    /* ── Hero ── */
+    #hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 100px 24px 60px;
+    }
+    .hero-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 18px;
+      background: rgba(88,101,242,0.1);
+      border: 1px solid rgba(88,101,242,0.28);
+      border-radius: 100px;
+      font-size: 11px; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.08em;
+      text-transform: uppercase; margin-bottom: 32px;
+      animation: fadeDown 0.8s ease both;
+    }
+    .hero-name {
+      font-size: clamp(52px, 9vw, 96px);
+      font-weight: 900; letter-spacing: -0.05em; line-height: 1;
+      background: linear-gradient(160deg, #fff 30%, rgba(255,255,255,0.45) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 20px;
+      animation: fadeDown 0.9s 0.1s ease both;
+    }
+    .hero-sub {
+      font-size: clamp(15px, 2.2vw, 20px); color: var(--txt2);
+      max-width: 540px; margin-bottom: 40px;
+      animation: fadeDown 1s 0.2s ease both;
+    }
+    .hero-sub strong { color: var(--accent); font-weight: 600; }
+    .hero-btns {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      justify-content: center; margin-bottom: 80px;
+      animation: fadeDown 1s 0.3s ease both;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 12px 26px; border-radius: 8px;
+      font-size: 14px; font-weight: 600;
+      text-decoration: none; transition: all 0.2s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover {
+      background: var(--accent2); transform: translateY(-2px);
+      box-shadow: 0 8px 28px var(--glow);
+    }
+    .btn-ghost {
+      background: rgba(255,255,255,0.05);
+      color: var(--txt); border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+    .scroll-hint {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      color: var(--txt2); font-size: 10px; letter-spacing: 0.14em;
+      text-transform: uppercase; animation: pulse 2.4s infinite;
+    }
+    .scroll-hint::before {
+      content: ''; display: block;
+      width: 1px; height: 44px;
+      background: linear-gradient(to bottom, var(--accent), transparent);
+    }
+
+    /* ── Sections ── */
+    .section {
+      max-width: 1080px; margin: 0 auto;
+      padding: 100px 24px;
+    }
+    .section-eyebrow {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+    }
+    .section-eyebrow span {
+      font-size: 10px; font-weight: 800; letter-spacing: 0.18em;
+      text-transform: uppercase; color: var(--accent);
+    }
+    .section-eyebrow::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .section-h { font-size: clamp(26px, 4vw, 40px); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 12px; }
+    .section-p { font-size: 15px; color: var(--txt2); max-width: 480px; margin-bottom: 48px; }
+
+    /* ── Stats ── */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    @media(max-width: 700px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    .stat {
+      background: var(--surf); border: 1px solid var(--border);
+      border-radius: 14px; padding: 24px;
+      text-align: center; transition: all 0.22s;
+    }
+    .stat:hover { border-color: rgba(88,101,242,0.4); transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.3); }
+    .stat-n { font-size: 38px; font-weight: 900; letter-spacing: -0.05em; color: var(--accent); line-height: 1; margin-bottom: 6px; }
+    .stat-l { font-size: 11px; color: var(--txt2); font-weight: 500; letter-spacing: 0.04em; }
+
+    /* ── Skills ── */
+    .skill-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+    .skill-card {
+      background: var(--surf); border: 1px solid var(--border);
+      border-radius: 14px; padding: 22px; transition: border-color 0.2s;
+    }
+    .skill-card:hover { border-color: rgba(88,101,242,0.32); }
+    .skill-cat { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 7px; }
+    .tag {
+      padding: 4px 11px; background: var(--surf2);
+      border: 1px solid var(--border); border-radius: 100px;
+      font-size: 12px; color: var(--txt2); font-weight: 500;
+      transition: all 0.18s; cursor: default;
+    }
+    .tag:hover { border-color: rgba(88,101,242,0.4); color: var(--txt); }
+
+    /* ── Projects ── */
+    .project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+    .pcard {
+      background: var(--surf); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px; cursor: pointer;
+      transition: border-color 0.18s, box-shadow 0.18s;
+      transform-style: preserve-3d; position: relative; overflow: hidden;
+    }
+    .pcard::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .pcard:hover { border-color: rgba(88,101,242,0.38); box-shadow: 0 16px 48px rgba(0,0,0,0.45), 0 0 0 1px rgba(88,101,242,0.14); }
+    .pcard:hover::after { opacity: 1; }
+    .pcard-icon { font-size: 26px; margin-bottom: 14px; }
+    .pcard-name { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+    .pcard-desc { font-size: 13px; color: var(--txt2); line-height: 1.65; margin-bottom: 18px; }
+    .pcard-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+    .ptag {
+      padding: 3px 10px; border-radius: 100px;
+      font-size: 11px; font-weight: 600;
+      background: rgba(88,101,242,0.1); border: 1px solid rgba(88,101,242,0.22); color: var(--accent);
+    }
+    .pcard-link { font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 600; transition: letter-spacing 0.2s; }
+    .pcard-link:hover { letter-spacing: 0.04em; }
+
+    /* ── Experience ── */
+    .exp-list { display: flex; flex-direction: column; gap: 16px; }
+    .exp {
+      background: var(--surf); border: 1px solid var(--border);
+      border-radius: 14px; padding: 22px 26px;
+      display: flex; gap: 18px; align-items: flex-start;
+      transition: border-color 0.2s;
+    }
+    .exp:hover { border-color: rgba(88,101,242,0.3); }
+    .exp-ico { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+    .exp-title { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+    .exp-org { font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 7px; }
+    .exp-desc { font-size: 13px; color: var(--txt2); line-height: 1.6; }
+
+    /* ── Contact ── */
+    #contact { text-align: center; }
+    .cbox {
+      background: var(--surf); border: 1px solid var(--border);
+      border-radius: 20px; padding: 56px 40px;
+      max-width: 580px; margin: 0 auto;
+      position: relative; overflow: hidden;
+    }
+    .cbox::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(88,101,242,0.12), transparent 70%);
+      pointer-events: none;
+    }
+    .cbox h2 { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 10px; }
+    .cbox p { font-size: 14px; color: var(--txt2); margin-bottom: 30px; }
+    .clinks { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; padding: 28px 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--txt2);
+    }
+
+    /* ── Reveal ── */
+    .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.65s ease, transform 0.65s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+
+    /* ── Animations ── */
+    @keyframes fadeDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
+    @keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--surf2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+  </style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+
+<div class="wrapper">
+
+  <!-- NAV -->
+  <nav>
+    <a href="#hero" class="nav-logo">Chandaro<span>.</span></a>
+    <ul class="nav-links">
+      <li><a href="#about">About</a></li>
+      <li><a href="#skills">Skills</a></li>
+      <li><a href="#projects">Projects</a></li>
+      <li><a href="#experience">Experience</a></li>
+    </ul>
+    <a href="mailto:chandaro9.7rise@gmail.com" class="nav-cta">Hire Me →</a>
+  </nav>
+
+  <!-- HERO -->
+  <div id="hero">
+    <div class="hero-chip">🇰🇭 Techo Digital Talent Scholar · AUPP</div>
+    <h1 class="hero-name">Hen Chandaro</h1>
+    <p class="hero-sub">
+      Building <strong>AI tools</strong> that anyone can use.<br/>
+      Backend Engineer · Computer Vision · NLP
+    </p>
+    <div class="hero-btns">
+      <a href="#projects" class="btn btn-primary">View Projects →</a>
+      <a href="https://github.com/Chandaro" target="_blank" class="btn btn-ghost">GitHub</a>
+      <a href="https://www.linkedin.com/in/chandaro-hen-28a36b326" target="_blank" class="btn btn-ghost">LinkedIn</a>
+    </div>
+    <div class="scroll-hint">Scroll</div>
+  </div>
+
+  <!-- ABOUT -->
+  <div class="section" id="about">
+    <div class="section-eyebrow"><span>About</span></div>
+    <h2 class="section-h">Turning data into decisions.</h2>
+    <p class="section-p">Full scholarship student at AUPP, passionate about AI and building systems that solve real-world problems. Fast learner with strong backend logic and real project experience.</p>
+    <div class="stats reveal">
+      <div class="stat"><div class="stat-n">20+</div><div class="stat-l">Repositories</div></div>
+      <div class="stat"><div class="stat-n">141</div><div class="stat-l">Contributions</div></div>
+      <div class="stat"><div class="stat-n">2yr</div><div class="stat-l">Industry Experience</div></div>
+      <div class="stat"><div class="stat-n">🥉</div><div class="stat-l">DGF Award</div></div>
+    </div>
+  </div>
+
+  <!-- SKILLS -->
+  <div class="section" id="skills">
+    <div class="section-eyebrow"><span>Skills</span></div>
+    <h2 class="section-h">Tech stack.</h2>
+    <p class="section-p">From backend APIs to training ML models and building interactive frontends.</p>
+    <div class="skill-grid reveal">
+      <div class="skill-card">
+        <div class="skill-cat">Backend</div>
+        <div class="tags">
+          <span class="tag">Python</span><span class="tag">Django</span>
+          <span class="tag">Django REST</span><span class="tag">FastAPI</span>
+          <span class="tag">Laravel</span><span class="tag">JWT Auth</span>
+        </div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-cat">AI / ML & Data</div>
+        <div class="tags">
+          <span class="tag">PyTorch</span><span class="tag">YOLOv8</span>
+          <span class="tag">scikit-learn</span><span class="tag">NLP</span>
+          <span class="tag">Pandas</span><span class="tag">NumPy</span>
+        </div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-cat">Frontend</div>
+        <div class="tags">
+          <span class="tag">React</span><span class="tag">Next.js</span>
+          <span class="tag">TypeScript</span><span class="tag">Three.js</span>
+          <span class="tag">HTML / CSS</span>
+        </div>
+      </div>
+      <div class="skill-card">
+        <div class="skill-cat">Tools & Cloud</div>
+        <div class="tags">
+          <span class="tag">Git</span><span class="tag">GitHub</span>
+          <span class="tag">AWS</span><span class="tag">Linux</span>
+          <span class="tag">Postman</span><span class="tag">Google OAuth</span>
+          <span class="tag">Telegram Bot API</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROJECTS -->
+  <div class="section" id="projects">
+    <div class="section-eyebrow"><span>Projects</span></div>
+    <h2 class="section-h">Things I've built.</h2>
+    <p class="section-p">Real projects — from computer vision platforms to multi-role backend systems.</p>
+    <div class="project-grid reveal">
+
+      <div class="pcard" onclick="window.open('https://github.com/Chandaro/NoCode-Computer-Vision','_blank')">
+        <div class="pcard-icon">🧠</div>
+        <div class="pcard-name">NoCode CV Trainer</div>
+        <div class="pcard-desc">Train YOLOv8 & classification models without writing code. Features a real-time 3D CNN architecture visualiser, annotation studio, and one-click installer.</div>
+        <div class="pcard-tags">
+          <span class="ptag">FastAPI</span><span class="ptag">PyTorch</span>
+          <span class="ptag">YOLOv8</span><span class="ptag">React</span><span class="ptag">Three.js</span>
+        </div>
+        <a class="pcard-link">View on GitHub →</a>
+      </div>
+
+      <div class="pcard" onclick="window.open('https://github.com/Chandaro/Handwritten-Character-Recognition','_blank')">
+        <div class="pcard-icon">✍️</div>
+        <div class="pcard-name">Handwritten Character Recognition</div>
+        <div class="pcard-desc">Draw a letter — the AI names it. Trained on 700,000+ real handwritten characters, runs live in the browser after setup.</div>
+        <div class="pcard-tags">
+          <span class="ptag">Python</span><span class="ptag">ML</span><span class="ptag">Jupyter</span>
+        </div>
+        <a class="pcard-link">View on GitHub →</a>
+      </div>
+
+      <div class="pcard" onclick="window.open('https://github.com/Chandaro/Acne-type-classification','_blank')">
+        <div class="pcard-icon">🔬</div>
+        <div class="pcard-name">Acne Type Classification</div>
+        <div class="pcard-desc">Upload a photo — the model identifies the acne type and confidence level. A CV classification model trained on medical image data.</div>
+        <div class="pcard-tags">
+          <span class="ptag">Computer Vision</span><span class="ptag">PyTorch</span><span class="ptag">Python</span>
+        </div>
+        <a class="pcard-link">View on GitHub →</a>
+      </div>
+
+      <div class="pcard" onclick="window.open('https://github.com/Chandaro/DashSchedulePrivate','_blank')">
+        <div class="pcard-icon">📅</div>
+        <div class="pcard-name">Scheduling System</div>
+        <div class="pcard-desc">Multi-role backend (admin / staff / user) with JWT auth and clean REST APIs. Focused on maintainable architecture and clean code.</div>
+        <div class="pcard-tags">
+          <span class="ptag">Django</span><span class="ptag">DRF</span><span class="ptag">JWT</span>
+        </div>
+        <a class="pcard-link">View on GitHub →</a>
+      </div>
+
+      <div class="pcard">
+        <div class="pcard-icon">🔐</div>
+        <div class="pcard-name">Auth System — Next.js × Django</div>
+        <div class="pcard-desc">Full-stack auth with Google OAuth, Google Sheets integration, and role-based access control across a Next.js + Django stack.</div>
+        <div class="pcard-tags">
+          <span class="ptag">Next.js</span><span class="ptag">Django</span><span class="ptag">Google OAuth</span>
+        </div>
+        <a class="pcard-link" href="https://github.com/Chandaro" target="_blank">View on GitHub →</a>
+      </div>
+
+      <div class="pcard">
+        <div class="pcard-icon">🇰🇭</div>
+        <div class="pcard-name">Khmer Article Classifier</div>
+        <div class="pcard-desc">NLP classification model for Khmer-language news articles. Applied Khmer script preprocessing and ML algorithms across multiple news categories.</div>
+        <div class="pcard-tags">
+          <span class="ptag">NLP</span><span class="ptag">scikit-learn</span><span class="ptag">Python</span>
+        </div>
+        <a class="pcard-link" href="https://github.com/Chandaro" target="_blank">View on GitHub →</a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- EXPERIENCE -->
+  <div class="section" id="experience">
+    <div class="section-eyebrow"><span>Experience</span></div>
+    <h2 class="section-h">Background.</h2>
+    <p class="section-p">Academic, professional, and competition highlights.</p>
+    <div class="exp-list reveal">
+      <div class="exp">
+        <div class="exp-ico">💼</div>
+        <div>
+          <div class="exp-title">Support Intern</div>
+          <div class="exp-org">RSA (ERA) · 2 Years</div>
+          <div class="exp-desc">Supported national-level examination coordination. Worked closely with diverse groups, demonstrating responsibility, teamwork, and professionalism at scale.</div>
+        </div>
+      </div>
+      <div class="exp">
+        <div class="exp-ico">🏆</div>
+        <div>
+          <div class="exp-title">3rd Place — Video Competition</div>
+          <div class="exp-org">DGF · Verify and Go Products</div>
+          <div class="exp-desc">Volunteered at DGF for three days and placed 3rd in the Verify and Go products video competition.</div>
+        </div>
+      </div>
+      <div class="exp">
+        <div class="exp-ico">🎓</div>
+        <div>
+          <div class="exp-title">B.Sc. Information Communication and Technology</div>
+          <div class="exp-org">American University of Phnom Penh · Techo Digital Talent Scholarship (Full)</div>
+          <div class="exp-desc">Senior student. Coursework covers Cloud Computing, Machine Learning, Linux systems, Web Development, and Software Architecture.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTACT -->
+  <div class="section" id="contact">
+    <div class="cbox reveal">
+      <h2>Let's work together.</h2>
+      <p>Open to internships, collaborations, and real-world projects.<br/>I respond to every message.</p>
+      <div class="clinks">
+        <a href="mailto:chandaro9.7rise@gmail.com" class="btn btn-primary">Send an Email →</a>
+        <a href="https://www.linkedin.com/in/chandaro-hen-28a36b326" target="_blank" class="btn btn-ghost">LinkedIn</a>
+        <a href="https://github.com/Chandaro" target="_blank" class="btn btn-ghost">GitHub</a>
+      </div>
+    </div>
+  </div>
+
+  <footer>Built with Three.js &nbsp;·&nbsp; &copy; 2026 Hen Chandaro</footer>
+
+</div><!-- /wrapper -->
+
+<!-- THREE.JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+//  THREE.JS — Neural network particle system + central 3D objects
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const canvas   = document.getElementById('bg');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0, 0, 28);
+
+// ── Particles ─────────────────────────────────────────────────────────────────
+const N   = 160;
+const pos = new Float32Array(N * 3);
+const vel = [];
+
+for (let i = 0; i < N; i++) {
+  pos[i*3]   = (Math.random() - 0.5) * 44;
+  pos[i*3+1] = (Math.random() - 0.5) * 32;
+  pos[i*3+2] = (Math.random() - 0.5) * 22;
+  vel.push({
+    x: (Math.random() - 0.5) * 0.016,
+    y: (Math.random() - 0.5) * 0.016,
+    z: (Math.random() - 0.5) * 0.010,
+  });
+}
+
+const dotGeo = new THREE.BufferGeometry();
+dotGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+const dotMat = new THREE.PointsMaterial({ color: 0x5865f2, size: 0.13, transparent: true, opacity: 0.9, sizeAttenuation: true });
+scene.add(new THREE.Points(dotGeo, dotMat));
+
+// ── Lines ─────────────────────────────────────────────────────────────────────
+const MAX_CONN  = N * 10;
+const lPos      = new Float32Array(MAX_CONN * 6);
+const lCol      = new Float32Array(MAX_CONN * 6);
+const lineGeo   = new THREE.BufferGeometry();
+lineGeo.setAttribute('position', new THREE.BufferAttribute(lPos, 3));
+lineGeo.setAttribute('color',    new THREE.BufferAttribute(lCol, 3));
+const lineMesh  = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.38 }));
+scene.add(lineMesh);
+
+// ── Torus knot ────────────────────────────────────────────────────────────────
+const torus = new THREE.Mesh(
+  new THREE.TorusKnotGeometry(3.4, 0.85, 200, 20, 2, 3),
+  new THREE.MeshBasicMaterial({ color: 0x5865f2, wireframe: true, transparent: true, opacity: 0.11 })
+);
+scene.add(torus);
+
+// ── Icosahedron ───────────────────────────────────────────────────────────────
+const ico = new THREE.Mesh(
+  new THREE.IcosahedronGeometry(6.5, 1),
+  new THREE.MeshBasicMaterial({ color: 0x4752c4, wireframe: true, transparent: true, opacity: 0.055 })
+);
+scene.add(ico);
+
+// ── Mouse & Scroll ────────────────────────────────────────────────────────────
+const mouse = { x: 0, y: 0 };
+window.addEventListener('mousemove', e => {
+  mouse.x = (e.clientX / window.innerWidth  - 0.5) * 2;
+  mouse.y = (e.clientY / window.innerHeight - 0.5) * 2;
+});
+let scrollY = 0;
+window.addEventListener('scroll', () => { scrollY = window.scrollY; });
+
+// ── Resize ────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── Loop ──────────────────────────────────────────────────────────────────────
+const B = { x: 22, y: 16, z: 11 };
+const DIST = 8.0;
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Move particles
+  for (let i = 0; i < N; i++) {
+    let x = pos[i*3]   + vel[i].x;
+    let y = pos[i*3+1] + vel[i].y;
+    let z = pos[i*3+2] + vel[i].z;
+    if (Math.abs(x) > B.x) { vel[i].x *= -1; x = pos[i*3]; }
+    if (Math.abs(y) > B.y) { vel[i].y *= -1; y = pos[i*3+1]; }
+    if (Math.abs(z) > B.z) { vel[i].z *= -1; z = pos[i*3+2]; }
+    pos[i*3] = x; pos[i*3+1] = y; pos[i*3+2] = z;
+  }
+  dotGeo.attributes.position.needsUpdate = true;
+
+  // Connections
+  let c = 0;
+  for (let i = 0; i < N && c < MAX_CONN; i++) {
+    for (let j = i + 1; j < N && c < MAX_CONN; j++) {
+      const dx = pos[i*3]-pos[j*3], dy = pos[i*3+1]-pos[j*3+1], dz = pos[i*3+2]-pos[j*3+2];
+      const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      if (d < DIST) {
+        const a = (1 - d/DIST) * 0.9;
+        const b6 = c * 6;
+        lPos[b6]=pos[i*3]; lPos[b6+1]=pos[i*3+1]; lPos[b6+2]=pos[i*3+2];
+        lPos[b6+3]=pos[j*3]; lPos[b6+4]=pos[j*3+1]; lPos[b6+5]=pos[j*3+2];
+        const r=0.345*a, g=0.396*a, bl=0.945*a;
+        lCol[b6]=r; lCol[b6+1]=g; lCol[b6+2]=bl;
+        lCol[b6+3]=r; lCol[b6+4]=g; lCol[b6+5]=bl;
+        c++;
+      }
+    }
+  }
+  lineGeo.setDrawRange(0, c * 2);
+  lineGeo.attributes.position.needsUpdate = true;
+  lineGeo.attributes.color.needsUpdate    = true;
+
+  // Rotate objects
+  torus.rotation.x = t * 0.13; torus.rotation.y = t * 0.08; torus.rotation.z = t * 0.05;
+  ico.rotation.x   = t * 0.055; ico.rotation.y  = t * 0.035;
+
+  // Camera parallax + depth on scroll
+  camera.position.x += (mouse.x * 2.8 - camera.position.x) * 0.04;
+  camera.position.y += (-mouse.y * 1.8 - camera.position.y) * 0.04;
+  camera.position.z  = 28 - scrollY * 0.005;
+  camera.lookAt(0, 0, 0);
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SCROLL REVEAL
+// ═══════════════════════════════════════════════════════════════════════════════
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  3D CARD TILT
+// ═══════════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.pcard').forEach(card => {
+  card.addEventListener('mousemove', e => {
+    const r = card.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width  - 0.5;
+    const y = (e.clientY - r.top)  / r.height - 0.5;
+    card.style.transform = `perspective(800px) rotateX(${-y*9}deg) rotateY(${x*9}deg) translateZ(8px)`;
+  });
+  card.addEventListener('mouseleave', () => { card.style.transform = ''; });
+});
+</script>
+</body>
+</html>
