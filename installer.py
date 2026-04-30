@@ -821,6 +821,14 @@ class Installer(tk.Tk):
 
         # 1. Create venv
         def do_venv():
+            # Clean up stale constraints file left by older installer versions
+            stale = os.path.join(BACKEND, "_torch_constraints.txt")
+            if os.path.isfile(stale):
+                try:
+                    os.remove(stale)
+                except Exception:
+                    pass
+
             if os.path.isfile(VENV_PY):
                 # Verify it's functional — a copied venv has broken paths
                 rc_test, _ = run_cmd(f'"{VENV_PY}" -c "import sys; print(sys.version)"')
@@ -911,40 +919,41 @@ class Installer(tk.Tk):
         def do_backend():
             req = os.path.join(BACKEND, "requirements.txt")
 
-            # ── Step 3a: upgrade pip itself first ────────────────────────────
+            # ── Step 3a: upgrade pip ──────────────────────────────────────────
             self._log("  Upgrading pip…")
             run_cmd(f'"{VENV_PY}" -m pip install --upgrade pip --quiet')
 
-            # ── Step 3b: build a constraints file that pins torch/torchvision ─
-            # This prevents ultralytics from downgrading the CUDA build we just
-            # installed to a plain CPU wheel from PyPI.
-            constraints_path = os.path.join(BACKEND, "_torch_constraints.txt")
-            try:
-                lines = []
-                for pkg in ("torch", "torchvision"):
-                    rc_s, out_s = run_cmd(f'"{VENV_PIP}" show {pkg}')
-                    if rc_s == 0:
-                        for l in out_s.splitlines():
-                            if l.startswith("Version:"):
-                                ver = l.split(":", 1)[1].strip()
-                                lines.append(f"{pkg}=={ver}")
-                                break
-                with open(constraints_path, "w") as cf:
-                    cf.write("\n".join(lines) + "\n")
-                self._log(f"  Pinned: {', '.join(lines)}")
-                constraint_flag = f'--constraint "{constraints_path}"'
-            except Exception as e:
-                self._log(f"  ⚠ Could not write constraints ({e}) — proceeding without pin")
-                constraint_flag = ""
+            # ── Step 3b: resolve the PyTorch index that was used earlier ──────
+            #
+            #  ROOT CAUSE of the "backend install fails on all machines" bug:
+            #  The old approach wrote a --constraint file pinning e.g.
+            #  "torch==2.7.0+cu128", then ran pip against requirements.txt.
+            #  pip searched only PyPI for that pin — PyPI never has wheels with
+            #  local-version suffixes like "+cu128", so the constraint could
+            #  never be satisfied and pip failed every time on a fresh install.
+            #
+            #  Fix: pass --extra-index-url so pip can find the correct CUDA
+            #  wheel when ultralytics (or any other dep) pulls torch transitively.
+            #  Then verify torch wasn't silently downgraded afterwards.
+            urls = {
+                "cpu":   "https://download.pytorch.org/whl/cpu",
+                "cu118": "https://download.pytorch.org/whl/cu118",
+                "cu124": "https://download.pytorch.org/whl/cu124",
+                "cu128": "https://download.pytorch.org/whl/cu128",
+            }
+            effective_mode = self.torch_choice.get() if torch_mode == "auto" else torch_mode
+            if effective_mode == "auto":
+                effective_mode = "cpu"
+            torch_url = urls.get(effective_mode, urls["cpu"])
 
-            # ── Step 3c: install requirements ────────────────────────────────
-            self._log("  Installing backend libraries…")
+            # ── Step 3c: install requirements with the correct torch index ────
+            self._log(f"  Installing backend libraries  [{effective_mode}]…")
             error_lines = []
 
             def on_line(line):
                 low = line.lower()
-                # Always capture error lines for display on failure
-                if any(k in low for k in ("error", "could not", "no matching", "failed")):
+                if any(k in low for k in ("error", "could not", "no matching",
+                                           "failed", "exception")):
                     error_lines.append(line.strip())
                 if any(k in low for k in (
                     "downloading", "installing", "successfully", "error",
@@ -955,23 +964,40 @@ class Installer(tk.Tk):
                         disp = disp[:87] + "…"
                     self._log(f"  {disp}")
 
-            cmd = (f'"{VENV_PIP}" install -r "{req}" {constraint_flag} '
+            cmd = (f'"{VENV_PIP}" install -r "{req}" '
+                   f'--extra-index-url {torch_url} '
                    f'--no-warn-script-location')
             rc, _ = run_cmd_stream(cmd, cwd=BACKEND, line_cb=on_line)
 
-            # Clean up temporary constraints file
-            try:
-                os.remove(constraints_path)
-            except Exception:
-                pass
-
-            if rc == 0:
-                self._log("  ✓ Backend libraries installed.")
-            else:
+            if rc != 0:
                 self._log("  ❌ Backend install failed. Error details:")
-                for el in error_lines[-10:]:   # show last 10 error lines
+                for el in error_lines[-15:]:
                     self._log(f"     {el}")
-            return rc == 0, ""
+                return False, ""
+
+            # ── Step 3d: guard against silent torch downgrade ─────────────────
+            #  ultralytics is known to pull the plain-CPU PyPI wheel even when
+            #  a CUDA build is already installed. Re-check and force-restore.
+            if effective_mode != "cpu":
+                rc_v, ver_out = run_cmd(
+                    f'"{VENV_PY}" -c "import torch; print(torch.__version__)"'
+                )
+                if rc_v == 0:
+                    ver = ver_out.strip()
+                    if f"+{effective_mode}" not in ver:
+                        self._log(f"  ⚠ torch downgraded to {ver} — restoring {effective_mode} build…")
+                        run_cmd_stream(
+                            f'"{VENV_PIP}" install torch torchvision '
+                            f'--index-url {torch_url} --force-reinstall '
+                            f'--no-warn-script-location',
+                            line_cb=on_line
+                        )
+                        self._log("  ✓ CUDA build restored.")
+                    else:
+                        self._log(f"  ✓ torch {ver} confirmed.")
+
+            self._log("  ✓ Backend libraries installed.")
+            return True, ""
 
         if not step("install_backend", do_backend):
             self._log("❌ Backend dependency install failed. See error lines above.", ERROR)
