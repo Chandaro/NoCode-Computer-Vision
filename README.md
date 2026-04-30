@@ -1,81 +1,120 @@
-# NoCode CV Trainer
+<div align="center">
 
-**Train computer vision models without writing a single line of code.**
+<br/>
 
-NoCode CV Trainer is a desktop application for Windows that lets you upload images, draw annotations, and train state-of-the-art object detection and image classification models — all through a clean point-and-click interface.
+<img src="https://img.shields.io/badge/NoCode%20CV-Trainer-5865f2?style=for-the-badge&labelColor=0d0d0f" alt="NoCode CV Trainer" />
 
----
+<br/><br/>
 
-## What You Can Do
+**Train production-grade computer vision models — no code required.**
 
-| Feature | Description |
-|---|---|
-| **Annotation Studio** | Draw bounding boxes, polygons, and point markers on your images |
-| **Object Detection** | Train YOLOv8 models to detect and locate objects in images |
-| **Image Classification** | Train ResNet, MobileNet, or EfficientNet classifiers |
-| **Live Inference** | Run your trained model on new images instantly |
-| **Analytics** | Visualize label distributions and dataset statistics |
-| **Evaluation** | Review model performance with precision/recall metrics |
-| **Export** | Export your dataset in YOLO or COCO format |
+Annotate images, design custom CNN architectures, train YOLOv8 & classification models,<br/>
+evaluate performance, and export datasets — all from a single desktop application.
 
----
+<br/>
 
-## Runs On Your Machine — No Cloud Required
+[![Python](https://img.shields.io/badge/Python-3.9%2B-3776ab?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![YOLOv8](https://img.shields.io/badge/YOLOv8-Ultralytics-00b4d8?style=flat-square)](https://github.com/ultralytics/ultralytics)
+[![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 
-> **Your hardware does all the work.** NoCode CV Trainer runs entirely on your own computer — no internet connection needed during training, no data uploaded anywhere, no subscription, no API calls to external services.
->
-> Training deep learning models is computationally intensive. Here's what to expect:
->
-> | Hardware | Training Speed | Recommendation |
-> |---|---|---|
-> | **NVIDIA GPU (CUDA)** | Fast — minutes per epoch | Ideal for serious training |
-> | **CPU only** | Slow — can take hours per epoch | Fine for small datasets / testing |
-> | **AMD / Intel GPU** | Not accelerated | Falls back to CPU |
->
-> The more images and epochs you train, the more CPU/GPU and RAM your machine will use. This is normal — close other heavy applications while training for best performance.
->
-> On first use, YOLOv8 will download its base model weights (~130 MB) from the internet once. After that, everything runs offline.
+<br/>
+
+</div>
 
 ---
 
-## Requirements
+## Overview
 
-| Requirement | Status | Notes |
-|---|---|---|
-| **Python 3.9 or newer** | Required | [python.org/downloads](https://www.python.org/downloads/) |
-| **Node.js** | Optional | Not needed — frontend is pre-built |
-| **NVIDIA GPU + CUDA** | Optional | CPU works fine; GPU trains much faster |
+NoCode CV Trainer is a **self-hosted, offline-first** desktop application for Windows that gives non-technical teams the same computer vision capabilities as professional ML engineers — without writing a single line of code.
 
-> **Just need Python.** Everything else is handled automatically by the installer.
+Everything runs **locally on your machine**. No subscriptions. No data leaves your network. No cloud dependencies.
 
 ---
 
-## Quick Start (Non-Technical)
+## Features
 
-1. **Double-click** `Install NoCode CV.bat`
-   - This creates a virtual environment and installs all dependencies
-   - Takes 2–5 minutes on first run
-   - You only need to do this once
+<table>
+<tr>
+<td width="50%">
 
-2. **Double-click** `NoCode CV.bat` to launch the app
+### 🖼 Annotation Studio
+Draw bounding boxes, polygons, and point markers on your images with a full-featured annotation canvas — complete with undo/redo, zoom, and label management.
 
-3. Open your browser and go to **http://localhost:8000**
+</td>
+<td width="50%">
 
-That's it. No terminal, no commands, no configuration.
+### 🧠 Custom CNN Builder
+Design and visualise your own neural network architecture layer by layer in an interactive 3D/2D canvas. Load architecture presets or build from scratch.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### ⚡ YOLOv8 Object Detection
+Train state-of-the-art YOLOv8 models with real-time log streaming, live loss curves, and full augmentation control — directly on your GPU.
+
+</td>
+<td width="50%">
+
+### 🏷 Image Classification
+Fine-tune ResNet, MobileNetV3, and EfficientNet-B0 on your own image classes using PyTorch transfer learning. Results in minutes, not hours.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🔬 Evaluation & Inference
+Review model performance with precision, recall, mAP metrics, and per-class breakdowns. Run live inference on new images immediately after training.
+
+</td>
+<td width="50%">
+
+### 📦 Dataset Export
+Export your labelled dataset in **YOLO** or **COCO** format as a ready-to-use zip archive — compatible with any downstream ML pipeline.
+
+</td>
+</tr>
+</table>
 
 ---
 
-## Developer Setup (Manual)
+## Getting Started
 
-If you prefer to set things up yourself:
+### Option A — One-Click Install *(Recommended)*
 
-**1. Clone the repository**
-```bash
-git clone https://github.com/Chandaro/NoCode_CV.git
-cd NoCode_CV
+> **No terminal required.** Everything is handled automatically.
+
+```
+1.  Double-click   →   Install NoCode CV.bat
+2.  Double-click   →   NoCode CV.bat
+3.  Open browser   →   http://localhost:8000
 ```
 
-**2. Create and activate a virtual environment**
+The installer will:
+- Detect your Python version automatically (`python`, `python3`, `py` launcher — all supported)
+- Create an isolated virtual environment
+- Install the correct PyTorch build for your GPU (CUDA 11.8 / 12.x / CPU — auto-detected)
+- Install all backend libraries
+- Launch a guided setup wizard
+
+**First install takes ~5 minutes.** Subsequent launches are instant.
+
+---
+
+### Option B — Manual / Developer Setup
+
+**1. Clone**
+```bash
+git clone https://github.com/Chandaro/NoCode-Computer-Vision.git
+cd NoCode-Computer-Vision
+```
+
+**2. Create virtual environment**
 ```bash
 python -m venv venv
 
@@ -86,83 +125,159 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-**3. Install Python dependencies**
+**3. Install PyTorch** *(choose one)*
 ```bash
-pip install -r backend/requirements.txt
+# CPU only
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# CUDA 11.8
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+
+# CUDA 12.x (RTX 30/40 series)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+
+# CUDA 12.5+ (RTX 40/50 series — Blackwell / Ada)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 ```
 
-**4. (Optional) Rebuild the frontend**
+**4. Install backend dependencies**
+```bash
+pip install -r backend/requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+```
 
-The pre-built frontend is already included in `frontend/dist/`. Only do this if you modify the UI:
+**5. *(Optional)* Rebuild the frontend**
+
+The pre-built frontend is already included in `frontend/dist/`. Only needed if you modify the UI:
 ```bash
 cd frontend
-npm install
-npm run build
+npm install && npm run build
 cd ..
 ```
 
-**5. Start the server**
+**6. Start the server**
 ```bash
 cd backend
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Open **http://localhost:8000** in your browser.
+Open **[http://localhost:8000](http://localhost:8000)** in your browser.
 
 ---
 
-## How It Works
+## Hardware Requirements
+
+| Hardware | Training Speed | Notes |
+|---|---|---|
+| **NVIDIA GPU + CUDA 12.x** | ⚡ Fast — minutes per epoch | Recommended for serious training |
+| **NVIDIA GPU + CUDA 11.8** | ⚡ Fast — minutes per epoch | Older GPUs (GTX 10xx / RTX 20xx) |
+| **CPU only** | 🐢 Slow — hours per epoch | Fine for small datasets & testing |
+| **AMD / Intel GPU** | 🐢 Falls back to CPU | No CUDA acceleration |
+
+> **Minimum:** Python 3.9+, 8 GB RAM, 4 GB free disk space  
+> **Recommended:** Python 3.11+, 16 GB RAM, NVIDIA GPU with 6 GB VRAM
+
+On first use, YOLOv8 downloads its base weights (~130 MB) once. All subsequent training runs offline.
+
+---
+
+## Architecture
 
 ```
-frontend/dist/         ← Pre-built React UI (served by FastAPI)
-backend/
-  main.py              ← FastAPI app, serves UI + API
-  routers/
-    images.py          ← Upload & manage images
-    training.py        ← YOLOv8 training with live log streaming (SSE)
-    classification.py  ← PyTorch classification training
-    infer.py           ← Run inference on trained models
-    analytics.py       ← Dataset statistics
-    evaluation.py      ← Model metrics
-    export.py          ← YOLO / COCO export
-  database.py          ← SQLite via SQLModel
+NoCode-Computer-Vision/
+│
+├── Install NoCode CV.bat      ← Guided GUI installer (run once)
+├── NoCode CV.bat              ← App launcher (run to start)
+├── installer.py               ← Tkinter setup wizard
+├── launcher.py                ← Starts backend + opens browser
+│
+├── backend/
+│   ├── main.py                ← FastAPI app entry point
+│   ├── database.py            ← SQLite via SQLModel
+│   ├── requirements.txt       ← Python dependencies
+│   └── routers/
+│       ├── images.py          ← Image upload & management
+│       ├── training.py        ← YOLOv8 training + SSE log streaming
+│       ├── classification.py  ← PyTorch classification training
+│       ├── custom.py          ← Custom CNN builder & training
+│       ├── infer.py           ← Inference on trained models
+│       ├── analytics.py       ← Dataset statistics
+│       ├── evaluation.py      ← Model metrics & evaluation
+│       └── export.py          ← YOLO / COCO dataset export
+│
+└── frontend/
+    ├── dist/                  ← Pre-built production bundle (served by FastAPI)
+    └── src/
+        ├── pages/             ← React page components
+        │   ├── CustomModel.tsx  ← CNN architecture builder
+        │   └── ...
+        └── components/        ← Shared UI components
 ```
 
-The frontend is a React + TypeScript SPA. The backend is a FastAPI server that also serves the built frontend as static files — so there's only one process to run and one URL to visit.
+> The frontend is a **React + TypeScript SPA** served directly by FastAPI as static files — one process, one URL, zero configuration.
 
 ---
 
 ## Tech Stack
 
-**Backend**
-- [FastAPI](https://fastapi.tiangolo.com/) — REST API + static file serving
-- [SQLModel](https://sqlmodel.tiangolo.com/) + SQLite — data persistence
-- [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) — object detection training & inference
-- [PyTorch](https://pytorch.org/) — classification training (ResNet18/50, MobileNetV3, EfficientNet-B0)
-- [Uvicorn](https://www.uvicorn.org/) — ASGI server
+### Backend
+| Library | Version | Role |
+|---|---|---|
+| [FastAPI](https://fastapi.tiangolo.com/) | 0.115 | REST API + static file serving |
+| [Uvicorn](https://www.uvicorn.org/) | 0.32 | ASGI server |
+| [SQLModel](https://sqlmodel.tiangolo.com/) | 0.0.22 | ORM + SQLite persistence |
+| [Ultralytics](https://github.com/ultralytics/ultralytics) | 8.4 | YOLOv8 detection training & inference |
+| [PyTorch](https://pytorch.org/) | 2.x | Classification training backbone |
+| [Pillow](https://python-pillow.org/) | 11.x | Image processing |
 
-**Frontend**
-- [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
-- [Vite](https://vitejs.dev/) — build tool
-- HTML5 Canvas — annotation drawing engine
+### Frontend
+| Library | Version | Role |
+|---|---|---|
+| [React](https://react.dev/) | 18 | UI framework |
+| [TypeScript](https://www.typescriptlang.org/) | 5.x | Type safety |
+| [Vite](https://vitejs.dev/) | 6.x | Build tool |
+| [Three.js](https://threejs.org/) | 0.x | 3D CNN architecture visualisation |
+| HTML5 Canvas | — | Annotation drawing engine |
 
 ---
 
-## Project Structure
+## Workflow
 
 ```
-NoCode_CV/
-├── Install NoCode CV.bat   ← Run once to install
-├── NoCode CV.bat           ← Run to launch
-├── installer.py            ← GUI installer (tkinter)
-├── launcher.py             ← App launcher (opens browser)
-├── backend/                ← FastAPI server + ML logic
-├── frontend/               ← React source + pre-built dist
-└── README.md
+Upload Images  →  Annotate  →  Train  →  Evaluate  →  Export
+     │               │            │           │            │
+  Drag & drop    BBox / Poly   YOLOv8 or   mAP / P/R   YOLO zip
+  or bulk add    Point tools   ResNet etc  per class    COCO zip
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome. To get started:
+
+```bash
+# Fork the repo, then clone your fork
+git clone https://github.com/YOUR_USERNAME/NoCode-Computer-Vision.git
+
+# Create a feature branch
+git checkout -b feature/your-feature-name
+
+# Make changes, then push and open a PR
+git push origin feature/your-feature-name
+```
+
+Please keep PRs focused — one feature or fix per PR.
 
 ---
 
 ## License
 
-MIT — free to use, modify, and distribute.
+[MIT](LICENSE) — free to use, modify, and distribute.
+
+---
+
+<div align="center">
+
+Built with FastAPI · PyTorch · React · Three.js
+
+</div>
