@@ -946,7 +946,26 @@ class Installer(tk.Tk):
                 effective_mode = "cpu"
             torch_url = urls.get(effective_mode, urls["cpu"])
 
-            # ── Step 3c: install requirements with the correct torch index ────
+            # ── Step 3c: pre-install pillow from binary wheel only ────────────
+            # pillow sometimes has no wheel for less common Python builds and
+            # pip falls back to compiling from source, which fails on machines
+            # without zlib/libpng headers.  Installing it separately first with
+            # --only-binary guarantees a wheel is used.  If no wheel exists for
+            # this Python version, we fall back to a known-good older release.
+            self._log("  Installing Pillow (binary only)…")
+            rc_p, _ = run_cmd(
+                f'"{VENV_PIP}" install "pillow>=10.0.0" '
+                f'--only-binary=pillow --prefer-binary '
+                f'--no-warn-script-location'
+            )
+            if rc_p != 0:
+                self._log("  Pillow latest wheel not found — trying pillow 10.4.0…")
+                run_cmd(
+                    f'"{VENV_PIP}" install "pillow==10.4.0" '
+                    f'--only-binary=pillow --no-warn-script-location'
+                )
+
+            # ── Step 3d: install requirements with the correct torch index ────
             self._log(f"  Installing backend libraries  [{effective_mode}]…")
             error_lines = []
 
