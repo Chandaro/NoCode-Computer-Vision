@@ -966,6 +966,7 @@ class Installer(tk.Tk):
 
             cmd = (f'"{VENV_PIP}" install -r "{req}" '
                    f'--extra-index-url {torch_url} '
+                   f'--prefer-binary '
                    f'--no-warn-script-location')
             rc, _ = run_cmd_stream(cmd, cwd=BACKEND, line_cb=on_line)
 
