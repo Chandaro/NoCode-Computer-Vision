@@ -130,6 +130,9 @@ class Installer(tk.Tk):
         self.checks         = {}         # {name: (ok, detail)}
         self.torch_choice   = tk.StringVar(value="auto")
         self.shortcut_var   = tk.BooleanVar(value=True)
+        self.install_mode   = tk.StringVar(value="venv")  # "venv" | "system"
+        self._pkg_scan      = {}         # {pkg_name: (ok, installed_ver, required)}
+        self._scan_panel    = None       # tk.Frame reference, rebuilt on mode change
         self._install_done  = False
         self.detected_cuda  = None       # e.g. "12.8" from nvidia-smi
         self.detected_gpu   = None       # e.g. "NVIDIA GeForce RTX 5070 Ti"
@@ -687,6 +690,47 @@ class Installer(tk.Tk):
 
         tk.Frame(c, bg=BORDER, height=1).pack(fill="x", pady=10)
 
+        # ── Environment ───────────────────────────────────────────────────────
+        tk.Label(c, text="Environment", bg=BG, fg=TXT,
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        tk.Label(c, text="Choose where packages are installed.",
+                 bg=BG, fg=TXT2, font=("Segoe UI", 8)).pack(anchor="w", pady=(2, 6))
+
+        env_opts = [
+            ("venv",
+             "Isolated virtual environment",
+             "Creates ./venv — installs everything fresh, nothing touches your system Python.  (recommended)"),
+            ("system",
+             "Use existing Python installation",
+             f"Skips venv creation.  Only installs packages that are missing from your current Python."),
+        ]
+        for val, label, desc in env_opts:
+            row = tk.Frame(c, bg=SURF2, cursor="hand2",
+                           highlightbackground=BORDER, highlightthickness=1)
+            row.pack(fill="x", pady=2, ipady=5, ipadx=4)
+            row.bind("<Button-1>", lambda e, v=val: self._set_env_mode(v))
+
+            rb = tk.Radiobutton(row, variable=self.install_mode, value=val,
+                                bg=SURF2, activebackground=SURF2,
+                                selectcolor=SURF2, fg=ACCENT, relief="flat",
+                                bd=0, cursor="hand2",
+                                command=lambda v=val: self._set_env_mode(v))
+            rb.pack(side="left", padx=(10, 4))
+
+            inner = tk.Frame(row, bg=SURF2)
+            inner.pack(side="left", fill="x", expand=True)
+            tk.Label(inner, text=label, font=("Segoe UI", 9, "bold"),
+                     bg=SURF2, fg=TXT, anchor="w").pack(anchor="w")
+            tk.Label(inner, text=desc, font=("Segoe UI", 8),
+                     bg=SURF2, fg=TXT2, anchor="w", wraplength=430,
+                     justify="left").pack(anchor="w")
+
+        # Scan panel — populated when "system" mode is selected
+        self._scan_panel = tk.Frame(c, bg=BG)
+        self._scan_panel.pack(fill="x", pady=(4, 0))
+
+        tk.Frame(c, bg=BORDER, height=1).pack(fill="x", pady=10)
+
         # ── Options ───────────────────────────────────────────────────────────
         tk.Label(c, text="Options", bg=BG, fg=TXT,
                  font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 4))
@@ -697,6 +741,130 @@ class Installer(tk.Tk):
                             selectcolor=SURF2, font=("Segoe UI", 9), bd=0, relief="flat",
                             cursor="hand2")
         cb.pack(anchor="w")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Environment mode helpers
+    # ──────────────────────────────────────────────────────────────────────────
+    def _set_env_mode(self, val):
+        self.install_mode.set(val)
+        self._pkg_scan = {}          # clear stale results on mode switch
+        self._rebuild_scan_panel()
+
+    def _rebuild_scan_panel(self):
+        if self._scan_panel is None:
+            return
+        for w in self._scan_panel.winfo_children():
+            w.destroy()
+        if self.install_mode.get() != "system":
+            return
+
+        btn_row = tk.Frame(self._scan_panel, bg=BG)
+        btn_row.pack(anchor="w", pady=(4, 0))
+        tk.Button(btn_row,
+                  text="Scan installed packages",
+                  font=("Segoe UI", 8), bg=SURF2, fg=ACCENT,
+                  relief="flat", bd=0, padx=14, pady=6,
+                  cursor="hand2", activebackground=SURF2,
+                  command=self._start_pkg_scan).pack(side="left")
+        tk.Label(btn_row,
+                 text="  Check which required packages are already on your system.",
+                 font=("Segoe UI", 8), bg=BG, fg=TXT2).pack(side="left")
+
+        if self._pkg_scan:
+            self._draw_scan_results()
+
+    def _start_pkg_scan(self):
+        # Disable the button while scanning
+        for w in self._scan_panel.winfo_children():
+            if isinstance(w, tk.Frame):
+                for child in w.winfo_children():
+                    if isinstance(child, tk.Button):
+                        child.config(state="disabled", text="Scanning…")
+        threading.Thread(target=self._do_pkg_scan, daemon=True).start()
+
+    def _do_pkg_scan(self):
+        """Check every package in requirements.txt + torch/torchvision."""
+        import re as _re
+
+        req_path = os.path.join(BACKEND, "requirements.txt")
+        # Parse requirements.txt: collect (display_name, pip_name, version_spec)
+        packages = []
+        try:
+            with open(req_path) as fh:
+                for raw in fh:
+                    line = raw.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    # Normalise: "python-multipart==0.0.20" -> pip_name="python-multipart"
+                    pip_name = _re.split(r"[><=!;]", line)[0].strip()
+                    packages.append((pip_name, line))
+        except Exception:
+            pass
+
+        # Always check torch and torchvision (not in requirements.txt)
+        for name in ("torch", "torchvision"):
+            if not any(p == name for p, _ in packages):
+                packages.append((name, name))
+
+        results = {}
+        for pip_name, req_spec in packages:
+            rc, out = run_cmd(f'"{sys.executable}" -m pip show "{pip_name}"')
+            if rc == 0:
+                ver_line = next(
+                    (ln for ln in out.splitlines() if ln.lower().startswith("version:")),
+                    ""
+                )
+                ver = ver_line.split(":", 1)[-1].strip() if ver_line else "?"
+                results[pip_name] = (True, ver, req_spec)
+            else:
+                results[pip_name] = (False, "not installed", req_spec)
+
+        self._pkg_scan = results
+        self.after(0, self._rebuild_scan_panel)
+
+    def _draw_scan_results(self):
+        """Render scan results table inside _scan_panel (called after data is ready)."""
+        found    = sum(1 for ok, _, _ in self._pkg_scan.values() if ok)
+        total    = len(self._pkg_scan)
+        missing  = [n for n, (ok, _, _) in self._pkg_scan.items() if not ok]
+
+        summary_col = SUCCESS if not missing else WARN
+        summary_txt = (f"  {found}/{total} packages already installed"
+                       + (f"  —  {len(missing)} missing" if missing else "  —  all present"))
+        tk.Label(self._scan_panel, text=summary_txt,
+                 font=("Segoe UI", 8, "bold"), bg=BG, fg=summary_col,
+                 anchor="w").pack(anchor="w", pady=(6, 4))
+
+        grid = tk.Frame(self._scan_panel, bg=SURF2)
+        grid.pack(fill="x")
+
+        # Header
+        for col, (txt, w) in enumerate([("Package", 22), ("Required", 24), ("Installed", 20)]):
+            tk.Label(grid, text=txt, font=("Courier New", 7, "bold"),
+                     bg=SURF2, fg=TXT2, width=w, anchor="w").grid(
+                row=0, column=col, padx=(8 if col == 0 else 4, 4), pady=(5, 2), sticky="w")
+
+        for row_i, (pkg, (ok, ver, req)) in enumerate(self._pkg_scan.items(), start=1):
+            bg_row = "#0f1520" if row_i % 2 == 0 else SURF2
+            icon   = "✓" if ok else "✗"
+            icol   = SUCCESS if ok else ERROR
+            vcol   = TXT if ok else ERROR
+
+            tk.Label(grid, text=f"{icon} {pkg}", font=("Courier New", 7),
+                     bg=bg_row, fg=icol, width=22, anchor="w").grid(
+                row=row_i, column=0, padx=(8, 4), pady=1, sticky="w")
+            tk.Label(grid, text=req[:24], font=("Courier New", 7),
+                     bg=bg_row, fg=TXT2, width=24, anchor="w").grid(
+                row=row_i, column=1, padx=(4, 4), pady=1, sticky="w")
+            tk.Label(grid, text=ver[:20], font=("Courier New", 7),
+                     bg=bg_row, fg=vcol, width=20, anchor="w").grid(
+                row=row_i, column=2, padx=(4, 8), pady=1, sticky="w")
+
+        if missing:
+            tk.Label(self._scan_panel,
+                     text=f"  Missing packages will be installed automatically during setup.",
+                     font=("Segoe UI", 8), bg=BG, fg=TXT2, anchor="w").pack(
+                anchor="w", pady=(6, 0))
 
     # ──────────────────────────────────────────────────────────────────────────
     # PAGE 3 – Install
@@ -802,10 +970,23 @@ class Installer(tk.Tk):
         threading.Thread(target=self._install_thread, daemon=True).start()
 
     def _install_thread(self):
-        torch_mode = self.torch_choice.get()
+        torch_mode    = self.torch_choice.get()
         want_shortcut = self.shortcut_var.get()
+        use_system    = (self.install_mode.get() == "system")
         total = len(self._step_names)
-        done = 0
+        done  = 0
+
+        # Which Python / pip to use throughout this install
+        if use_system:
+            venv_py  = sys.executable
+            venv_pip = sys.executable   # invoked as  "{venv_pip}" -m pip …
+            qpy  = f'"{venv_py}"'
+            qpip = f'"{venv_pip}" -m pip'
+        else:
+            venv_py  = VENV_PY
+            venv_pip = VENV_PIP
+            qpy  = f'"{venv_py}"'
+            qpip = f'"{venv_pip}"'
 
         def step(key, fn):
             nonlocal done
@@ -819,7 +1000,7 @@ class Installer(tk.Tk):
             self._advance_progress()
             return ok
 
-        # 1. Create venv
+        # 1. Create venv  (or verify system Python)
         def do_venv():
             # Clean up stale constraints file left by older installer versions
             stale = os.path.join(BACKEND, "_torch_constraints.txt")
@@ -829,8 +1010,18 @@ class Installer(tk.Tk):
                 except Exception:
                     pass
 
+            if use_system:
+                # System-Python mode: just verify it works
+                rc_test, ver_out = run_cmd(f'{qpy} -c "import sys; print(sys.version)"')
+                if rc_test == 0:
+                    self._log(f"  Using system Python {ver_out.strip()[:60]}")
+                    self._log("  Packages will be installed into your existing environment.")
+                    return True, "", "skip"
+                self._log("  ❌ System Python does not respond — this should not happen.")
+                return False, ""
+
+            # venv mode (original behaviour)
             if os.path.isfile(VENV_PY):
-                # Verify it's functional — a copied venv has broken paths
                 rc_test, _ = run_cmd(f'"{VENV_PY}" -c "import sys; print(sys.version)"')
                 if rc_test == 0:
                     self._log("  ✓ Existing venv found and working — reusing.")
@@ -848,17 +1039,18 @@ class Installer(tk.Tk):
 
         # 2. Install PyTorch
         def do_torch():
-            # Check if already present and working in the venv
+            # Check if already present and working
             rc_chk, out_chk = run_cmd(
-                f"\"{VENV_PY}\" -c \"import torch; print(torch.__version__)\""
+                f"{qpy} -c \"import torch; print(torch.__version__)\""
             )
             if rc_chk == 0 and torch_mode == "auto":
                 # Also verify CUDA actually works if GPU present
                 rc_cuda, _ = run_cmd(
-                    f"\"{VENV_PY}\" -c \"import torch; torch.zeros(1).cuda() if torch.cuda.is_available() else None; print('ok')\""
+                    f"{qpy} -c \"import torch; torch.zeros(1).cuda() if torch.cuda.is_available() else None; print('ok')\""
                 )
                 if rc_cuda == 0:
-                    self._log(f"  ✓ torch {out_chk.strip()} already in venv and working, skipping.")
+                    env_label = "system env" if use_system else "venv"
+                    self._log(f"  ✓ torch {out_chk.strip()} already in {env_label} and working, skipping.")
                     return True, "", "skip"
                 self._log(f"  ⚠ torch {out_chk.strip()} found but CUDA test failed — reinstalling with correct variant.")
                 # Fall through to reinstall with selected mode
@@ -885,7 +1077,7 @@ class Installer(tk.Tk):
 
             # ── Stream pip output line by line ────────────────────────────────
             # No -q so we see Downloading / Installing lines as they happen.
-            cmd = (f"\"{VENV_PIP}\" install torch torchvision "
+            cmd = (f"{qpip} install torch torchvision "
                    f"--index-url {url} --no-warn-script-location")
 
             last_pkg = [None]   # track last package name for dedup
@@ -921,7 +1113,7 @@ class Installer(tk.Tk):
 
             # ── Step 3a: upgrade pip ──────────────────────────────────────────
             self._log("  Upgrading pip…")
-            run_cmd(f'"{VENV_PY}" -m pip install --upgrade pip --quiet')
+            run_cmd(f'{qpy} -m pip install --upgrade pip --quiet')
 
             # ── Step 3b: resolve the PyTorch index that was used earlier ──────
             #
@@ -954,14 +1146,14 @@ class Installer(tk.Tk):
             # this Python version, we fall back to a known-good older release.
             self._log("  Installing Pillow (binary only)…")
             rc_p, _ = run_cmd(
-                f'"{VENV_PIP}" install "pillow>=10.0.0" '
+                f'{qpip} install "pillow>=10.0.0" '
                 f'--only-binary=pillow --prefer-binary '
                 f'--no-warn-script-location'
             )
             if rc_p != 0:
                 self._log("  Pillow latest wheel not found — trying pillow 10.4.0…")
                 run_cmd(
-                    f'"{VENV_PIP}" install "pillow==10.4.0" '
+                    f'{qpip} install "pillow==10.4.0" '
                     f'--only-binary=pillow --no-warn-script-location'
                 )
 
@@ -983,7 +1175,7 @@ class Installer(tk.Tk):
                         disp = disp[:87] + "…"
                     self._log(f"  {disp}")
 
-            cmd = (f'"{VENV_PIP}" install -r "{req}" '
+            cmd = (f'{qpip} install -r "{req}" '
                    f'--extra-index-url {torch_url} '
                    f'--prefer-binary '
                    f'--no-warn-script-location')
@@ -1000,14 +1192,14 @@ class Installer(tk.Tk):
             #  a CUDA build is already installed. Re-check and force-restore.
             if effective_mode != "cpu":
                 rc_v, ver_out = run_cmd(
-                    f'"{VENV_PY}" -c "import torch; print(torch.__version__)"'
+                    f'{qpy} -c "import torch; print(torch.__version__)"'
                 )
                 if rc_v == 0:
                     ver = ver_out.strip()
                     if f"+{effective_mode}" not in ver:
                         self._log(f"  ⚠ torch downgraded to {ver} — restoring {effective_mode} build…")
                         run_cmd_stream(
-                            f'"{VENV_PIP}" install torch torchvision '
+                            f'{qpip} install torch torchvision '
                             f'--index-url {torch_url} --force-reinstall '
                             f'--no-warn-script-location',
                             line_cb=on_line
@@ -1076,7 +1268,7 @@ class Installer(tk.Tk):
 
         # 6. Write launcher files
         def do_launcher():
-            self._write_launcher_files()
+            self._write_launcher_files(venv_py if use_system else None)
             return True, ""
 
         step("write_launcher", do_launcher)
@@ -1101,21 +1293,35 @@ class Installer(tk.Tk):
                              command=lambda: self._show_step(4))
 
     # ── Write launcher files ──────────────────────────────────────────────────
-    def _write_launcher_files(self):
+    def _write_launcher_files(self, system_py=None):
+        """Write NoCode CV.bat.
+        system_py: if set, the bat uses this absolute Python path directly
+                   instead of looking for ./venv/Scripts/pythonw.exe.
+        """
         self._log("  Writing NoCode CV.bat…")
 
-        # Use %~dp0 so the bat works from any location (no hardcoded paths)
-        bat = (
-            "@echo off\r\n"
-            "title NoCode CV Trainer\r\n"
-            "cd /d \"%~dp0\"\r\n"
-            "if exist \"%~dp0venv\\Scripts\\pythonw.exe\" (\r\n"
-            "    start \"\" \"%~dp0venv\\Scripts\\pythonw.exe\" \"%~dp0launcher.py\"\r\n"
-            ") else (\r\n"
-            "    echo ERROR: App not installed. Please run \"Install NoCode CV.bat\" first.\r\n"
-            "    pause\r\n"
-            ")\r\n"
-        )
+        if system_py:
+            # System-Python mode: hardcode the path that was used to install
+            py_path = system_py.replace("\\", "\\\\")
+            bat = (
+                "@echo off\r\n"
+                "title NoCode CV Trainer\r\n"
+                "cd /d \"%~dp0\"\r\n"
+                f"start \"\" \"{py_path}\" \"%~dp0launcher.py\"\r\n"
+            )
+        else:
+            # venv mode: use the venv python (relative path, portable)
+            bat = (
+                "@echo off\r\n"
+                "title NoCode CV Trainer\r\n"
+                "cd /d \"%~dp0\"\r\n"
+                "if exist \"%~dp0venv\\Scripts\\pythonw.exe\" (\r\n"
+                "    start \"\" \"%~dp0venv\\Scripts\\pythonw.exe\" \"%~dp0launcher.py\"\r\n"
+                ") else (\r\n"
+                "    echo ERROR: App not installed. Please run \"Install NoCode CV.bat\" first.\r\n"
+                "    pause\r\n"
+                ")\r\n"
+            )
         bat_path = os.path.join(ROOT_DIR, "NoCode CV.bat")
         with open(bat_path, "w", encoding="utf-8") as f:
             f.write(bat)
