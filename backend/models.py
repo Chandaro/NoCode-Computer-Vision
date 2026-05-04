@@ -1,3 +1,5 @@
+from __future__ import annotations  # keep annotations as strings at class creation time
+                                     # (required for Python 3.14 + Pydantic/SQLModel compat)
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
 import json
