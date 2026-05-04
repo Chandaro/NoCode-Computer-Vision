@@ -1,4 +1,16 @@
+from __future__ import annotations
+# PEP 563: store all annotations as strings at class-definition time so that
+# Python 3.14 (PEP 649 lazy __annotations__) doesn't break Pydantic's field
+# discovery inside SQLModel's metaclass __new__.
+#
+# SQLAlchemy compat: with string annotations, SQLModel passes the raw string
+# (e.g. "List['Image']") to SQLAlchemy's class-registry resolver which cannot
+# resolve generic wrapper strings.  Fix: supply sa_relationship explicitly so
+# SQLModel skips annotation-based relationship setup and SQLAlchemy resolves
+# the plain class-name string ("Image", "Project", …) from its own registry.
+
 from typing import Optional, List
+from sqlalchemy.orm import relationship
 from sqlmodel import SQLModel, Field, Relationship
 import json
 
@@ -8,7 +20,9 @@ class Project(SQLModel, table=True):
     name: str
     description: str = ""
     classes_json: str = "[]"
-    images: List["Image"] = Relationship(back_populates="project")
+    images: List["Image"] = Relationship(
+        sa_relationship=relationship("Image", back_populates="project")
+    )
 
     @property
     def classes(self) -> List[str]:
@@ -32,8 +46,12 @@ class Image(SQLModel, table=True):
     color_space: str = Field(default="RGB")   # "RGB" | "Grayscale"
     is_corrupt: bool = Field(default=False)
     file_size: int = Field(default=0)
-    project: Optional[Project] = Relationship(back_populates="images")
-    annotations: List["Annotation"] = Relationship(back_populates="image")
+    project: Optional["Project"] = Relationship(
+        sa_relationship=relationship("Project", back_populates="images", uselist=False)
+    )
+    annotations: List["Annotation"] = Relationship(
+        sa_relationship=relationship("Annotation", back_populates="image")
+    )
 
 
 class Annotation(SQLModel, table=True):
@@ -46,7 +64,9 @@ class Annotation(SQLModel, table=True):
     width: float = Field(default=0.0)
     height: float = Field(default=0.0)
     points_json: str = Field(default="[]")
-    image: Optional[Image] = Relationship(back_populates="annotations")
+    image: Optional["Image"] = Relationship(
+        sa_relationship=relationship("Image", back_populates="annotations", uselist=False)
+    )
 
 
 class TrainingRun(SQLModel, table=True):
@@ -115,10 +135,8 @@ class CustomTrainingRun(SQLModel, table=True):
     created_at: str = Field(default="")
 
 
-# Force SQLModel/Pydantic to resolve all forward-reference annotations now
-# that every class in this module is fully defined.  Required when using
-# 'from __future__ import annotations' (PEP 563/649 lazy eval) so that
-# relationship types like List["Image"] resolve correctly at query time.
+# Rebuild Pydantic models so forward-reference annotations are resolved now
+# that every class in this module is fully defined.
 Project.model_rebuild()
 Image.model_rebuild()
 Annotation.model_rebuild()
