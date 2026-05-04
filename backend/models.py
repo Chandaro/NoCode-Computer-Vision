@@ -115,3 +115,12 @@ class CustomTrainingRun(SQLModel, table=True):
     run_dir: str = Field(default="")
     results_json: str = Field(default="{}")
     created_at: str = Field(default="")
+
+
+# Force SQLModel/Pydantic to resolve all forward-reference annotations now
+# that every class in this module is fully defined.  Required when using
+# 'from __future__ import annotations' (PEP 563/649 lazy eval) so that
+# relationship types like List["Image"] resolve correctly at query time.
+Project.model_rebuild()
+Image.model_rebuild()
+Annotation.model_rebuild()

@@ -12,9 +12,10 @@ export default function Projects() {
   const [classInput, setClassInput] = useState('')
   const [classes, setClasses]       = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError]           = useState('')
   const navigate = useNavigate()
 
-  const load = () => api.get('/projects').then(r => setProjects(r.data))
+  const load = () => api.get('/projects').then(r => setProjects(r.data)).catch(() => setError('Failed to load projects. Is the server running?'))
   useEffect(() => { load() }, [])
 
   const addClass = () => {
@@ -25,9 +26,12 @@ export default function Projects() {
   const submit = async () => {
     if (!name.trim() || submitting) return
     setSubmitting(true)
+    setError('')
     try {
       await api.post('/projects', { name: name.trim(), description: desc, classes })
       setName(''); setDesc(''); setClasses([]); setShowForm(false); load()
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? 'Failed to create project.')
     } finally { setSubmitting(false) }
   }
 
@@ -50,6 +54,11 @@ export default function Projects() {
           <Plus size={14} strokeWidth={2.5} /> New Project
         </Btn>
       </div>
+
+      {/* Load error */}
+      {error && !showForm && (
+        <div style={{ fontSize: 13, color: 'var(--red, #f87171)', marginBottom: 16 }}>{error}</div>
+      )}
 
       {/* Project grid */}
       {projects.length === 0 ? (
@@ -149,7 +158,10 @@ export default function Projects() {
                 )}
               </Field>
 
-              <Btn variant="primary" onClick={submit} disabled={!name.trim() || classes.length === 0 || submitting}
+              {error && (
+                <p style={{ fontSize: 12, color: 'var(--red, #f87171)', marginTop: -4 }}>{error}</p>
+              )}
+              <Btn variant="primary" onClick={submit} disabled={!name.trim() || submitting}
                 style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}>
                 {submitting ? 'Creating…' : 'Create Project'}
               </Btn>
