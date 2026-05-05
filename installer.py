@@ -3,7 +3,6 @@ NoCode CV Trainer – GUI Installer
 Requires: Python 3.9+ (tkinter is built-in)
 Run via:  Install NoCode CV.bat  (Windows)
           bash 'Install NoCode CV.sh'  (macOS / Linux)
-          python installer.py  (any platform)
 """
 
 import tkinter as tk
@@ -13,8 +12,8 @@ import subprocess, threading, os, sys, shutil, webbrowser, json, platform
 # ─── Constants ────────────────────────────────────────────────────────────────
 APP_NAME     = "NoCode CV Trainer"
 APP_VERSION  = "1.0.0"
-WIN_W, WIN_H = 760, 520
-SIDE_W       = 190
+WIN_W, WIN_H = 820, 560
+SIDE_W       = 215
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 VENV_DIR = os.path.join(ROOT_DIR, "venv")
@@ -22,7 +21,6 @@ BACKEND  = os.path.join(ROOT_DIR, "backend")
 FRONTEND = os.path.join(ROOT_DIR, "frontend")
 DIST     = os.path.join(FRONTEND, "dist")
 
-# Python inside venv
 if platform.system() == "Windows":
     VENV_PY  = os.path.join(VENV_DIR, "Scripts", "python.exe")
     VENV_PIP = os.path.join(VENV_DIR, "Scripts", "pip.exe")
@@ -30,34 +28,38 @@ else:
     VENV_PY  = os.path.join(VENV_DIR, "bin", "python")
     VENV_PIP = os.path.join(VENV_DIR, "bin", "pip")
 
-# ─── Platform helpers ─────────────────────────────────────────────────────────
 _IS_WIN = platform.system() == "Windows"
 _IS_MAC = platform.system() == "Darwin"
 
-# Font stacks: use OS-native fonts so the UI looks correct on every platform
-FONT_UI    = "Segoe UI"       if _IS_WIN else ("SF Pro Text"   if _IS_MAC else "Helvetica")
+FONT_UI    = "Segoe UI"       if _IS_WIN else ("SF Pro Text"       if _IS_MAC else "Helvetica")
 FONT_EMOJI = "Segoe UI Emoji" if _IS_WIN else ("Apple Color Emoji" if _IS_MAC else "Noto Color Emoji")
 FONT_MONO  = "Courier New"
 
-# ─── Colour palette (matches the app dark theme) ──────────────────────────────
-BG      = "#0d0d0f"
-SURFACE = "#16161a"
-SURF2   = "#1e1e24"
-BORDER  = "#2a2a35"
+# ─── Colour palette ───────────────────────────────────────────────────────────
+BG      = "#0b0b0e"
+SIDE_BG = "#0e0e14"
+SURFACE = "#141419"
+SURF2   = "#1b1b24"
+SURF3   = "#22222f"
+BORDER  = "#2b2b3c"
+BORDER2 = "#38385a"
 ACCENT  = "#5865f2"
 ACCENT2 = "#4752c4"
-TXT     = "#e2e2e2"
-TXT2    = "#8b8b9a"
+ACCENTL = "#6e79f5"
+TXT     = "#eeeef2"
+TXT2    = "#7a7a98"
+TXT3    = "#3c3c58"
 SUCCESS = "#3ba55d"
 ERROR   = "#ed4245"
 WARN    = "#faa61a"
+INFO    = "#4f9ef8"
+PURPLE  = "#c084fc"
 
 STEPS = ["Welcome", "System Check", "Configure", "Install", "Done"]
 
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+# ─── Subprocess helpers ───────────────────────────────────────────────────────
 def run_cmd(cmd, cwd=None, env=None):
-    """Run a subprocess and return (returncode, stdout+stderr)."""
     proc = subprocess.run(
         cmd, cwd=cwd, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -67,7 +69,6 @@ def run_cmd(cmd, cwd=None, env=None):
 
 
 def run_cmd_stream(cmd, cwd=None, line_cb=None):
-    """Run a subprocess and call line_cb(line) for each output line in real-time."""
     proc = subprocess.Popen(
         cmd, cwd=cwd,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -87,7 +88,6 @@ def run_cmd_stream(cmd, cwd=None, line_cb=None):
 
 
 def check_tool(name):
-    """Return version string or None."""
     try:
         rc, out = run_cmd(f"{name} --version")
         if rc == 0:
@@ -99,18 +99,16 @@ def check_tool(name):
 
 def get_free_gb(path):
     try:
-        s = shutil.disk_usage(path)
-        return s.free / (1024 ** 3)
+        return shutil.disk_usage(path).free / (1024 ** 3)
     except Exception:
         return 999
 
 
 def create_desktop_shortcut(launcher_file):
-    """Create a desktop shortcut. Windows only — skipped silently on other platforms."""
     if not _IS_WIN:
         return False
     desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-    lnk     = os.path.join(desktop, f"{APP_NAME}.lnk")
+    lnk = os.path.join(desktop, f"{APP_NAME}.lnk")
     ps = (
         f'$ws = New-Object -ComObject WScript.Shell;'
         f'$s  = $ws.CreateShortcut("{lnk}");'
@@ -127,11 +125,35 @@ def create_desktop_shortcut(launcher_file):
         return False
 
 
+# ─── UI micro-helpers ─────────────────────────────────────────────────────────
+def bind_hover(widget, bg_normal, bg_hover, fg_normal=None, fg_hover=None):
+    def _enter(e):
+        widget.config(bg=bg_hover)
+        if fg_hover:
+            widget.config(fg=fg_hover)
+    def _leave(e):
+        widget.config(bg=bg_normal)
+        if fg_normal:
+            widget.config(fg=fg_normal)
+    widget.bind("<Enter>", _enter)
+    widget.bind("<Leave>", _leave)
+
+
+def bordered_frame(parent, bg=None, border_color=None, **pack_kw):
+    """Return (outer_border_frame, inner_content_frame)."""
+    bg = bg or SURF2
+    border_color = border_color or BORDER
+    outer = tk.Frame(parent, bg=border_color)
+    inner = tk.Frame(outer, bg=bg)
+    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    return outer, inner
+
+
 # ─── Main Installer Window ────────────────────────────────────────────────────
 class Installer(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(f"{APP_NAME} – Setup {APP_VERSION}")
+        self.title(f"{APP_NAME}  ·  Setup")
         self.geometry(f"{WIN_W}x{WIN_H}")
         self.resizable(False, False)
         self.configure(bg=BG)
@@ -139,16 +161,16 @@ class Installer(tk.Tk):
         self._set_icon()
 
         # State
-        self.step           = 0          # current page index
-        self.checks         = {}         # {name: (ok, detail)}
-        self.torch_choice   = tk.StringVar(value="auto")
-        self.shortcut_var   = tk.BooleanVar(value=True)
-        self.install_mode   = tk.StringVar(value="venv")  # "venv" | "system"
-        self._pkg_scan      = {}         # {pkg_name: (ok, installed_ver, required)}
-        self._scan_panel    = None       # tk.Frame reference, rebuilt on mode change
-        self._install_done  = False
-        self.detected_cuda  = None       # e.g. "12.8" from nvidia-smi
-        self.detected_gpu   = None       # e.g. "NVIDIA GeForce RTX 5070 Ti"
+        self.step          = 0
+        self.checks        = {}
+        self.torch_choice  = tk.StringVar(value="auto")
+        self.shortcut_var  = tk.BooleanVar(value=True)
+        self.install_mode  = tk.StringVar(value="venv")
+        self._pkg_scan     = {}
+        self._scan_panel   = None
+        self._install_done = False
+        self.detected_cuda = None
+        self.detected_gpu  = None
 
         self._build_ui()
         self._show_step(0)
@@ -162,7 +184,6 @@ class Installer(tk.Tk):
 
     def _set_icon(self):
         try:
-            # Use a simple photo image as icon (no external file needed)
             ico = tk.PhotoImage(width=1, height=1)
             self.iconphoto(True, ico)
         except Exception:
@@ -170,80 +191,112 @@ class Installer(tk.Tk):
 
     # ── UI skeleton ───────────────────────────────────────────────────────────
     def _build_ui(self):
-        # ── Left sidebar ──────────────────────────────────────────────────────
-        self.sidebar = tk.Frame(self, bg=SURFACE, width=SIDE_W)
+        # ── Sidebar ───────────────────────────────────────────────────────────
+        self.sidebar = tk.Frame(self, bg=SIDE_BG, width=SIDE_W)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
 
-        tk.Label(self.sidebar, text="🧠", font=("Segoe UI Emoji", 28),
-                 bg=SURFACE, fg=ACCENT).pack(pady=(32, 4))
-        tk.Label(self.sidebar, text=APP_NAME, font=("Segoe UI", 11, "bold"),
-                 bg=SURFACE, fg=TXT, wraplength=160, justify="center").pack(pady=(0, 4))
-        tk.Label(self.sidebar, text=f"v{APP_VERSION}",
-                 font=("Segoe UI", 9), bg=SURFACE, fg=TXT2).pack()
+        # Thin vertical divider between sidebar and content
+        tk.Frame(self, bg=BORDER, width=1).pack(side="left", fill="y")
 
-        tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=16, pady=20)
+        # Accent top bar
+        tk.Frame(self.sidebar, bg=ACCENT, height=3).pack(fill="x")
 
-        self.step_labels = []
+        # Brand block
+        brand = tk.Frame(self.sidebar, bg=SIDE_BG)
+        brand.pack(fill="x", padx=22, pady=(22, 0))
+        tk.Label(brand, text="🧠", font=(FONT_EMOJI, 26),
+                 bg=SIDE_BG, fg=ACCENT).pack(anchor="w")
+        tk.Label(brand, text=APP_NAME,
+                 font=(FONT_UI, 10, "bold"), bg=SIDE_BG, fg=TXT,
+                 wraplength=170, justify="left").pack(anchor="w", pady=(6, 2))
+        tk.Label(brand, text=f"v{APP_VERSION}  ·  Setup Wizard",
+                 font=(FONT_UI, 8), bg=SIDE_BG, fg=TXT3).pack(anchor="w")
+
+        tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=0, pady=(20, 18))
+
+        # Step indicators
+        self._step_circles  = []   # Canvas widgets
+        self._step_lbls     = []   # Label widgets
+        self._connector_frs = []   # connector line frames
+
         for i, name in enumerate(STEPS):
-            row = tk.Frame(self.sidebar, bg=SURFACE)
-            row.pack(fill="x", padx=0, pady=1)
+            if i > 0:
+                # Connector line between steps
+                line_wrap = tk.Frame(self.sidebar, bg=SIDE_BG)
+                line_wrap.pack(anchor="w", padx=(37, 0))
+                line = tk.Frame(line_wrap, bg=TXT3, width=1, height=16)
+                line.pack()
+                self._connector_frs.append(line)
 
-            dot = tk.Label(row, text="●", font=("Segoe UI", 9),
-                           bg=SURFACE, fg=TXT2, width=3)
-            dot.pack(side="left", padx=(16, 4))
+            row = tk.Frame(self.sidebar, bg=SIDE_BG)
+            row.pack(fill="x", padx=20, pady=0)
 
-            lbl = tk.Label(row, text=name, font=("Segoe UI", 9),
-                           bg=SURFACE, fg=TXT2, anchor="w")
-            lbl.pack(side="left", fill="x", expand=True)
+            circ = tk.Canvas(row, width=28, height=28,
+                             bg=SIDE_BG, highlightthickness=0)
+            circ.pack(side="left", padx=(0, 12))
 
-            self.step_labels.append((row, dot, lbl))
+            lbl = tk.Label(row, text=name, font=(FONT_UI, 9),
+                           bg=SIDE_BG, fg=TXT3, anchor="w")
+            lbl.pack(side="left", fill="x")
+
+            self._step_circles.append(circ)
+            self._step_lbls.append(lbl)
+
+        # Sidebar footer
+        footer = tk.Frame(self.sidebar, bg=SIDE_BG)
+        footer.pack(side="bottom", fill="x", padx=22, pady=18)
+        tk.Label(footer,
+                 text="Everything runs locally.\nNo data leaves your machine.",
+                 font=(FONT_UI, 7), bg=SIDE_BG, fg=TXT3,
+                 justify="left").pack(anchor="w")
 
         # ── Right panel ───────────────────────────────────────────────────────
         right = tk.Frame(self, bg=BG)
         right.pack(side="left", fill="both", expand=True)
 
-        # IMPORTANT: pack the bottom bar FIRST so it is always visible.
-        # The scrollable content area then fills whatever space remains.
-
-        # ── Bottom bar (packed to bottom before content) ──────────────────────
+        # Bottom button bar — pack BEFORE content so it anchors to bottom
         tk.Frame(right, bg=BORDER, height=1).pack(side="bottom", fill="x")
-
         bar = tk.Frame(right, bg=SURFACE)
         bar.pack(side="bottom", fill="x")
 
-        self.btn_back = tk.Button(bar, text="← Back",
-                                  font=("Segoe UI", 9), bg=SURF2, fg=TXT2,
-                                  relief="flat", bd=0, padx=18, pady=9,
-                                  cursor="hand2", activebackground=SURF2,
-                                  activeforeground=TXT, command=self._go_back)
-        self.btn_back.pack(side="right", padx=(4, 16), pady=10)
+        self.step_counter = tk.Label(bar, text="",
+                                     font=(FONT_UI, 8), bg=SURFACE, fg=TXT3)
+        self.step_counter.pack(side="left", padx=22, pady=12)
 
-        self.btn_next = tk.Button(bar, text="Next  →",
-                                  font=("Segoe UI", 9, "bold"), bg=ACCENT, fg="#fff",
-                                  relief="flat", bd=0, padx=20, pady=9,
-                                  cursor="hand2", activebackground=ACCENT2,
-                                  activeforeground="#fff", command=self._go_next)
+        self.btn_back = tk.Button(
+            bar, text="← Back",
+            font=(FONT_UI, 9), bg=SURFACE, fg=TXT2,
+            relief="flat", bd=0, padx=20, pady=9,
+            cursor="hand2", activebackground=SURF2, activeforeground=TXT,
+            command=self._go_back)
+        self.btn_back.pack(side="right", padx=(4, 18), pady=10)
+        bind_hover(self.btn_back, SURFACE, SURF2)
+
+        self.btn_next = tk.Button(
+            bar, text="Continue  →",
+            font=(FONT_UI, 9, "bold"), bg=ACCENT, fg="#fff",
+            relief="flat", bd=0, padx=26, pady=9,
+            cursor="hand2", activebackground=ACCENT2, activeforeground="#fff",
+            command=self._go_next)
         self.btn_next.pack(side="right", padx=(0, 4), pady=10)
+        bind_hover(self.btn_next, ACCENT, ACCENT2, "#fff", "#fff")
 
-        # ── Scrollable content area (fills remaining space above button bar) ──
+        # Scrollable content area
         wrap = tk.Frame(right, bg=BG)
         wrap.pack(side="top", fill="both", expand=True)
 
         self._cv = tk.Canvas(wrap, bg=BG, highlightthickness=0, bd=0)
         self._sb = tk.Scrollbar(wrap, orient="vertical", command=self._cv.yview,
-                                bg=SURF2, troughcolor=BG, relief="flat", width=10)
+                                bg=SURF2, troughcolor=BG, relief="flat", width=7)
         self._cv.configure(yscrollcommand=self._sb.set)
         self._cv.pack(side="left", fill="both", expand=True)
-        # Scrollbar shown only when content overflows (see _refresh_scroll)
 
-        # Inner frame: this is what each page populates
         self._inner = tk.Frame(self._cv, bg=BG)
         self._cwin  = self._cv.create_window((0, 0), window=self._inner, anchor="nw")
 
-        # Wrapper adds consistent padding around page content
         self.content = tk.Frame(self._inner, bg=BG)
-        self.content.pack(fill="both", expand=True, padx=28, pady=22)
+        self.content.pack(fill="both", expand=True, padx=32, pady=28)
 
         def _on_inner_resize(_e=None):
             self._cv.configure(scrollregion=self._cv.bbox("all"))
@@ -255,64 +308,78 @@ class Installer(tk.Tk):
 
         self._inner.bind("<Configure>", _on_inner_resize)
         self._cv.bind("<Configure>", _on_canvas_resize)
-
-        # Mouse-wheel scrolling (Windows)
         self._cv.bind_all("<MouseWheel>",
             lambda e: self._cv.yview_scroll(int(-1 * e.delta / 120), "units"))
 
+    def _draw_step_circle(self, canvas, state, num):
+        canvas.delete("all")
+        bg = canvas.cget("bg")
+        if state == "done":
+            canvas.create_oval(2, 2, 26, 26, fill=SUCCESS, outline="")
+            canvas.create_text(14, 14, text="✓", fill="white",
+                               font=(FONT_UI, 9, "bold"))
+        elif state == "active":
+            canvas.create_oval(2, 2, 26, 26, fill=ACCENT, outline="")
+            canvas.create_text(14, 14, text=str(num), fill="white",
+                               font=(FONT_UI, 9, "bold"))
+        else:
+            canvas.create_oval(2, 2, 26, 26, fill="", outline=TXT3, width=1.5)
+            canvas.create_text(14, 14, text=str(num), fill=TXT3,
+                               font=(FONT_UI, 9))
+
     def _refresh_scroll(self):
-        """Show scrollbar only when content is taller than the canvas."""
         self._cv.update_idletasks()
-        content_h = self._inner.winfo_reqheight()
-        canvas_h  = self._cv.winfo_height()
-        if content_h > canvas_h + 4:
+        if self._inner.winfo_reqheight() > self._cv.winfo_height() + 4:
             self._sb.pack(side="right", fill="y")
         else:
             self._sb.pack_forget()
 
     # ── Step navigation ───────────────────────────────────────────────────────
     def _update_sidebar(self):
-        for i, (row, dot, lbl) in enumerate(self.step_labels):
+        for i, (circ, lbl) in enumerate(zip(self._step_circles, self._step_lbls)):
             if i < self.step:
-                dot.config(fg=SUCCESS, text="✓")
-                lbl.config(fg=TXT2)
-                row.config(bg=SURFACE)
+                self._draw_step_circle(circ, "done", i + 1)
+                lbl.config(fg=TXT2, font=(FONT_UI, 9))
+                # Connector line turns green once step is done
+                if i < len(self._connector_frs):
+                    self._connector_frs[i].config(bg=SUCCESS)
             elif i == self.step:
-                dot.config(fg=ACCENT, text="●")
-                lbl.config(fg=TXT, font=("Segoe UI", 9, "bold"))
-                row.config(bg=SURF2)
+                self._draw_step_circle(circ, "active", i + 1)
+                lbl.config(fg=TXT, font=(FONT_UI, 9, "bold"))
             else:
-                dot.config(fg=BORDER, text="○")
-                lbl.config(fg=TXT2, font=("Segoe UI", 9))
-                row.config(bg=SURFACE)
+                self._draw_step_circle(circ, "inactive", i + 1)
+                lbl.config(fg=TXT3, font=(FONT_UI, 9))
+                if i > 0 and i - 1 < len(self._connector_frs):
+                    if i > self.step:
+                        self._connector_frs[i - 1].config(bg=TXT3)
 
     def _show_step(self, idx):
         self.step = idx
         self._update_sidebar()
         for w in self.content.winfo_children():
             w.destroy()
-        # Reset scroll to top for each new page
         self._cv.yview_moveto(0)
 
-        pages = [
-            self._page_welcome,
-            self._page_syscheck,
-            self._page_configure,
-            self._page_install,
-            self._page_done,
-        ]
-        pages[idx]()
+        self.step_counter.config(text=f"Step {idx + 1} of {len(STEPS)}")
 
-        # Back button visibility
-        self.btn_back.config(state="normal" if idx > 0 else "disabled",
-                             fg=TXT2 if idx > 0 else BORDER)
-        # Next button text
+        [self._page_welcome, self._page_syscheck, self._page_configure,
+         self._page_install, self._page_done][idx]()
+
+        self.btn_back.config(
+            state="normal" if idx > 0 else "disabled",
+            fg=TXT2 if idx > 0 else TXT3)
+
         if idx == len(STEPS) - 1:
-            self.btn_next.config(text="Close", command=self.destroy)
+            self.btn_next.config(text="Close", state="normal",
+                                 command=self.destroy, bg=SURF2, fg=TXT2)
+            bind_hover(self.btn_next, SURF2, SURF3, TXT2, TXT)
         elif idx == 3:
-            self.btn_next.config(text="Installing…", state="disabled")
+            self.btn_next.config(text="Installing…", state="disabled",
+                                 bg=SURF2, fg=TXT2)
         else:
-            self.btn_next.config(text="Next  →", state="normal", command=self._go_next)
+            self.btn_next.config(text="Continue  →", state="normal",
+                                 command=self._go_next, bg=ACCENT, fg="#fff")
+            bind_hover(self.btn_next, ACCENT, ACCENT2, "#fff", "#fff")
 
     def _go_next(self):
         if self.step == 1 and not self._checks_pass():
@@ -332,130 +399,146 @@ class Installer(tk.Tk):
     # ──────────────────────────────────────────────────────────────────────────
     def _page_welcome(self):
         c = self.content
-        tk.Label(c, text=f"Welcome to {APP_NAME}", bg=BG, fg=TXT,
-                 font=("Segoe UI", 17, "bold")).pack(anchor="w")
-        tk.Label(c, text="AI-powered computer vision annotation, training & evaluation.",
-                 bg=BG, fg=TXT2, font=("Segoe UI", 10)).pack(anchor="w", pady=(4, 20))
 
-        # Feature list
+        # Hero card
+        hero_outer, hero = bordered_frame(c, bg=SURF2)
+        hero_outer.pack(fill="x", pady=(0, 18))
+        tk.Frame(hero, bg=ACCENT, height=3).pack(fill="x")
+        hero_body = tk.Frame(hero, bg=SURF2)
+        hero_body.pack(fill="x", padx=20, pady=16)
+        tk.Label(hero_body, text=f"Welcome to {APP_NAME}",
+                 font=(FONT_UI, 16, "bold"), bg=SURF2, fg=TXT,
+                 anchor="w").pack(anchor="w")
+        tk.Label(hero_body,
+                 text="Annotate images, train AI models, and run predictions — no code required.",
+                 font=(FONT_UI, 9), bg=SURF2, fg=TXT2,
+                 anchor="w").pack(anchor="w", pady=(4, 0))
+
+        # Feature cards
         features = [
-            ("🖼", "Annotation Studio",   "BBox, polygon & point tools with undo/redo"),
-            ("⚡", "YOLOv8 Training",     "Real-time training logs, augmentation control"),
-            ("🔬", "Evaluation & Infer",  "mAP metrics, per-class breakdown, live inference"),
-            ("🏷", "Classification",      "ResNet / MobileNet / EfficientNet transfer learning"),
-            ("📦", "Dataset Export",      "YOLO & COCO zip export in one click"),
+            (ACCENT,  "🖼",  "Annotation Studio",    "Bounding box, polygon & point tools with undo / redo"),
+            (SUCCESS, "⚡",  "YOLOv8 Training",       "Real-time training logs, augmentation control"),
+            (WARN,    "🔬",  "Evaluation & Inference", "mAP metrics, per-class breakdown, live inference"),
+            (INFO,    "🏷",  "Classification",         "ResNet / MobileNet / EfficientNet transfer learning"),
+            (PURPLE,  "🧱",  "Custom CNN Builder",     "Design your own neural network architecture visually"),
+            (SUCCESS, "📦",  "Dataset Export",         "YOLO & COCO zip export in one click"),
         ]
-        for icon, title, desc in features:
-            row = tk.Frame(c, bg=SURF2, bd=0, relief="flat")
-            row.pack(fill="x", pady=3, ipady=8, ipadx=10)
-            tk.Label(row, text=icon, font=("Segoe UI Emoji", 14), bg=SURF2).pack(side="left", padx=(12,8))
-            inner = tk.Frame(row, bg=SURF2)
-            inner.pack(side="left", fill="x")
-            tk.Label(inner, text=title, font=("Segoe UI", 9, "bold"),
-                     bg=SURF2, fg=TXT, anchor="w").pack(anchor="w")
-            tk.Label(inner, text=desc, font=("Segoe UI", 8),
-                     bg=SURF2, fg=TXT2, anchor="w").pack(anchor="w")
 
-        tk.Label(c, text=f"Install location:  {ROOT_DIR}",
-                 bg=BG, fg=TXT2, font=("Courier New", 8)).pack(anchor="w", pady=(16, 0))
+        for accent_col, icon, title, desc in features:
+            f_outer, f_inner = bordered_frame(c, bg=SURF2)
+            f_outer.pack(fill="x", pady=2)
+            tk.Frame(f_inner, bg=accent_col, width=3).pack(side="left", fill="y")
+            body = tk.Frame(f_inner, bg=SURF2)
+            body.pack(side="left", fill="both", expand=True, padx=14, pady=9)
+            tk.Label(body, text=f"{icon}  {title}",
+                     font=(FONT_UI, 9, "bold"), bg=SURF2, fg=TXT,
+                     anchor="w").pack(anchor="w")
+            tk.Label(body, text=desc, font=(FONT_UI, 8),
+                     bg=SURF2, fg=TXT2, anchor="w").pack(anchor="w", pady=(2, 0))
+
+        # Install path
+        tk.Frame(c, bg=BG, height=6).pack()
+        tk.Label(c, text="Install location",
+                 font=(FONT_UI, 8), bg=BG, fg=TXT2).pack(anchor="w")
+        path_outer, path_inner = bordered_frame(c, bg=SURF2)
+        path_outer.pack(fill="x", pady=(4, 0))
+        tk.Label(path_inner, text=ROOT_DIR,
+                 font=(FONT_MONO, 8), bg=SURF2, fg=TXT2,
+                 anchor="w").pack(anchor="w", padx=14, pady=8)
 
     # ──────────────────────────────────────────────────────────────────────────
     # PAGE 1 – System Check
     # ──────────────────────────────────────────────────────────────────────────
     def _page_syscheck(self):
         c = self.content
-        tk.Label(c, text="System Requirements", bg=BG, fg=TXT,
-                 font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        tk.Label(c, text="Checking your system before installation…",
-                 bg=BG, fg=TXT2, font=("Segoe UI", 9)).pack(anchor="w", pady=(2, 16))
+        tk.Label(c, text="System Check", font=(FONT_UI, 15, "bold"),
+                 bg=BG, fg=TXT).pack(anchor="w")
+        tk.Label(c, text="Verifying your environment before installation.",
+                 font=(FONT_UI, 9), bg=BG, fg=TXT2).pack(anchor="w", pady=(4, 18))
 
         dist_prebuilt = os.path.isfile(os.path.join(DIST, "index.html"))
-        node_note = "Optional — pre-built frontend included" if dist_prebuilt else "Required  (nodejs.org)"
-        npm_note  = "Optional — pre-built frontend included" if dist_prebuilt else "Comes with Node.js"
+        node_note = "Pre-built frontend included" if dist_prebuilt else "Required  (nodejs.org)"
+        npm_note  = "Pre-built frontend included" if dist_prebuilt else "Comes with Node.js"
+
         self.check_rows = {}
         items = [
-            ("python",  "Python 3.9+",          "Required"),
-            ("node",    "Node.js 16+",           node_note),
-            ("npm",     "npm",                   npm_note),
-            ("gpu",     "NVIDIA GPU",            "Optional (CPU fallback)"),
-            ("cuda",    "CUDA Toolkit",          "Optional — needed for GPU training"),
-            ("disk",    "Free disk space ≥2 GB", "Required"),
+            ("python", "Python 3.9+",            "Required"),
+            ("node",   "Node.js 16+",             node_note),
+            ("npm",    "npm",                     npm_note),
+            ("gpu",    "NVIDIA GPU",              "Optional  ·  CPU fallback available"),
+            ("cuda",   "CUDA Toolkit",            "Optional  ·  required for GPU training"),
+            ("disk",   "Free disk space  ≥ 2 GB", "Required"),
         ]
+
         for key, label, note in items:
-            row = tk.Frame(c, bg=SURF2)
-            row.pack(fill="x", pady=2, ipady=5, ipadx=10)
+            outer, row = bordered_frame(c, bg=SURF2)
+            outer.pack(fill="x", pady=2)
 
-            dot = tk.Label(row, text="⏳", font=("Segoe UI Emoji", 11), bg=SURF2, width=3)
-            dot.pack(side="left", padx=(10, 6))
+            dot = tk.Label(row, text="·", font=(FONT_EMOJI, 16),
+                           bg=SURF2, fg=TXT3, width=3)
+            dot.pack(side="left", padx=(12, 6), pady=10)
 
-            tk.Label(row, text=label, font=("Segoe UI", 9, "bold"),
-                     bg=SURF2, fg=TXT, width=22, anchor="w").pack(side="left")
+            tk.Label(row, text=label, font=(FONT_UI, 9, "bold"),
+                     bg=SURF2, fg=TXT, width=24, anchor="w").pack(side="left", pady=10)
 
-            val = tk.Label(row, text="checking…", font=("Courier New", 8),
+            val = tk.Label(row, text="checking…", font=(FONT_MONO, 8),
                            bg=SURF2, fg=TXT2, anchor="w")
-            val.pack(side="left", padx=8)
+            val.pack(side="left", padx=8, pady=10)
 
-            self.check_rows[key] = (dot, val)
+            tk.Label(row, text=note, font=(FONT_UI, 7),
+                     bg=SURF2, fg=TXT3, anchor="e").pack(side="right", padx=14, pady=10)
 
-        # Hint area (shown conditionally after checks)
+            self.check_rows[key] = (dot, val, outer, row)
+
         self.hint_frame = tk.Frame(c, bg=BG)
-        self.hint_frame.pack(fill="x", pady=(6, 0))
+        self.hint_frame.pack(fill="x", pady=(10, 0))
 
-        # Run checks in background
         threading.Thread(target=self._run_checks, daemon=True).start()
 
     def _run_checks(self):
         import re
         results = {}
 
-        # ── Python ────────────────────────────────────────────────────────────
+        # Python
         v = sys.version.split()[0]
         parts = v.split(".")
         ok = int(parts[0]) >= 3 and int(parts[1]) >= 9
         results["python"] = (ok, f"Python {v}")
 
-        # ── Node.js ───────────────────────────────────────────────────────────
+        # Node.js
         nv = check_tool("node")
         if nv:
             num = nv.replace("v", "").split(".")[0]
-            ok_n = int(num) >= 16
-            results["node"] = (ok_n, nv[:40])
+            results["node"] = (int(num) >= 16, nv[:40])
         else:
             results["node"] = (False, "Not found")
 
-        # ── npm ───────────────────────────────────────────────────────────────
+        # npm
         nv2 = check_tool("npm")
         results["npm"] = (bool(nv2), nv2[:40] if nv2 else "Not found")
 
-        # ── NVIDIA GPU (via nvidia-smi) ───────────────────────────────────────
-        # nvidia-smi is installed alongside the NVIDIA driver — no PyTorch needed.
+        # NVIDIA GPU
         gpu_name   = None
         cuda_ver   = None
         driver_ver = None
         try:
             rc, smi = run_cmd("nvidia-smi")
             if rc == 0 and smi:
-                # GPU name  e.g. "NVIDIA GeForce RTX 5070 Ti"
                 m = re.search(r'\|\s+(NVIDIA\s+[^\|]+?)\s+\d{5,}', smi)
                 if m:
                     gpu_name = m.group(1).strip()
-                # Driver version  e.g. "Driver Version: 572.70"
                 m2 = re.search(r'Driver Version:\s*([\d.]+)', smi)
                 if m2:
                     driver_ver = m2.group(1)
-                # CUDA version reported by driver  e.g. "CUDA Version: 12.8"
                 m3 = re.search(r'CUDA Version:\s*([\d.]+)', smi)
                 if m3:
                     cuda_ver = m3.group(1)
         except Exception:
             pass
 
-        # Try querying GPU name more reliably
         if not gpu_name:
             try:
-                rc2, name_out = run_cmd(
-                    "nvidia-smi --query-gpu=name --format=csv,noheader"
-                )
+                rc2, name_out = run_cmd("nvidia-smi --query-gpu=name --format=csv,noheader")
                 if rc2 == 0 and name_out.strip():
                     gpu_name = name_out.strip().split("\n")[0].strip()
             except Exception:
@@ -469,12 +552,9 @@ class Installer(tk.Tk):
         else:
             results["gpu"] = (None, "No NVIDIA GPU detected")
 
-        # ── CUDA Toolkit ──────────────────────────────────────────────────────
         if cuda_ver:
             results["cuda"] = (True, f"CUDA {cuda_ver}  (driver-reported)")
         elif gpu_name:
-            # GPU present but CUDA version not readable from smi
-            # Try nvcc (full toolkit install)
             nvcc = check_tool("nvcc")
             if nvcc:
                 m4 = re.search(r'release\s*([\d.]+)', nvcc, re.IGNORECASE)
@@ -485,11 +565,9 @@ class Installer(tk.Tk):
         else:
             results["cuda"] = (None, "No GPU — CUDA not needed")
 
-        # Store for Configure page auto-selection
         self.detected_cuda = cuda_ver
         self.detected_gpu  = gpu_name
 
-        # ── Disk space ────────────────────────────────────────────────────────
         gb = get_free_gb(ROOT_DIR)
         results["disk"] = (gb >= 2.0, f"{gb:.1f} GB free")
 
@@ -497,54 +575,61 @@ class Installer(tk.Tk):
         self.after(0, self._apply_check_results)
 
     def _apply_check_results(self):
-        icons = {True: ("✓", SUCCESS), False: ("✗", ERROR), None: ("ℹ", TXT2)}
-        for key, (dot, val) in self.check_rows.items():
+        for key, (dot, val, outer, row) in self.check_rows.items():
             if key not in self.checks:
                 continue
             ok, detail = self.checks[key]
-            sym, col = icons[ok]
-            dot.config(text=sym, fg=col)
-            val.config(text=detail, fg=TXT if ok is not False else ERROR)
 
-        # Clear old hints
+            if ok is True:
+                sym, col, row_bg = "✓", SUCCESS, SURF2
+            elif ok is False:
+                sym, col, row_bg = "✗", ERROR, "#1e1118"
+            else:
+                sym, col, row_bg = "ℹ", TXT2, SURF2
+
+            row.config(bg=row_bg)
+            for child in row.winfo_children():
+                try:
+                    child.config(bg=row_bg)
+                except Exception:
+                    pass
+
+            dot.config(text=sym, fg=col, bg=row_bg,
+                       font=(FONT_EMOJI, 13))
+            val.config(text=detail,
+                       fg=TXT if ok is not False else ERROR,
+                       bg=row_bg)
+
         for w in self.hint_frame.winfo_children():
             w.destroy()
 
         def _hint(text, color, url=None):
             lbl = tk.Label(self.hint_frame, text=text, bg=BG, fg=color,
-                           font=("Segoe UI", 8), cursor="hand2" if url else "arrow",
+                           font=(FONT_UI, 8),
+                           cursor="hand2" if url else "arrow",
                            anchor="w")
             lbl.pack(anchor="w", pady=1)
             if url:
                 lbl.bind("<Button-1>", lambda e, u=url: webbrowser.open(u))
 
-        # Node.js hint
         if not self.checks.get("node", (False,))[0]:
             if os.path.isfile(os.path.join(DIST, "index.html")):
-                _hint("ℹ  Node.js not found — pre-built frontend detected, skipping build step.",
-                      TXT2)
+                _hint("ℹ  Node.js not found — pre-built frontend detected, skipping build step.", TXT2)
             else:
                 _hint("⚠  Node.js not found — click to download  nodejs.org",
                       WARN, "https://nodejs.org/en/download")
 
-        # CUDA hints
-        gpu_ok   = self.checks.get("gpu",  (None,))[0]
-        cuda_ok  = self.checks.get("cuda", (None,))[0]
+        gpu_ok  = self.checks.get("gpu",  (None,))[0]
+        cuda_ok = self.checks.get("cuda", (None,))[0]
 
         if gpu_ok and not cuda_ok:
-            # GPU present but CUDA toolkit missing
-            _hint("⚠  CUDA Toolkit not installed.  GPU training will NOT work without it.",
-                  WARN)
-            _hint("   → Download CUDA Toolkit (recommended: CUDA 12.4 or 12.8)",
+            _hint("⚠  CUDA Toolkit not installed — GPU training will not work without it.", WARN)
+            _hint("   → Download CUDA Toolkit  (recommended: CUDA 12.4 or 12.8)",
                   ACCENT, "https://developer.nvidia.com/cuda-downloads")
-            _hint("   After installing CUDA, re-run this installer and choose a CUDA PyTorch variant.",
-                  TXT2)
+            _hint("   After installing CUDA, re-run this installer and choose a CUDA PyTorch variant.", TXT2)
         elif not gpu_ok:
-            # No GPU at all
-            _hint("ℹ  No NVIDIA GPU detected.  The app will run in CPU mode (slower training).",
-                  TXT2)
+            _hint("ℹ  No NVIDIA GPU detected — the app will run in CPU mode (slower training).", TXT2)
 
-        # Auto-select best PyTorch variant based on detected CUDA
         self._auto_select_torch()
 
         if self._checks_pass():
@@ -553,14 +638,9 @@ class Installer(tk.Tk):
             self.btn_next.config(state="disabled")
 
     def _auto_select_torch(self):
-        """Pick the best torch_choice based on detected CUDA version."""
-        cv = self.detected_cuda  # e.g. "12.8", "11.8", None
+        cv = self.detected_cuda
         if cv is None:
-            if self.detected_gpu:
-                # GPU but no CUDA toolkit yet — keep "auto" as placeholder
-                self.torch_choice.set("auto")
-            else:
-                self.torch_choice.set("cpu")
+            self.torch_choice.set("cpu" if not self.detected_gpu else "auto")
             return
         try:
             major = int(cv.split(".")[0])
@@ -568,17 +648,16 @@ class Installer(tk.Tk):
         except ValueError:
             return
         if major > 12 or (major == 12 and minor >= 5):
-            self.torch_choice.set("cu128")   # CUDA 12.5+ → cu128 (Blackwell/RTX 50xx)
+            self.torch_choice.set("cu128")
         elif major == 12:
-            self.torch_choice.set("cu124")   # CUDA 12.0–12.4
+            self.torch_choice.set("cu124")
         elif major == 11 and minor >= 8:
             self.torch_choice.set("cu118")
         else:
-            self.torch_choice.set("cpu")     # CUDA too old, use CPU build
+            self.torch_choice.set("cpu")
 
     def _checks_pass(self):
         must = ["python", "disk"]
-        # Node.js only required if the frontend hasn't been pre-built
         if not os.path.isfile(os.path.join(DIST, "index.html")):
             must += ["node", "npm"]
         return all(self.checks.get(k, (False,))[0] for k in must)
@@ -588,179 +667,156 @@ class Installer(tk.Tk):
     # ──────────────────────────────────────────────────────────────────────────
     def _page_configure(self):
         c = self.content
-        tk.Label(c, text="Configure Installation", bg=BG, fg=TXT,
-                 font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        tk.Label(c, text="Choose your PyTorch backend and options.",
-                 bg=BG, fg=TXT2, font=("Segoe UI", 9)).pack(anchor="w", pady=(2, 10))
+        tk.Label(c, text="Configure Installation", font=(FONT_UI, 15, "bold"),
+                 bg=BG, fg=TXT).pack(anchor="w")
+        tk.Label(c, text="Select your PyTorch backend and installation options.",
+                 font=(FONT_UI, 9), bg=BG, fg=TXT2).pack(anchor="w", pady=(4, 18))
 
-        # ── Detected hardware summary ──────────────────────────────────────────
-        hw_frame = tk.Frame(c, bg=SURF2)
-        hw_frame.pack(fill="x", pady=(0, 10), ipady=7, ipadx=10)
-
+        # Hardware summary
         gpu_ok  = self.checks.get("gpu",  (None,))[0]
         cuda_ok = self.checks.get("cuda", (None,))[0]
-
-        gpu_text  = self.detected_gpu  or "No NVIDIA GPU detected"
+        gpu_text  = self.detected_gpu or "No NVIDIA GPU detected"
         cuda_text = (f"CUDA {self.detected_cuda}" if self.detected_cuda
                      else ("Not installed" if gpu_ok else "N/A"))
+        gpu_col  = SUCCESS if gpu_ok else (TXT2 if gpu_ok is None else ERROR)
+        cuda_col = SUCCESS if cuda_ok else (WARN if gpu_ok else TXT2)
 
-        gpu_icon  = "✓" if gpu_ok  else ("ℹ" if gpu_ok is None else "✗")
-        cuda_icon = "✓" if cuda_ok else ("⚠" if gpu_ok else "ℹ")
-        gpu_col   = SUCCESS if gpu_ok else (TXT2 if gpu_ok is None else ERROR)
-        cuda_col  = SUCCESS if cuda_ok else (WARN if gpu_ok else TXT2)
+        hw_outer, hw = bordered_frame(c, bg=SURF2)
+        hw_outer.pack(fill="x", pady=(0, 16))
+        tk.Frame(hw, bg=INFO, width=3).pack(side="left", fill="y")
+        hw_body = tk.Frame(hw, bg=SURF2)
+        hw_body.pack(side="left", padx=14, pady=12)
 
-        row1 = tk.Frame(hw_frame, bg=SURF2)
-        row1.pack(fill="x")
-        tk.Label(row1, text=f" {gpu_icon} GPU:   ", font=("Courier New", 8),
-                 bg=SURF2, fg=gpu_col).pack(side="left")
-        tk.Label(row1, text=gpu_text[:56], font=("Courier New", 8),
-                 bg=SURF2, fg=TXT).pack(side="left")
+        for icon, label, val, col in [
+            ("GPU ", gpu_text[:58], None, gpu_col),
+            ("CUDA", cuda_text,     None, cuda_col),
+        ]:
+            r = tk.Frame(hw_body, bg=SURF2)
+            r.pack(anchor="w", pady=1)
+            tk.Label(r, text=icon, font=(FONT_MONO, 8, "bold"),
+                     bg=SURF2, fg=TXT2).pack(side="left")
+            tk.Label(r, text=f"  {label}", font=(FONT_MONO, 8),
+                     bg=SURF2, fg=col).pack(side="left")
 
-        row2 = tk.Frame(hw_frame, bg=SURF2)
-        row2.pack(fill="x", pady=(2, 0))
-        tk.Label(row2, text=f" {cuda_icon} CUDA:  ", font=("Courier New", 8),
-                 bg=SURF2, fg=cuda_col).pack(side="left")
-        tk.Label(row2, text=cuda_text, font=("Courier New", 8),
-                 bg=SURF2, fg=TXT).pack(side="left")
-
-        # CUDA not installed but GPU present → show download button inline
         if gpu_ok and not cuda_ok:
-            row3 = tk.Frame(hw_frame, bg=SURF2)
-            row3.pack(fill="x", pady=(4, 0))
-            tk.Label(row3, text="   CUDA Toolkit is required for GPU training.",
-                     font=("Segoe UI", 8), bg=SURF2, fg=WARN).pack(side="left")
-            dl_btn = tk.Button(row3, text="Download CUDA Toolkit →",
-                               font=("Segoe UI", 8), bg=SURF2, fg=ACCENT,
-                               relief="flat", bd=0, cursor="hand2",
-                               activebackground=SURF2, activeforeground=ACCENT2,
-                               command=lambda: webbrowser.open(
-                                   "https://developer.nvidia.com/cuda-downloads"))
-            dl_btn.pack(side="left", padx=(6, 0))
+            r3 = tk.Frame(hw_body, bg=SURF2)
+            r3.pack(anchor="w", pady=(6, 0))
+            btn = tk.Button(r3, text="Download CUDA Toolkit  →",
+                            font=(FONT_UI, 8), bg=SURF2, fg=ACCENT,
+                            relief="flat", bd=0, cursor="hand2",
+                            activebackground=SURF2, activeforeground=ACCENTL,
+                            command=lambda: webbrowser.open(
+                                "https://developer.nvidia.com/cuda-downloads"))
+            btn.pack(side="left")
 
-        # ── PyTorch variant selector ───────────────────────────────────────────
-        tk.Label(c, text="PyTorch Backend", bg=BG, fg=TXT,
-                 font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        tk.Label(c,
-                 text="The installer selects the best option automatically based on your hardware.",
-                 bg=BG, fg=TXT2, font=("Segoe UI", 8)).pack(anchor="w", pady=(2, 6))
+        # PyTorch backend
+        self._section_label(c, "PyTorch Backend",
+                            "Auto-selected based on hardware. Change only if needed.")
 
+        auto_val = self.torch_choice.get()
         torch_opts = [
             ("auto",  "Auto-detect",
-             "Skip PyTorch install if already present in venv"),
+             "Skip if PyTorch is already installed and working"),
             ("cpu",   "CPU only",
-             "No GPU required — slower training, smaller download (~250 MB)"),
+             "No GPU required  ·  smaller download (~250 MB)  ·  slower training"),
             ("cu118", "CUDA 11.8",
-             "Requires NVIDIA GPU + CUDA Toolkit 11.x installed on system"),
+             "GTX 10xx / RTX 20xx  ·  requires CUDA Toolkit 11.x"),
             ("cu124", "CUDA 12.x  (12.0 – 12.4)",
-             "Requires NVIDIA GPU + CUDA Toolkit 12.0–12.4"),
-            ("cu128", "CUDA 12.8  (RTX 40/50 series)",
-             "Required for Blackwell/Ada GPUs (RTX 50xx, RTX 40xx) — CUDA 12.5+"),
+             "RTX 30xx  ·  requires CUDA Toolkit 12.0 – 12.4"),
+            ("cu128", "CUDA 12.8  (RTX 40 / 50 series)",
+             "Ada Lovelace & Blackwell  ·  requires CUDA Toolkit 12.5+"),
         ]
-
-        # Tag which option is auto-selected so we can show a badge
-        auto_val = self.torch_choice.get()
-
         for val, label, desc in torch_opts:
-            is_auto = (val == auto_val and auto_val != "auto")
-            bg_row  = "#1a1f2e" if is_auto else SURF2
+            recommended = (val == auto_val and auto_val != "auto")
+            self._radio_card(c, self.torch_choice, val, label, desc,
+                             recommended=recommended,
+                             on_click=lambda v=val: self.torch_choice.set(v))
 
-            row = tk.Frame(c, bg=bg_row, cursor="hand2",
-                           highlightbackground=ACCENT if is_auto else BORDER,
-                           highlightthickness=1)
-            row.pack(fill="x", pady=2, ipady=5, ipadx=4)
-            row.bind("<Button-1>", lambda e, v=val: self.torch_choice.set(v))
+        note_outer, note_inner = bordered_frame(c, bg=SURF3, border_color=BORDER)
+        note_outer.pack(fill="x", pady=(8, 0))
+        tk.Label(note_inner,
+                 text="ℹ  PyTorch CUDA is downloaded automatically.\n"
+                      "   The CUDA Toolkit from NVIDIA must already be installed to use GPU training.",
+                 font=(FONT_UI, 8), bg=SURF3, fg=TXT2,
+                 justify="left", anchor="w").pack(anchor="w", padx=14, pady=10)
 
-            rb = tk.Radiobutton(row, variable=self.torch_choice, value=val,
-                                bg=bg_row, activebackground=bg_row,
-                                selectcolor=bg_row, fg=ACCENT, relief="flat",
-                                bd=0, cursor="hand2",
-                                command=lambda v=val: self.torch_choice.set(v))
-            rb.pack(side="left", padx=(10, 4))
+        tk.Frame(c, bg=BORDER, height=1).pack(fill="x", pady=(14, 10))
 
-            inner = tk.Frame(row, bg=bg_row)
-            inner.pack(side="left", fill="x", expand=True)
-
-            lbl_row = tk.Frame(inner, bg=bg_row)
-            lbl_row.pack(anchor="w")
-            tk.Label(lbl_row, text=label, font=("Segoe UI", 9, "bold"),
-                     bg=bg_row, fg=TXT, anchor="w").pack(side="left")
-            if is_auto:
-                tk.Label(lbl_row, text=" ✦ recommended for your system",
-                         font=("Segoe UI", 8), bg=bg_row,
-                         fg=ACCENT).pack(side="left", padx=(6, 0))
-
-            tk.Label(inner, text=desc, font=("Segoe UI", 8),
-                     bg=bg_row, fg=TXT2, anchor="w").pack(anchor="w")
-
-        # ── Note about CUDA Toolkit vs PyTorch CUDA ───────────────────────────
-        note = tk.Frame(c, bg="#151520")
-        note.pack(fill="x", pady=(8, 0), ipady=6, ipadx=8)
-        tk.Label(note,
-                 text="ℹ  PyTorch CUDA ≠ CUDA Toolkit.  PyTorch CUDA is installed here automatically.\n"
-                      "   The CUDA Toolkit (driver) must already be on your system to use GPU training.",
-                 bg="#151520", fg=TXT2, font=("Segoe UI", 8),
-                 justify="left", anchor="w").pack(anchor="w", padx=8)
-
-        tk.Frame(c, bg=BORDER, height=1).pack(fill="x", pady=10)
-
-        # ── Environment ───────────────────────────────────────────────────────
-        tk.Label(c, text="Environment", bg=BG, fg=TXT,
-                 font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        tk.Label(c, text="Choose where packages are installed.",
-                 bg=BG, fg=TXT2, font=("Segoe UI", 8)).pack(anchor="w", pady=(2, 6))
-
+        # Environment
+        self._section_label(c, "Environment",
+                            "Choose where packages are installed.")
         env_opts = [
-            ("venv",
-             "Isolated virtual environment",
-             "Creates ./venv — installs everything fresh, nothing touches your system Python.  (recommended)"),
-            ("system",
-             "Use existing Python installation",
-             f"Skips venv creation.  Only installs packages that are missing from your current Python."),
+            ("venv",   "Isolated virtual environment",
+             "Creates ./venv  ·  nothing touches your system Python  (recommended)"),
+            ("system", "Use existing Python installation",
+             "Skips venv creation  ·  only installs missing packages"),
         ]
         for val, label, desc in env_opts:
-            row = tk.Frame(c, bg=SURF2, cursor="hand2",
-                           highlightbackground=BORDER, highlightthickness=1)
-            row.pack(fill="x", pady=2, ipady=5, ipadx=4)
-            row.bind("<Button-1>", lambda e, v=val: self._set_env_mode(v))
+            self._radio_card(c, self.install_mode, val, label, desc,
+                             on_click=lambda v=val: self._set_env_mode(v))
 
-            rb = tk.Radiobutton(row, variable=self.install_mode, value=val,
-                                bg=SURF2, activebackground=SURF2,
-                                selectcolor=SURF2, fg=ACCENT, relief="flat",
-                                bd=0, cursor="hand2",
-                                command=lambda v=val: self._set_env_mode(v))
-            rb.pack(side="left", padx=(10, 4))
-
-            inner = tk.Frame(row, bg=SURF2)
-            inner.pack(side="left", fill="x", expand=True)
-            tk.Label(inner, text=label, font=("Segoe UI", 9, "bold"),
-                     bg=SURF2, fg=TXT, anchor="w").pack(anchor="w")
-            tk.Label(inner, text=desc, font=("Segoe UI", 8),
-                     bg=SURF2, fg=TXT2, anchor="w", wraplength=430,
-                     justify="left").pack(anchor="w")
-
-        # Scan panel — populated when "system" mode is selected
         self._scan_panel = tk.Frame(c, bg=BG)
         self._scan_panel.pack(fill="x", pady=(4, 0))
 
-        tk.Frame(c, bg=BORDER, height=1).pack(fill="x", pady=10)
+        tk.Frame(c, bg=BORDER, height=1).pack(fill="x", pady=(14, 10))
 
-        # ── Options ───────────────────────────────────────────────────────────
-        tk.Label(c, text="Options", bg=BG, fg=TXT,
-                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 4))
-
-        cb = tk.Checkbutton(c, text="Create desktop shortcut",
+        # Options
+        self._section_label(c, "Options", "")
+        opt_outer, opt_inner = bordered_frame(c, bg=SURF2)
+        opt_outer.pack(fill="x")
+        cb = tk.Checkbutton(opt_inner, text="Create desktop shortcut",
                             variable=self.shortcut_var,
-                            bg=BG, fg=TXT, activebackground=BG, activeforeground=TXT,
-                            selectcolor=SURF2, font=("Segoe UI", 9), bd=0, relief="flat",
-                            cursor="hand2")
-        cb.pack(anchor="w")
+                            bg=SURF2, fg=TXT, activebackground=SURF2,
+                            activeforeground=TXT, selectcolor=SURF3,
+                            font=(FONT_UI, 9), bd=0, relief="flat", cursor="hand2")
+        cb.pack(anchor="w", padx=14, pady=10)
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # Environment mode helpers
-    # ──────────────────────────────────────────────────────────────────────────
+    def _section_label(self, parent, title, subtitle):
+        tk.Label(parent, text=title, font=(FONT_UI, 10, "bold"),
+                 bg=BG, fg=TXT, anchor="w").pack(anchor="w")
+        if subtitle:
+            tk.Label(parent, text=subtitle, font=(FONT_UI, 8),
+                     bg=BG, fg=TXT2, anchor="w").pack(anchor="w", pady=(2, 6))
+        else:
+            tk.Frame(parent, bg=BG, height=6).pack()
+
+    def _radio_card(self, parent, var, val, label, desc,
+                    recommended=False, on_click=None):
+        border_col = ACCENT if recommended else BORDER
+        bg_col     = "#181826" if recommended else SURF2
+
+        outer = tk.Frame(parent, bg=border_col)
+        outer.pack(fill="x", pady=2)
+        inner = tk.Frame(outer, bg=bg_col, cursor="hand2")
+        inner.pack(fill="both", padx=1, pady=1)
+        if on_click:
+            inner.bind("<Button-1>", lambda e: on_click())
+
+        rb = tk.Radiobutton(inner, variable=var, value=val,
+                            bg=bg_col, activebackground=bg_col,
+                            selectcolor=bg_col, fg=ACCENT,
+                            relief="flat", bd=0, cursor="hand2",
+                            command=on_click)
+        rb.pack(side="left", padx=(12, 4), pady=10)
+
+        txt_frame = tk.Frame(inner, bg=bg_col)
+        txt_frame.pack(side="left", fill="x", expand=True, pady=10)
+
+        lbl_row = tk.Frame(txt_frame, bg=bg_col)
+        lbl_row.pack(anchor="w")
+        tk.Label(lbl_row, text=label, font=(FONT_UI, 9, "bold"),
+                 bg=bg_col, fg=TXT, anchor="w").pack(side="left")
+        if recommended:
+            tk.Label(lbl_row, text="  ✦ recommended",
+                     font=(FONT_UI, 8), bg=bg_col, fg=ACCENT).pack(side="left", padx=(6, 0))
+
+        tk.Label(txt_frame, text=desc, font=(FONT_UI, 8),
+                 bg=bg_col, fg=TXT2, anchor="w").pack(anchor="w")
+
+    # ── Environment mode helpers ───────────────────────────────────────────────
     def _set_env_mode(self, val):
         self.install_mode.set(val)
-        self._pkg_scan = {}          # clear stale results on mode switch
+        self._pkg_scan = {}
         self._rebuild_scan_panel()
 
     def _rebuild_scan_panel(self):
@@ -773,21 +829,21 @@ class Installer(tk.Tk):
 
         btn_row = tk.Frame(self._scan_panel, bg=BG)
         btn_row.pack(anchor="w", pady=(4, 0))
-        tk.Button(btn_row,
-                  text="Scan installed packages",
-                  font=("Segoe UI", 8), bg=SURF2, fg=ACCENT,
-                  relief="flat", bd=0, padx=14, pady=6,
-                  cursor="hand2", activebackground=SURF2,
-                  command=self._start_pkg_scan).pack(side="left")
+        scan_btn = tk.Button(btn_row, text="Scan installed packages",
+                             font=(FONT_UI, 8), bg=SURF2, fg=ACCENT,
+                             relief="flat", bd=0, padx=14, pady=6,
+                             cursor="hand2", activebackground=SURF2,
+                             command=self._start_pkg_scan)
+        scan_btn.pack(side="left")
+        bind_hover(scan_btn, SURF2, SURF3)
         tk.Label(btn_row,
                  text="  Check which required packages are already on your system.",
-                 font=("Segoe UI", 8), bg=BG, fg=TXT2).pack(side="left")
+                 font=(FONT_UI, 8), bg=BG, fg=TXT2).pack(side="left")
 
         if self._pkg_scan:
             self._draw_scan_results()
 
     def _start_pkg_scan(self):
-        # Disable the button while scanning
         for w in self._scan_panel.winfo_children():
             if isinstance(w, tk.Frame):
                 for child in w.winfo_children():
@@ -796,11 +852,8 @@ class Installer(tk.Tk):
         threading.Thread(target=self._do_pkg_scan, daemon=True).start()
 
     def _do_pkg_scan(self):
-        """Check every package in requirements.txt + torch/torchvision."""
         import re as _re
-
         req_path = os.path.join(BACKEND, "requirements.txt")
-        # Parse requirements.txt: collect (display_name, pip_name, version_spec)
         packages = []
         try:
             with open(req_path) as fh:
@@ -808,13 +861,11 @@ class Installer(tk.Tk):
                     line = raw.strip()
                     if not line or line.startswith("#"):
                         continue
-                    # Normalise: "python-multipart==0.0.20" -> pip_name="python-multipart"
                     pip_name = _re.split(r"[><=!;]", line)[0].strip()
                     packages.append((pip_name, line))
         except Exception:
             pass
 
-        # Always check torch and torchvision (not in requirements.txt)
         for name in ("torch", "torchvision"):
             if not any(p == name for p, _ in packages):
                 packages.append((name, name))
@@ -824,9 +875,7 @@ class Installer(tk.Tk):
             rc, out = run_cmd(f'"{sys.executable}" -m pip show "{pip_name}"')
             if rc == 0:
                 ver_line = next(
-                    (ln for ln in out.splitlines() if ln.lower().startswith("version:")),
-                    ""
-                )
+                    (ln for ln in out.splitlines() if ln.lower().startswith("version:")), "")
                 ver = ver_line.split(":", 1)[-1].strip() if ver_line else "?"
                 results[pip_name] = (True, ver, req_spec)
             else:
@@ -836,47 +885,45 @@ class Installer(tk.Tk):
         self.after(0, self._rebuild_scan_panel)
 
     def _draw_scan_results(self):
-        """Render scan results table inside _scan_panel (called after data is ready)."""
-        found    = sum(1 for ok, _, _ in self._pkg_scan.values() if ok)
-        total    = len(self._pkg_scan)
-        missing  = [n for n, (ok, _, _) in self._pkg_scan.items() if not ok]
+        found   = sum(1 for ok, _, _ in self._pkg_scan.values() if ok)
+        total   = len(self._pkg_scan)
+        missing = [n for n, (ok, _, _) in self._pkg_scan.items() if not ok]
 
         summary_col = SUCCESS if not missing else WARN
-        summary_txt = (f"  {found}/{total} packages already installed"
-                       + (f"  —  {len(missing)} missing" if missing else "  —  all present"))
+        summary_txt = (f"  {found}/{total} packages installed"
+                       + (f"  ·  {len(missing)} missing" if missing else "  ·  all present"))
         tk.Label(self._scan_panel, text=summary_txt,
-                 font=("Segoe UI", 8, "bold"), bg=BG, fg=summary_col,
+                 font=(FONT_UI, 8, "bold"), bg=BG, fg=summary_col,
                  anchor="w").pack(anchor="w", pady=(6, 4))
 
         grid = tk.Frame(self._scan_panel, bg=SURF2)
         grid.pack(fill="x")
 
-        # Header
-        for col, (txt, w) in enumerate([("Package", 22), ("Required", 24), ("Installed", 20)]):
-            tk.Label(grid, text=txt, font=("Courier New", 7, "bold"),
+        for col_i, (txt, w) in enumerate([("Package", 22), ("Required", 24), ("Installed", 20)]):
+            tk.Label(grid, text=txt, font=(FONT_MONO, 7, "bold"),
                      bg=SURF2, fg=TXT2, width=w, anchor="w").grid(
-                row=0, column=col, padx=(8 if col == 0 else 4, 4), pady=(5, 2), sticky="w")
+                row=0, column=col_i,
+                padx=(8 if col_i == 0 else 4, 4), pady=(5, 2), sticky="w")
 
         for row_i, (pkg, (ok, ver, req)) in enumerate(self._pkg_scan.items(), start=1):
             bg_row = "#0f1520" if row_i % 2 == 0 else SURF2
-            icon   = "✓" if ok else "✗"
-            icol   = SUCCESS if ok else ERROR
-            vcol   = TXT if ok else ERROR
-
-            tk.Label(grid, text=f"{icon} {pkg}", font=("Courier New", 7),
+            icon = "✓" if ok else "✗"
+            icol = SUCCESS if ok else ERROR
+            vcol = TXT if ok else ERROR
+            tk.Label(grid, text=f"{icon} {pkg}", font=(FONT_MONO, 7),
                      bg=bg_row, fg=icol, width=22, anchor="w").grid(
                 row=row_i, column=0, padx=(8, 4), pady=1, sticky="w")
-            tk.Label(grid, text=req[:24], font=("Courier New", 7),
+            tk.Label(grid, text=req[:24], font=(FONT_MONO, 7),
                      bg=bg_row, fg=TXT2, width=24, anchor="w").grid(
                 row=row_i, column=1, padx=(4, 4), pady=1, sticky="w")
-            tk.Label(grid, text=ver[:20], font=("Courier New", 7),
+            tk.Label(grid, text=ver[:20], font=(FONT_MONO, 7),
                      bg=bg_row, fg=vcol, width=20, anchor="w").grid(
                 row=row_i, column=2, padx=(4, 8), pady=1, sticky="w")
 
         if missing:
             tk.Label(self._scan_panel,
-                     text=f"  Missing packages will be installed automatically during setup.",
-                     font=("Segoe UI", 8), bg=BG, fg=TXT2, anchor="w").pack(
+                     text="  Missing packages will be installed automatically.",
+                     font=(FONT_UI, 8), bg=BG, fg=TXT2, anchor="w").pack(
                 anchor="w", pady=(6, 0))
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -884,14 +931,13 @@ class Installer(tk.Tk):
     # ──────────────────────────────────────────────────────────────────────────
     def _page_install(self):
         c = self.content
-        tk.Label(c, text="Installing…", bg=BG, fg=TXT,
-                 font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        tk.Label(c, text="Please wait while dependencies are installed.",
-                 bg=BG, fg=TXT2, font=("Segoe UI", 9)).pack(anchor="w", pady=(2, 14))
+        tk.Label(c, text="Installing", font=(FONT_UI, 15, "bold"),
+                 bg=BG, fg=TXT).pack(anchor="w")
+        tk.Label(c, text="Please wait while NoCode CV Trainer is set up.",
+                 font=(FONT_UI, 9), bg=BG, fg=TXT2).pack(anchor="w", pady=(4, 16))
 
-        # Step checklist
         self.install_steps_frame = tk.Frame(c, bg=BG)
-        self.install_steps_frame.pack(fill="x")
+        self.install_steps_frame.pack(fill="x", pady=(0, 10))
 
         self._step_names = [
             "create_venv",
@@ -907,76 +953,102 @@ class Installer(tk.Tk):
             "install_torch":    "Installing PyTorch",
             "install_backend":  "Installing backend libraries",
             "install_frontend": "Installing frontend packages",
-            "build_frontend":   "Building frontend (production)",
+            "build_frontend":   "Building frontend bundle",
             "write_launcher":   "Writing launcher files",
             "shortcut":         "Creating desktop shortcut",
         }
         self._step_widgets = {}
+
         for key in self._step_names:
             row = tk.Frame(self.install_steps_frame, bg=BG)
-            row.pack(fill="x", pady=1)
-            dot = tk.Label(row, text="○", font=("Segoe UI", 9),
-                           fg=BORDER, bg=BG, width=3)
-            dot.pack(side="left")
+            row.pack(fill="x", pady=2)
+
+            dot = tk.Canvas(row, width=18, height=18,
+                            bg=BG, highlightthickness=0)
+            dot.create_oval(3, 3, 15, 15, fill="", outline=TXT3, width=1)
+            dot.pack(side="left", padx=(0, 10))
+
             lbl = tk.Label(row, text=self._step_labels_map[key],
-                           font=("Segoe UI", 9), fg=TXT2, bg=BG, anchor="w")
+                           font=(FONT_UI, 9), fg=TXT3, bg=BG, anchor="w")
             lbl.pack(side="left")
+
             self._step_widgets[key] = (dot, lbl)
 
-        # Overall progress bar
-        tk.Label(c, text="", bg=BG).pack()
+        # Progress bar
         style = ttk.Style()
         style.theme_use("clam")
-        style.configure("Install.Horizontal.TProgressbar",
+        style.configure("Pro.Horizontal.TProgressbar",
                         troughcolor=SURF2, background=ACCENT,
-                        lightcolor=ACCENT, darkcolor=ACCENT,
-                        bordercolor=BORDER, thickness=8)
-        self.progress = ttk.Progressbar(c, style="Install.Horizontal.TProgressbar",
-                                        orient="horizontal", length=460,
-                                        mode="determinate", maximum=len(self._step_names))
-        self.progress.pack(fill="x", pady=(4, 8))
+                        lightcolor=ACCENTL, darkcolor=ACCENT2,
+                        bordercolor=BORDER, thickness=6)
+        self.progress = ttk.Progressbar(c, style="Pro.Horizontal.TProgressbar",
+                                        orient="horizontal",
+                                        mode="determinate",
+                                        maximum=len(self._step_names))
+        self.progress.pack(fill="x", pady=(4, 12))
 
-        # Log text area
-        log_frame = tk.Frame(c, bg=BORDER, bd=1, relief="flat")
-        log_frame.pack(fill="both", expand=True)
-        self.log_text = tk.Text(log_frame, bg="#0a0a0c", fg=TXT2,
-                                font=("Courier New", 8), wrap="word",
+        # Log area
+        log_outer = tk.Frame(c, bg=BORDER)
+        log_outer.pack(fill="both", expand=True)
+        log_inner = tk.Frame(log_outer, bg="#08080b")
+        log_inner.pack(fill="both", expand=True, padx=1, pady=1)
+
+        self.log_text = tk.Text(log_inner, bg="#08080b", fg="#5a5a7a",
+                                font=(FONT_MONO, 8), wrap="word",
                                 relief="flat", bd=0, state="disabled",
-                                insertbackground=ACCENT)
-        scrollbar = tk.Scrollbar(log_frame, command=self.log_text.yview,
-                                 bg=SURF2, troughcolor=SURF2, relief="flat", bd=0)
+                                insertbackground=ACCENT, height=10)
+        scrollbar = tk.Scrollbar(log_inner, command=self.log_text.yview,
+                                 bg=SURF2, troughcolor="#08080b",
+                                 relief="flat", bd=0, width=6)
         self.log_text.config(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
-        self.log_text.pack(side="left", fill="both", expand=True, padx=6, pady=6)
+        scrollbar.pack(side="right", fill="y", padx=(0, 2), pady=4)
+        self.log_text.pack(side="left", fill="both", expand=True, padx=10, pady=8)
 
     def _log(self, msg, color=None):
         def _do():
             self.log_text.config(state="normal")
-            self.log_text.insert("end", msg + "\n")
+            if "✓" in msg or "✅" in msg:
+                tag = "ok"
+                self.log_text.tag_config("ok", foreground=SUCCESS)
+            elif "❌" in msg or "✗" in msg:
+                tag = "err"
+                self.log_text.tag_config("err", foreground=ERROR)
+            elif "⚠" in msg:
+                tag = "warn"
+                self.log_text.tag_config("warn", foreground=WARN)
+            else:
+                tag = None
+            if tag:
+                self.log_text.insert("end", msg + "\n", tag)
+            else:
+                self.log_text.insert("end", msg + "\n")
             self.log_text.see("end")
             self.log_text.config(state="disabled")
         self.after(0, _do)
 
     def _mark_step(self, key, state):
-        """state: 'running' | 'done' | 'skip' | 'error'"""
         dot, lbl = self._step_widgets[key]
+        dot.delete("all")
         if state == "running":
-            dot.config(text="⏳", fg=WARN)
+            dot.create_oval(3, 3, 15, 15, fill=WARN, outline="")
             lbl.config(fg=TXT)
         elif state == "done":
-            dot.config(text="✓", fg=SUCCESS)
+            dot.create_oval(3, 3, 15, 15, fill=SUCCESS, outline="")
+            dot.create_text(9, 9, text="✓", fill="white",
+                            font=(FONT_UI, 7, "bold"))
             lbl.config(fg=TXT2)
         elif state == "skip":
-            dot.config(text="⤼", fg=TXT2)
-            lbl.config(fg=TXT2)
+            dot.create_oval(3, 3, 15, 15, fill=SURF3, outline=TXT3, width=1)
+            dot.create_text(9, 9, text="—", fill=TXT3, font=(FONT_UI, 8))
+            lbl.config(fg=TXT3)
         elif state == "error":
-            dot.config(text="✗", fg=ERROR)
+            dot.create_oval(3, 3, 15, 15, fill=ERROR, outline="")
+            dot.create_text(9, 9, text="✗", fill="white",
+                            font=(FONT_UI, 7, "bold"))
             lbl.config(fg=ERROR)
 
     def _advance_progress(self):
-        def _do():
-            self.progress.step(1)
-        self.after(0, _do)
+        self.after(0, lambda: self.progress.step(1))
 
     # ── Install thread ────────────────────────────────────────────────────────
     def _start_install(self):
@@ -986,13 +1058,10 @@ class Installer(tk.Tk):
         torch_mode    = self.torch_choice.get()
         want_shortcut = self.shortcut_var.get()
         use_system    = (self.install_mode.get() == "system")
-        total = len(self._step_names)
-        done  = 0
 
-        # Which Python / pip to use throughout this install
         if use_system:
             venv_py  = sys.executable
-            venv_pip = sys.executable   # invoked as  "{venv_pip}" -m pip …
+            venv_pip = sys.executable
             qpy  = f'"{venv_py}"'
             qpip = f'"{venv_pip}" -m pip'
         else:
@@ -1002,20 +1071,16 @@ class Installer(tk.Tk):
             qpip = f'"{venv_pip}"'
 
         def step(key, fn):
-            nonlocal done
             self.after(0, lambda: self._mark_step(key, "running"))
             result = fn()
             ok    = result[0]
-            # Functions may return (ok, msg, "skip") to show ⤼ instead of ✓
             state = result[2] if len(result) > 2 else ("done" if ok else "error")
-            done += 1
             self.after(0, lambda s=state, k=key: self._mark_step(k, s))
             self._advance_progress()
             return ok
 
-        # 1. Create venv  (or verify system Python)
+        # 1. Create venv
         def do_venv():
-            # Clean up stale constraints file left by older installer versions
             stale = os.path.join(BACKEND, "_torch_constraints.txt")
             if os.path.isfile(stale):
                 try:
@@ -1024,49 +1089,43 @@ class Installer(tk.Tk):
                     pass
 
             if use_system:
-                # System-Python mode: just verify it works
                 rc_test, ver_out = run_cmd(f'{qpy} -c "import sys; print(sys.version)"')
                 if rc_test == 0:
                     self._log(f"  Using system Python {ver_out.strip()[:60]}")
                     self._log("  Packages will be installed into your existing environment.")
                     return True, "", "skip"
-                self._log("  ❌ System Python does not respond — this should not happen.")
+                self._log("  ❌ System Python does not respond.")
                 return False, ""
 
-            # venv mode (original behaviour)
             if os.path.isfile(VENV_PY):
                 rc_test, _ = run_cmd(f'"{VENV_PY}" -c "import sys; print(sys.version)"')
                 if rc_test == 0:
                     self._log("  ✓ Existing venv found and working — reusing.")
                     return True, "", "skip"
-                self._log("  ⚠ Existing venv is broken (moved/copied?), recreating…")
+                self._log("  ⚠ Existing venv is broken, recreating…")
                 shutil.rmtree(VENV_DIR, ignore_errors=True)
+
             self._log("  Creating virtual environment…")
             rc, out = run_cmd(f'"{sys.executable}" -m venv "{VENV_DIR}"')
             self._log(out[:800] if out else "  done")
             return rc == 0, out
 
         if not step("create_venv", do_venv):
-            self._log("❌ Failed to create venv. Aborting.", ERROR)
+            self._log("❌ Failed to create venv. Aborting.")
             return
 
         # 2. Install PyTorch
         def do_torch():
-            # Check if already present and working
             rc_chk, out_chk = run_cmd(
-                f"{qpy} -c \"import torch; print(torch.__version__)\""
-            )
+                f"{qpy} -c \"import torch; print(torch.__version__)\"")
             if rc_chk == 0 and torch_mode == "auto":
-                # Also verify CUDA actually works if GPU present
                 rc_cuda, _ = run_cmd(
-                    f"{qpy} -c \"import torch; torch.zeros(1).cuda() if torch.cuda.is_available() else None; print('ok')\""
-                )
+                    f"{qpy} -c \"import torch; torch.zeros(1).cuda() if torch.cuda.is_available() else None; print('ok')\"")
                 if rc_cuda == 0:
                     env_label = "system env" if use_system else "venv"
-                    self._log(f"  ✓ torch {out_chk.strip()} already in {env_label} and working, skipping.")
+                    self._log(f"  ✓ torch {out_chk.strip()} already in {env_label}, skipping.")
                     return True, "", "skip"
-                self._log(f"  ⚠ torch {out_chk.strip()} found but CUDA test failed — reinstalling with correct variant.")
-                # Fall through to reinstall with selected mode
+                self._log(f"  ⚠ torch found but CUDA test failed — reinstalling.")
 
             urls = {
                 "cpu":   "https://download.pytorch.org/whl/cpu",
@@ -1074,35 +1133,24 @@ class Installer(tk.Tk):
                 "cu124": "https://download.pytorch.org/whl/cu124",
                 "cu128": "https://download.pytorch.org/whl/cu128",
             }
-            # Resolve "auto" to the hardware-detected variant (set by _auto_select_torch)
             effective_mode = self.torch_choice.get() if torch_mode == "auto" else torch_mode
             if effective_mode == "auto":
-                effective_mode = "cpu"   # fallback if detection never ran
+                effective_mode = "cpu"
             url = urls.get(effective_mode, urls["cpu"])
 
             sizes = {"cpu": "~250 MB", "cu118": "~2.3 GB", "cu124": "~2.4 GB", "cu128": "~2.8 GB"}
-            size_hint = sizes.get(effective_mode, "~2.4 GB")
+            self._log(f"  Downloading PyTorch ({effective_mode})  {sizes.get(effective_mode, '')}")
+            self._log(f"  This may take several minutes…")
+            self._log(f"  Index: {url}\n")
 
-            self._log(f"  Downloading PyTorch ({effective_mode})  {size_hint}")
-            self._log(f"  This may take several minutes — please wait…")
-            self._log(f"  Index: {url}")
-            self._log("")
-
-            # ── Stream pip output line by line ────────────────────────────────
-            # No -q so we see Downloading / Installing lines as they happen.
             cmd = (f"{qpip} install torch torchvision "
                    f"--index-url {url} --no-warn-script-location")
-
-            last_pkg = [None]   # track last package name for dedup
+            last_pkg = [None]
 
             def on_line(line):
-                # Show download progress and key messages; skip noisy lines
                 low = line.lower()
-                if any(k in low for k in (
-                    "downloading", "installing", "successfully", "error",
-                    "warning", "looking in", "requirement already"
-                )):
-                    # Shorten very long filenames to keep log readable
+                if any(k in low for k in ("downloading", "installing", "successfully",
+                                          "error", "warning", "requirement already")):
                     disp = line.strip()
                     if len(disp) > 90:
                         disp = disp[:87] + "…"
@@ -1117,29 +1165,15 @@ class Installer(tk.Tk):
             return rc == 0, ""
 
         if not step("install_torch", do_torch):
-            self._log("❌ PyTorch install failed. Check internet or try a different backend.", ERROR)
+            self._log("❌ PyTorch install failed. Check internet or try a different backend.")
             return
 
         # 3. Install backend
         def do_backend():
             req = os.path.join(BACKEND, "requirements.txt")
-
-            # ── Step 3a: upgrade pip ──────────────────────────────────────────
             self._log("  Upgrading pip…")
             run_cmd(f'{qpy} -m pip install --upgrade pip --quiet')
 
-            # ── Step 3b: resolve the PyTorch index that was used earlier ──────
-            #
-            #  ROOT CAUSE of the "backend install fails on all machines" bug:
-            #  The old approach wrote a --constraint file pinning e.g.
-            #  "torch==2.7.0+cu128", then ran pip against requirements.txt.
-            #  pip searched only PyPI for that pin — PyPI never has wheels with
-            #  local-version suffixes like "+cu128", so the constraint could
-            #  never be satisfied and pip failed every time on a fresh install.
-            #
-            #  Fix: pass --extra-index-url so pip can find the correct CUDA
-            #  wheel when ultralytics (or any other dep) pulls torch transitively.
-            #  Then verify torch wasn't silently downgraded afterwards.
             urls = {
                 "cpu":   "https://download.pytorch.org/whl/cpu",
                 "cu118": "https://download.pytorch.org/whl/cu118",
@@ -1151,38 +1185,25 @@ class Installer(tk.Tk):
                 effective_mode = "cpu"
             torch_url = urls.get(effective_mode, urls["cpu"])
 
-            # ── Step 3c: pre-install pillow from binary wheel only ────────────
-            # pillow sometimes has no wheel for less common Python builds and
-            # pip falls back to compiling from source, which fails on machines
-            # without zlib/libpng headers.  Installing it separately first with
-            # --only-binary guarantees a wheel is used.  If no wheel exists for
-            # this Python version, we fall back to a known-good older release.
             self._log("  Installing Pillow (binary only)…")
             rc_p, _ = run_cmd(
                 f'{qpip} install "pillow>=10.0.0" '
-                f'--only-binary=pillow --prefer-binary '
-                f'--no-warn-script-location'
-            )
+                f'--only-binary=pillow --prefer-binary --no-warn-script-location')
             if rc_p != 0:
                 self._log("  Pillow latest wheel not found — trying pillow 10.4.0…")
-                run_cmd(
-                    f'{qpip} install "pillow==10.4.0" '
-                    f'--only-binary=pillow --no-warn-script-location'
-                )
+                run_cmd(f'{qpip} install "pillow==10.4.0" --only-binary=pillow --no-warn-script-location')
 
-            # ── Step 3d: install requirements with the correct torch index ────
             self._log(f"  Installing backend libraries  [{effective_mode}]…")
             error_lines = []
 
             def on_line(line):
                 low = line.lower()
                 if any(k in low for k in ("error", "could not", "no matching",
-                                           "failed", "exception")):
+                                          "failed", "exception")):
                     error_lines.append(line.strip())
-                if any(k in low for k in (
-                    "downloading", "installing", "successfully", "error",
-                    "requirement already", "collected", "could not", "no matching"
-                )):
+                if any(k in low for k in ("downloading", "installing", "successfully",
+                                          "error", "requirement already", "collected",
+                                          "could not", "no matching")):
                     disp = line.strip()
                     if len(disp) > 90:
                         disp = disp[:87] + "…"
@@ -1190,23 +1211,17 @@ class Installer(tk.Tk):
 
             cmd = (f'{qpip} install -r "{req}" '
                    f'--extra-index-url {torch_url} '
-                   f'--prefer-binary '
-                   f'--no-warn-script-location')
+                   f'--prefer-binary --no-warn-script-location')
             rc, _ = run_cmd_stream(cmd, cwd=BACKEND, line_cb=on_line)
 
             if rc != 0:
-                self._log("  ❌ Backend install failed. Error details:")
+                self._log("  ❌ Backend install failed:")
                 for el in error_lines[-15:]:
                     self._log(f"     {el}")
                 return False, ""
 
-            # ── Step 3d: guard against silent torch downgrade ─────────────────
-            #  ultralytics is known to pull the plain-CPU PyPI wheel even when
-            #  a CUDA build is already installed. Re-check and force-restore.
             if effective_mode != "cpu":
-                rc_v, ver_out = run_cmd(
-                    f'{qpy} -c "import torch; print(torch.__version__)"'
-                )
+                rc_v, ver_out = run_cmd(f'{qpy} -c "import torch; print(torch.__version__)"')
                 if rc_v == 0:
                     ver = ver_out.strip()
                     if f"+{effective_mode}" not in ver:
@@ -1215,8 +1230,7 @@ class Installer(tk.Tk):
                             f'{qpip} install torch torchvision '
                             f'--index-url {torch_url} --force-reinstall '
                             f'--no-warn-script-location',
-                            line_cb=on_line
-                        )
+                            line_cb=on_line)
                         self._log("  ✓ CUDA build restored.")
                     else:
                         self._log(f"  ✓ torch {ver} confirmed.")
@@ -1225,7 +1239,7 @@ class Installer(tk.Tk):
             return True, ""
 
         if not step("install_backend", do_backend):
-            self._log("❌ Backend dependency install failed. See error lines above.", ERROR)
+            self._log("❌ Backend dependency install failed.")
             return
 
         # 4. npm install
@@ -1235,12 +1249,11 @@ class Installer(tk.Tk):
             if dist_ready:
                 self._log("  ✓ Pre-built frontend detected — skipping npm install.")
                 return True, "", "skip"
-
             already = os.path.isdir(os.path.join(FRONTEND, "node_modules"))
-            if already:
-                self._log("  node_modules found — verifying packages (npm install is fast when up-to-date)…")
-            else:
+            if not already:
                 self._log("  Downloading npm packages — first install may take a minute…")
+            else:
+                self._log("  node_modules found — verifying packages…")
 
             def on_npm(line):
                 low = line.lower()
@@ -1255,7 +1268,7 @@ class Installer(tk.Tk):
             return rc == 0, ""
 
         if not step("install_frontend", do_npm):
-            self._log("❌ npm install failed.", ERROR)
+            self._log("❌ npm install failed.")
             return
 
         # 5. Build frontend
@@ -1276,7 +1289,7 @@ class Installer(tk.Tk):
             return ok, ""
 
         if not step("build_frontend", do_build):
-            self._log("❌ Frontend build failed.", ERROR)
+            self._log("❌ Frontend build failed.")
             return
 
         # 6. Write launcher files
@@ -1286,7 +1299,7 @@ class Installer(tk.Tk):
 
         step("write_launcher", do_launcher)
 
-        # 7. Desktop shortcut (Windows only)
+        # 7. Desktop shortcut
         def do_shortcut():
             if not want_shortcut or not _IS_WIN:
                 return True, "", "skip"
@@ -1296,21 +1309,18 @@ class Installer(tk.Tk):
 
         step("shortcut", do_shortcut)
 
-        # ── All done ──────────────────────────────────────────────────────────
         self._install_done = True
         self._log("\n✅ Installation complete!")
         self.after(0, self._on_install_complete)
 
     def _on_install_complete(self):
         self.btn_next.config(text="Finish  →", state="normal",
+                             bg=SUCCESS, fg="#fff",
                              command=lambda: self._show_step(4))
+        bind_hover(self.btn_next, SUCCESS, "#2d8a4e", "#fff", "#fff")
 
     # ── Write launcher files ──────────────────────────────────────────────────
     def _write_launcher_files(self, system_py=None):
-        """Write the platform-appropriate launcher script.
-        system_py: if set, the launcher uses this absolute Python path directly
-                   instead of the venv interpreter.
-        """
         if _IS_WIN:
             self._write_bat_launcher(system_py)
         else:
@@ -1370,51 +1380,64 @@ class Installer(tk.Tk):
     # ──────────────────────────────────────────────────────────────────────────
     def _page_done(self):
         c = self.content
+
+        accent_col = SUCCESS if self._install_done else WARN
+        icon  = "✅" if self._install_done else "⚠️"
+        title = "Installation Complete" if self._install_done else "Installation Incomplete"
+        sub   = ("NoCode CV Trainer is ready to launch."
+                 if self._install_done
+                 else "One or more steps failed — check the log on the previous page.")
+
+        # Hero card
+        hero_outer, hero = bordered_frame(c, bg=SURF2)
+        hero_outer.pack(fill="x", pady=(6, 0))
+        tk.Frame(hero, bg=accent_col, height=3).pack(fill="x")
+        hero_body = tk.Frame(hero, bg=SURF2)
+        hero_body.pack(fill="both", expand=True, padx=32, pady=28)
+
+        tk.Label(hero_body, text=icon, font=(FONT_EMOJI, 38), bg=SURF2).pack()
+        tk.Label(hero_body, text=title,
+                 font=(FONT_UI, 15, "bold"), bg=SURF2, fg=TXT).pack(pady=(10, 4))
+        tk.Label(hero_body, text=sub,
+                 font=(FONT_UI, 9), bg=SURF2, fg=TXT2).pack()
+
         if self._install_done:
-            tk.Label(c, text="✅", font=("Segoe UI Emoji", 40), bg=BG, fg=SUCCESS).pack(pady=(10, 4))
-            tk.Label(c, text="Installation Complete!", bg=BG, fg=TXT,
-                     font=("Segoe UI", 16, "bold")).pack()
-            tk.Label(c, text="NoCode CV Trainer is ready to use.",
-                     bg=BG, fg=TXT2, font=("Segoe UI", 10)).pack(pady=(4, 24))
-        else:
-            tk.Label(c, text="⚠️", font=("Segoe UI Emoji", 40), bg=BG, fg=WARN).pack(pady=(10, 4))
-            tk.Label(c, text="Installation Incomplete", bg=BG, fg=TXT,
-                     font=("Segoe UI", 16, "bold")).pack()
-            tk.Label(c, text="One or more steps failed. Check the log above.",
-                     bg=BG, fg=TXT2, font=("Segoe UI", 10)).pack(pady=(4, 24))
+            launch_btn = tk.Button(
+                hero_body,
+                text="  Launch NoCode CV  →",
+                font=(FONT_UI, 11, "bold"),
+                bg=ACCENT, fg="#fff", relief="flat", bd=0,
+                padx=32, pady=12, cursor="hand2",
+                activebackground=ACCENT2, activeforeground="#fff",
+                command=self._launch_app)
+            launch_btn.pack(pady=(20, 0))
+            bind_hover(launch_btn, ACCENT, ACCENT2, "#fff", "#fff")
 
-        launch_btn = tk.Button(c,
-            text="🚀  Launch NoCode CV",
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT, fg="#fff", relief="flat", bd=0,
-            padx=28, pady=12, cursor="hand2",
-            activebackground=ACCENT2, activeforeground="#fff",
-            command=self._launch_app)
-        launch_btn.pack(pady=6)
-        if not self._install_done:
-            launch_btn.config(state="disabled", bg=SURF2, fg=TXT2)
-
-        tk.Frame(c, bg=BORDER, height=1).pack(fill="x", pady=16)
+        # Info grid
+        tk.Frame(c, bg=BORDER, height=1).pack(fill="x", pady=(20, 14))
 
         launcher_name = "NoCode CV.bat" if _IS_WIN else "NoCode CV.sh"
-        launch_hint = (f"double-click  '{launcher_name}'  or the desktop shortcut"
-                       if _IS_WIN else f"run:  bash '{launcher_name}'")
-        info_lines = [
-            f"• To launch later:  {launch_hint}",
-            "• App runs at:  http://localhost:8000",
-            "• Logs are streamed live during training",
+        launch_hint = (f"Double-click  {launcher_name}  or the desktop shortcut"
+                       if _IS_WIN else f"Run:  bash '{launcher_name}'  in a terminal")
+        info_items = [
+            ("Launch later",  launch_hint),
+            ("App URL",       "http://localhost:8000  (opens automatically on start)"),
+            ("Training logs", "Streamed live in the browser during training"),
         ]
-        for line in info_lines:
-            tk.Label(c, text=line, bg=BG, fg=TXT2,
-                     font=("Segoe UI", 8), anchor="w").pack(anchor="w")
+        for key, val in info_items:
+            row = tk.Frame(c, bg=BG)
+            row.pack(fill="x", pady=3)
+            tk.Label(row, text=f"{key}:", font=(FONT_UI, 8, "bold"),
+                     bg=BG, fg=TXT2, width=14, anchor="w").pack(side="left")
+            tk.Label(row, text=val, font=(FONT_UI, 8),
+                     bg=BG, fg=TXT2, anchor="w").pack(side="left")
 
     def _launch_app(self):
         launcher = os.path.join(ROOT_DIR, "launcher.py")
         if _IS_WIN:
-            # Prefer pythonw.exe (no console window) on Windows
             venv_pyw = os.path.join(VENV_DIR, "Scripts", "pythonw.exe")
-            py = venv_pyw if os.path.isfile(venv_pyw) else (
-                VENV_PY if os.path.isfile(VENV_PY) else sys.executable)
+            py = (venv_pyw if os.path.isfile(venv_pyw)
+                  else (VENV_PY if os.path.isfile(VENV_PY) else sys.executable))
         else:
             py = VENV_PY if os.path.isfile(VENV_PY) else sys.executable
         subprocess.Popen([py, launcher], cwd=ROOT_DIR)
