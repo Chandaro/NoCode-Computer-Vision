@@ -49,9 +49,7 @@ if exist "%~dp0frontend\node_modules\.bin\vite.cmd" (
     )
     if %NEED_BUILD%==1 (
         echo  Rebuilding frontend…
-        pushd "%~dp0frontend"
-        call "%~dp0frontend\node_modules\.bin\vite.cmd" build >nul 2>&1
-        popd
+        cmd /c "cd /d "%~dp0frontend" && "%~dp0frontend\node_modules\.bin\vite.cmd" build" >nul 2>&1
     )
 )
 
