@@ -91,11 +91,12 @@ _DIST = os.path.normpath(
 )
 
 
-def _file_response(path: str) -> FileResponse:
+def _file_response(path: str, no_cache: bool = False) -> FileResponse:
     """Return FileResponse with correct MIME type regardless of OS registry."""
     ext = os.path.splitext(path)[1].lower()
     media_type = _MIME.get(ext) or mimetypes.guess_type(path)[0] or "application/octet-stream"
-    return FileResponse(path, media_type=media_type)
+    headers = {"Cache-Control": "no-cache, no-store, must-revalidate"} if no_cache else {}
+    return FileResponse(path, media_type=media_type, headers=headers)
 
 
 def _dist_ok() -> bool:
@@ -107,7 +108,7 @@ def _dist_ok() -> bool:
 async def serve_root():
     if not _dist_ok():
         return JSONResponse({"error": "Frontend not built. Run: cd frontend && npm run build"}, 503)
-    return _file_response(os.path.join(_DIST, "index.html"))
+    return _file_response(os.path.join(_DIST, "index.html"), no_cache=True)
 
 
 # All other non-API paths: serve matching file or fall back to index.html (SPA routing)
@@ -127,4 +128,4 @@ async def serve_spa(full_path: str):
         return _file_response(candidate)
 
     # SPA fallback — React Router handles the path client-side
-    return _file_response(os.path.join(_DIST, "index.html"))
+    return _file_response(os.path.join(_DIST, "index.html"), no_cache=True)
