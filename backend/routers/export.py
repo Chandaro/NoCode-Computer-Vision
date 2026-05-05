@@ -22,13 +22,13 @@ UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
 _export_state: dict = {}
 
 
-def _do_export(run_id: int, model_path: str, fmt: str):
+def _do_export(run_id: int, model_path: str, fmt: str, imgsz: int = 640):
     key = f"{run_id}_{fmt}"
     _export_state[key] = {"status": "running", "error": "", "path": ""}
     try:
         from ultralytics import YOLO
         model   = YOLO(model_path)
-        out     = model.export(format=fmt, imgsz=640)
+        out     = model.export(format=fmt, imgsz=imgsz)
         out_str = str(out)
         _export_state[key] = {"status": "done", "error": "", "path": out_str}
         if fmt == "onnx":
@@ -77,7 +77,7 @@ def start_onnx(project_id: int, run_id: int, session: Session = Depends(get_sess
         return {"status": "done"}
     if _export_state.get(f"{run_id}_onnx", {}).get("status") == "running":
         return {"status": "running"}
-    threading.Thread(target=_do_export, args=(run_id, run.model_path, "onnx"), daemon=True).start()
+    threading.Thread(target=_do_export, args=(run_id, run.model_path, "onnx", run.imgsz), daemon=True).start()
     return {"status": "running"}
 
 
@@ -110,7 +110,7 @@ def start_tflite(project_id: int, run_id: int, session: Session = Depends(get_se
     run = _get_run(project_id, run_id, session)
     if _export_state.get(f"{run_id}_tflite", {}).get("status") == "running":
         return {"status": "running"}
-    threading.Thread(target=_do_export, args=(run_id, run.model_path, "tflite"), daemon=True).start()
+    threading.Thread(target=_do_export, args=(run_id, run.model_path, "tflite", run.imgsz), daemon=True).start()
     return {"status": "running"}
 
 
@@ -147,7 +147,7 @@ def start_tensorrt(project_id: int, run_id: int, session: Session = Depends(get_
     run = _get_run(project_id, run_id, session)
     if _export_state.get(f"{run_id}_engine", {}).get("status") == "running":
         return {"status": "running"}
-    threading.Thread(target=_do_export, args=(run_id, run.model_path, "engine"), daemon=True).start()
+    threading.Thread(target=_do_export, args=(run_id, run.model_path, "engine", run.imgsz), daemon=True).start()
     return {"status": "running"}
 
 

@@ -79,7 +79,7 @@ export default function Train() {
       if (msg.startsWith('__PROGRESS__:')) {
         const parts = msg.split(':')
         if (parts.length < 5) return
-        const [, ep, , m50, prec, rec] = parts
+        const [, ep, m50, prec, rec] = parts
         const epochNum = Number(ep.split('/')[0]), totalNum = Number(ep.split('/')[1])
         const mAP50Val = Number(m50), precVal = Number(prec), recVal = Number(rec)
         setProgress({ epoch: epochNum, total: totalNum, mAP50: mAP50Val, precision: precVal, recall: recVal })

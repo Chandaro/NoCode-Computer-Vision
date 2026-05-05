@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import Optional
-import os, json, shutil, threading, time, uuid
+import os, json, shutil, threading, time, uuid, random
 from datetime import datetime
 
 from database import get_session, DATABASE_URL
@@ -56,9 +56,17 @@ def _build_dataset(project_id: int, val_split: float, session: Session) -> str:
         os.makedirs(os.path.join(dataset_dir, "images", split), exist_ok=True)
         os.makedirs(os.path.join(dataset_dir, "labels", split), exist_ok=True)
 
-    images = session.exec(select(Image).where(Image.project_id == project_id)).all()
-    n_val  = max(1, int(len(images) * val_split))
-    val_ids = {img.id for img in images[:n_val]}
+    all_images = session.exec(select(Image).where(Image.project_id == project_id)).all()
+
+    # Only include images that have at least one annotation
+    images = [img for img in all_images
+              if session.exec(select(Annotation).where(Annotation.image_id == img.id)).first()]
+
+    # Random shuffle so val set is representative, not just the first N
+    shuffled = list(images)
+    random.shuffle(shuffled)
+    n_val   = max(1, int(len(shuffled) * val_split))
+    val_ids = {img.id for img in shuffled[:n_val]}
 
     for img in images:
         split = "val" if img.id in val_ids else "train"
@@ -185,10 +193,9 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
         )
 
         # ── Locate artifacts ──────────────────────────────────────────────
-        run_dir  = os.path.join(output_dir, "weights")
-        best_pt  = os.path.join(run_dir, "weights", "best.pt")
-        if not os.path.exists(best_pt):
-            best_pt = os.path.join(run_dir, "best.pt")
+        # model.train(project=output_dir, name="weights") saves to output_dir/weights/
+        run_dir = os.path.join(output_dir, "weights")
+        best_pt = os.path.join(run_dir, "best.pt")
 
         # ── Overall metrics ───────────────────────────────────────────────
         metrics = {}
