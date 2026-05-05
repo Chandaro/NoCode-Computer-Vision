@@ -327,7 +327,8 @@ class LauncherWindow(tk.Tk):
                         self._running = True
                         self._set_status("Server running", APP_URL,
                                          SUCCESS, ready=True)
-                        self.after(400, lambda: webbrowser.open(APP_URL))
+                        url = f"{APP_URL}/?_={int(time.time())}"
+                        self.after(400, lambda u=url: webbrowser.open(u))
                         return
             except Exception:
                 pass
