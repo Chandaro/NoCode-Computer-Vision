@@ -224,48 +224,22 @@ class LauncherWindow(tk.Tk):
                         return True
         return False
 
-    @staticmethod
-    def _find_node() -> str | None:
-        import shutil
-        # Try PATH first
-        node = shutil.which("node")
-        if node:
-            return node
-        # Common Windows install locations
-        candidates = [
-            r"C:\Program Files\nodejs\node.exe",
-            r"C:\Program Files (x86)\nodejs\node.exe",
-            os.path.expandvars(r"%APPDATA%\nvm\current\node.exe"),
-            os.path.expandvars(r"%ProgramFiles%\nodejs\node.exe"),
-        ]
-        # Also scan nvm directory
-        nvm_home = os.environ.get("NVM_HOME", "")
-        if nvm_home:
-            for entry in os.scandir(nvm_home) if os.path.isdir(nvm_home) else []:
-                p = os.path.join(entry.path, "node.exe")
-                if os.path.isfile(p):
-                    candidates.insert(0, p)
-        for c in candidates:
-            if os.path.isfile(c):
-                return c
-        return None
-
     def _build_frontend(self):
         self._set_status("Building UI…", "Compiling frontend, please wait", WARN)
-        node = self._find_node()
-        if not node:
-            return  # No node found — skip, old dist may still work
+        flags = subprocess.CREATE_NO_WINDOW if _IS_WIN else 0
         try:
+            # shell=True lets cmd.exe resolve npm/node via the system PATH,
+            # which pythonw doesn't inherit properly on Windows.
             subprocess.run(
-                [node, VITE_SCRIPT, "build"],
+                "npm run build",
                 cwd=FRONTEND,
+                shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                creationflags=(subprocess.CREATE_NO_WINDOW
-                               if platform.system() == "Windows" else 0),
+                creationflags=flags,
             )
         except Exception:
-            pass  # If build fails, continue anyway — old dist may still work
+            pass
 
     def _launch(self):
         if self._needs_rebuild():
