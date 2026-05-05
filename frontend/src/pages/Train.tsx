@@ -18,7 +18,7 @@ export default function Train() {
   const [epochs, setEpochs]       = useState(50)
   const [imgsz, setImgsz]         = useState(640)
   const [batch, setBatch]         = useState(16)
-  const [modelBase, setModelBase] = useState('yolov8n.pt')
+  const [modelBase, setModelBase] = useState('yolo11n.pt')
   const [valSplit, setValSplit]   = useState(0.2)
   const [showAug, setShowAug]     = useState(false)
 
@@ -163,11 +163,35 @@ export default function Train() {
 
             <Field label="Architecture">
               <Select value={modelBase} onChange={setModelBase}>
-                <option value="yolov8n.pt">YOLOv8 Nano</option>
-                <option value="yolov8s.pt">YOLOv8 Small</option>
-                <option value="yolov8m.pt">YOLOv8 Medium</option>
-                <option value="yolov8l.pt">YOLOv8 Large</option>
-                <option value="yolov8x.pt">YOLOv8 XLarge</option>
+                <optgroup label="YOLO11 (latest)">
+                  <option value="yolo11n.pt">YOLO11 Nano</option>
+                  <option value="yolo11s.pt">YOLO11 Small</option>
+                  <option value="yolo11m.pt">YOLO11 Medium</option>
+                  <option value="yolo11l.pt">YOLO11 Large</option>
+                  <option value="yolo11x.pt">YOLO11 XLarge</option>
+                </optgroup>
+                <optgroup label="YOLOv10">
+                  <option value="yolov10n.pt">YOLOv10 Nano</option>
+                  <option value="yolov10s.pt">YOLOv10 Small</option>
+                  <option value="yolov10m.pt">YOLOv10 Medium</option>
+                  <option value="yolov10b.pt">YOLOv10 Base</option>
+                  <option value="yolov10l.pt">YOLOv10 Large</option>
+                  <option value="yolov10x.pt">YOLOv10 XLarge</option>
+                </optgroup>
+                <optgroup label="YOLOv9">
+                  <option value="yolov9t.pt">YOLOv9 Tiny</option>
+                  <option value="yolov9s.pt">YOLOv9 Small</option>
+                  <option value="yolov9m.pt">YOLOv9 Medium</option>
+                  <option value="yolov9c.pt">YOLOv9 Compact</option>
+                  <option value="yolov9e.pt">YOLOv9 Extended</option>
+                </optgroup>
+                <optgroup label="YOLOv8">
+                  <option value="yolov8n.pt">YOLOv8 Nano</option>
+                  <option value="yolov8s.pt">YOLOv8 Small</option>
+                  <option value="yolov8m.pt">YOLOv8 Medium</option>
+                  <option value="yolov8l.pt">YOLOv8 Large</option>
+                  <option value="yolov8x.pt">YOLOv8 XLarge</option>
+                </optgroup>
               </Select>
             </Field>
 

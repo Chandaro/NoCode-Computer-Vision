@@ -22,7 +22,7 @@ class TrainConfig(BaseModel):
     epochs: int = 50
     imgsz: int = 640
     batch: int = 16
-    model_base: str = "yolov8n.pt"
+    model_base: str = "yolo11n.pt"
     val_split: float = 0.2
     # Augmentation params (YOLO defaults)
     fliplr: float = 0.5
@@ -164,6 +164,9 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
             _state[run_id]["epoch"] = ep
             _state[run_id]["map50"] = m50
             push(f"__PROGRESS__:{ep}/{tot}:{m50:.4f}:{prec:.4f}:{rec:.4f}")
+            # Honour stop requests between epochs
+            if _state[run_id].get("stop_requested"):
+                trainer.stop = True
 
         model.add_callback("on_train_epoch_end", on_epoch_end)
 
@@ -321,6 +324,37 @@ def download_model(project_id: int, run_id: int, session: Session = Depends(get_
         raise HTTPException(404, "Model file not found")
     return FileResponse(run.model_path, filename=f"model_run{run_id}.pt",
                         media_type="application/octet-stream")
+
+
+@router.post("/runs/{run_id}/stop")
+def stop_run(project_id: int, run_id: int, session: Session = Depends(get_session)):
+    run = session.get(TrainingRun, run_id)
+    if not run or run.project_id != project_id:
+        raise HTTPException(404, "Run not found")
+    if run_id in _state:
+        _state[run_id]["stop_requested"] = True
+    # Also mark as failed immediately so UI updates even before the epoch ends
+    if run.status == "running":
+        run.status = "stopped"
+        session.add(run)
+        session.commit()
+    return {"ok": True}
+
+
+@router.delete("/runs/{run_id}")
+def delete_run(project_id: int, run_id: int, session: Session = Depends(get_session)):
+    run = session.get(TrainingRun, run_id)
+    if not run or run.project_id != project_id:
+        raise HTTPException(404, "Run not found")
+    if run.status == "running":
+        raise HTTPException(400, "Stop the run before deleting it")
+    # Remove run directory from disk
+    output_dir = os.path.join(RUNS_DIR, f"train_{run_id}")
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir, ignore_errors=True)
+    session.delete(run)
+    session.commit()
+    return {"ok": True}
 
 
 def _run_to_out(r: TrainingRun) -> TrainingRunOut:
