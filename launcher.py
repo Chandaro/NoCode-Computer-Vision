@@ -16,9 +16,12 @@ except ImportError:
     _req = None
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-VENV_DIR = os.path.join(ROOT_DIR, "venv")
-BACKEND  = os.path.join(ROOT_DIR, "backend")
+ROOT_DIR    = os.path.dirname(os.path.abspath(__file__))
+VENV_DIR    = os.path.join(ROOT_DIR, "venv")
+BACKEND     = os.path.join(ROOT_DIR, "backend")
+FRONTEND    = os.path.join(ROOT_DIR, "frontend")
+DIST_INDEX  = os.path.join(FRONTEND, "dist", "index.html")
+VITE_SCRIPT = os.path.join(FRONTEND, "node_modules", ".bin", "vite")
 APP_URL  = "http://localhost:8000"
 HEALTH   = f"{APP_URL}/health"
 
@@ -86,7 +89,7 @@ class LauncherWindow(tk.Tk):
         self._dot_job     = None
 
         self._build_ui()
-        threading.Thread(target=self._start_server, daemon=True).start()
+        threading.Thread(target=self._launch, daemon=True).start()
 
     def _center(self):
         self.update_idletasks()
@@ -207,6 +210,38 @@ class LauncherWindow(tk.Tk):
                 self.pbar.stop()
                 self.pbar.config(mode="determinate", value=0)
         self.after(0, _do)
+
+    # ── Frontend build ────────────────────────────────────────────────────────
+    def _needs_rebuild(self) -> bool:
+        if not os.path.exists(DIST_INDEX):
+            return True
+        dist_mtime = os.path.getmtime(DIST_INDEX)
+        src_dir = os.path.join(FRONTEND, "src")
+        for root, _, files in os.walk(src_dir):
+            for f in files:
+                if f.endswith((".tsx", ".ts", ".css", ".js")):
+                    if os.path.getmtime(os.path.join(root, f)) > dist_mtime:
+                        return True
+        return False
+
+    def _build_frontend(self):
+        self._set_status("Building UI…", "Compiling frontend, please wait", WARN)
+        try:
+            subprocess.run(
+                ["node", VITE_SCRIPT, "build"],
+                cwd=FRONTEND,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=(subprocess.CREATE_NO_WINDOW
+                               if platform.system() == "Windows" else 0),
+            )
+        except Exception:
+            pass  # If build fails, continue anyway — old dist may still work
+
+    def _launch(self):
+        if self._needs_rebuild():
+            self._build_frontend()
+        self._start_server()
 
     # ── Server lifecycle ──────────────────────────────────────────────────────
     def _kill_existing(self, port: int):

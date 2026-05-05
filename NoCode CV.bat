@@ -37,23 +37,6 @@ if %errorlevel% neq 0 (
 )
 
 :: ═══════════════════════════════════════════════════════════════════════════════
-::  Rebuild frontend if source is newer than the dist bundle
-:: ═══════════════════════════════════════════════════════════════════════════════
-
-if exist "%~dp0frontend\node_modules\.bin\vite.cmd" (
-    set NEED_BUILD=0
-    if not exist "%~dp0frontend\dist\index.html" set NEED_BUILD=1
-    if %NEED_BUILD%==0 (
-        powershell -NoProfile -Command "$d=(Get-Item '%~dp0frontend\dist\index.html').LastWriteTime; $s=(Get-ChildItem '%~dp0frontend\src' -Recurse -Include *.tsx,*.ts,*.css | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime; if($s -gt $d){exit 1}else{exit 0}" >nul 2>&1
-        if errorlevel 1 set NEED_BUILD=1
-    )
-    if %NEED_BUILD%==1 (
-        echo  Rebuilding frontend…
-        cmd /c "cd /d "%~dp0frontend" && "%~dp0frontend\node_modules\.bin\vite.cmd" build" >nul 2>&1
-    )
-)
-
-:: ═══════════════════════════════════════════════════════════════════════════════
 ::  Launch (prefer pythonw to suppress the console window)
 :: ═══════════════════════════════════════════════════════════════════════════════
 
