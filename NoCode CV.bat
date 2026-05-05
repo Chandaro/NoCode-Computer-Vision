@@ -44,11 +44,8 @@ if exist "%~dp0frontend\node_modules\.bin\vite.cmd" (
     set NEED_BUILD=0
     if not exist "%~dp0frontend\dist\index.html" set NEED_BUILD=1
     if %NEED_BUILD%==0 (
-        powershell -NoProfile -Command ^
-            "$dist = (Get-Item '%~dp0frontend\dist\index.html').LastWriteTime;" ^
-            "$src  = (Get-ChildItem '%~dp0frontend\src' -Recurse -Include *.tsx,*.ts,*.css | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime;" ^
-            "if ($src -gt $dist) { exit 1 } else { exit 0 }" >nul 2>&1
-        if %errorlevel% neq 0 set NEED_BUILD=1
+        powershell -NoProfile -Command "$d=(Get-Item '%~dp0frontend\dist\index.html').LastWriteTime; $s=(Get-ChildItem '%~dp0frontend\src' -Recurse -Include *.tsx,*.ts,*.css | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime; if($s -gt $d){exit 1}else{exit 0}" >nul 2>&1
+        if errorlevel 1 set NEED_BUILD=1
     )
     if %NEED_BUILD%==1 (
         echo  Rebuilding frontend…
