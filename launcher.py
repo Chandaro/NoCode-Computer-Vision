@@ -212,32 +212,46 @@ class LauncherWindow(tk.Tk):
         self.after(0, _do)
 
     # ── Frontend build ────────────────────────────────────────────────────────
+    _BUILD_HASH_FILE = os.path.join(FRONTEND, "dist", ".build_hash")
+
+    def _git_hash(self) -> str:
+        try:
+            r = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=ROOT_DIR, capture_output=True, text=True,
+                creationflags=(subprocess.CREATE_NO_WINDOW if _IS_WIN else 0),
+            )
+            return r.stdout.strip()
+        except Exception:
+            return ""
+
     def _needs_rebuild(self) -> bool:
         if not os.path.exists(DIST_INDEX):
             return True
-        dist_mtime = os.path.getmtime(DIST_INDEX)
-        src_dir = os.path.join(FRONTEND, "src")
-        for root, _, files in os.walk(src_dir):
-            for f in files:
-                if f.endswith((".tsx", ".ts", ".css", ".js")):
-                    if os.path.getmtime(os.path.join(root, f)) > dist_mtime:
-                        return True
-        return False
+        current = self._git_hash()
+        if not current:
+            return False  # Can't determine git hash — skip
+        try:
+            with open(self._BUILD_HASH_FILE) as f:
+                built = f.read().strip()
+            return built != current
+        except FileNotFoundError:
+            return True
 
     def _build_frontend(self):
         self._set_status("Building UI…", "Compiling frontend, please wait", WARN)
-        flags = subprocess.CREATE_NO_WINDOW if _IS_WIN else 0
         try:
-            # shell=True lets cmd.exe resolve npm/node via the system PATH,
-            # which pythonw doesn't inherit properly on Windows.
-            subprocess.run(
+            result = subprocess.run(
                 "npm run build",
-                cwd=FRONTEND,
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=flags,
+                cwd=FRONTEND, shell=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=(subprocess.CREATE_NO_WINDOW if _IS_WIN else 0),
             )
+            if result.returncode == 0:
+                h = self._git_hash()
+                if h:
+                    with open(self._BUILD_HASH_FILE, "w") as f:
+                        f.write(h)
         except Exception:
             pass
 
