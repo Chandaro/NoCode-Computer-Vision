@@ -306,14 +306,30 @@ Registered external models are stored on disk inside the app's `external_models/
 
 ## Installation
 
-Run `Install NoCode CV.bat` to open the setup wizard. It handles the following automatically:
+**Windows**
 
-- Detects Python on your system (supports `python`, `python3`, and the `py` launcher)
-- Creates an isolated virtual environment
+Run `Install NoCode CV.bat` to open the setup wizard.
+
+**macOS / Linux**
+
+```bash
+bash "Install NoCode CV.sh"
+```
+
+Both launchers open the same Tkinter setup wizard and handle the following automatically:
+
+- Detects Python 3.9+ on your system
+- Creates an isolated virtual environment (or reuses your existing Python if you choose)
 - Detects your GPU and installs the correct PyTorch build (CUDA 11.8, 12.x, or CPU fallback)
 - Installs all backend dependencies
+- Writes a platform-appropriate launcher script (`NoCode CV.bat` on Windows, `NoCode CV.sh` on macOS/Linux)
 
-After installation, launch the app with `NoCode CV.bat` and open `http://localhost:8000` in a browser. The first install takes roughly five minutes. Subsequent launches are immediate.
+After installation:
+
+- **Windows** — double-click `NoCode CV.bat` or the desktop shortcut
+- **macOS / Linux** — run `bash "NoCode CV.sh"` in a terminal
+
+Then open `http://localhost:8000` in a browser. The first install takes roughly five minutes due to the PyTorch download. Subsequent launches are immediate.
 
 ---
 

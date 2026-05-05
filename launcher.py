@@ -159,7 +159,16 @@ class LauncherWindow(tk.Tk):
                                 stdout=subprocess.DEVNULL,
                                 stderr=subprocess.DEVNULL,
                             )
+            elif platform.system() == "Darwin":
+                # macOS: fuser is not installed by default; use lsof + kill
+                subprocess.run(
+                    f"lsof -ti:{port} | xargs kill -9 2>/dev/null || true",
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
             else:
+                # Linux
                 subprocess.run(
                     f"fuser -k {port}/tcp",
                     shell=True,

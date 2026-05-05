@@ -1,7 +1,9 @@
 """
 NoCode CV Trainer – GUI Installer
 Requires: Python 3.9+ (tkinter is built-in)
-Run via:  Install NoCode CV.bat  (or  python installer.py)
+Run via:  Install NoCode CV.bat  (Windows)
+          bash 'Install NoCode CV.sh'  (macOS / Linux)
+          python installer.py  (any platform)
 """
 
 import tkinter as tk
@@ -27,6 +29,15 @@ if platform.system() == "Windows":
 else:
     VENV_PY  = os.path.join(VENV_DIR, "bin", "python")
     VENV_PIP = os.path.join(VENV_DIR, "bin", "pip")
+
+# ─── Platform helpers ─────────────────────────────────────────────────────────
+_IS_WIN = platform.system() == "Windows"
+_IS_MAC = platform.system() == "Darwin"
+
+# Font stacks: use OS-native fonts so the UI looks correct on every platform
+FONT_UI    = "Segoe UI"       if _IS_WIN else ("SF Pro Text"   if _IS_MAC else "Helvetica")
+FONT_EMOJI = "Segoe UI Emoji" if _IS_WIN else ("Apple Color Emoji" if _IS_MAC else "Noto Color Emoji")
+FONT_MONO  = "Courier New"
 
 # ─── Colour palette (matches the app dark theme) ──────────────────────────────
 BG      = "#0d0d0f"
@@ -94,14 +105,16 @@ def get_free_gb(path):
         return 999
 
 
-def create_desktop_shortcut(launcher_bat):
-    """Create a Windows .lnk desktop shortcut via PowerShell."""
+def create_desktop_shortcut(launcher_file):
+    """Create a desktop shortcut. Windows only — skipped silently on other platforms."""
+    if not _IS_WIN:
+        return False
     desktop = os.path.join(os.path.expanduser("~"), "Desktop")
     lnk     = os.path.join(desktop, f"{APP_NAME}.lnk")
     ps = (
         f'$ws = New-Object -ComObject WScript.Shell;'
         f'$s  = $ws.CreateShortcut("{lnk}");'
-        f'$s.TargetPath  = "{launcher_bat}";'
+        f'$s.TargetPath  = "{launcher_file}";'
         f'$s.WorkingDirectory = "{ROOT_DIR}";'
         f'$s.Description = "{APP_NAME}";'
         f'$s.Save()'
@@ -1273,9 +1286,9 @@ class Installer(tk.Tk):
 
         step("write_launcher", do_launcher)
 
-        # 7. Desktop shortcut
+        # 7. Desktop shortcut (Windows only)
         def do_shortcut():
-            if not want_shortcut:
+            if not want_shortcut or not _IS_WIN:
                 return True, "", "skip"
             launcher_bat = os.path.join(ROOT_DIR, "NoCode CV.bat")
             ok = create_desktop_shortcut(launcher_bat)
@@ -1294,14 +1307,18 @@ class Installer(tk.Tk):
 
     # ── Write launcher files ──────────────────────────────────────────────────
     def _write_launcher_files(self, system_py=None):
-        """Write NoCode CV.bat.
-        system_py: if set, the bat uses this absolute Python path directly
-                   instead of looking for ./venv/Scripts/pythonw.exe.
+        """Write the platform-appropriate launcher script.
+        system_py: if set, the launcher uses this absolute Python path directly
+                   instead of the venv interpreter.
         """
-        self._log("  Writing NoCode CV.bat…")
+        if _IS_WIN:
+            self._write_bat_launcher(system_py)
+        else:
+            self._write_sh_launcher(system_py)
 
+    def _write_bat_launcher(self, system_py=None):
+        self._log("  Writing NoCode CV.bat…")
         if system_py:
-            # System-Python mode: hardcode the path that was used to install
             py_path = system_py.replace("\\", "\\\\")
             bat = (
                 "@echo off\r\n"
@@ -1310,7 +1327,6 @@ class Installer(tk.Tk):
                 f"start \"\" \"{py_path}\" \"%~dp0launcher.py\"\r\n"
             )
         else:
-            # venv mode: use the venv python (relative path, portable)
             bat = (
                 "@echo off\r\n"
                 "title NoCode CV Trainer\r\n"
@@ -1326,6 +1342,28 @@ class Installer(tk.Tk):
         with open(bat_path, "w", encoding="utf-8") as f:
             f.write(bat)
         self._log(f"  Written: {bat_path}")
+
+    def _write_sh_launcher(self, system_py=None):
+        self._log("  Writing NoCode CV.sh…")
+        if system_py:
+            py_line = f'"{system_py}" "$DIR/launcher.py"'
+        else:
+            py_line = '"$DIR/venv/bin/python" launcher.py'
+        sh = (
+            "#!/usr/bin/env bash\n"
+            "# NoCode CV Trainer — Launcher\n"
+            'DIR="$(cd "$(dirname "$0")" && pwd)"\n'
+            "cd \"$DIR\"\n"
+            f"{py_line}\n"
+        )
+        sh_path = os.path.join(ROOT_DIR, "NoCode CV.sh")
+        with open(sh_path, "w", encoding="utf-8") as f:
+            f.write(sh)
+        try:
+            os.chmod(sh_path, 0o755)
+        except Exception:
+            pass
+        self._log(f"  Written: {sh_path}")
 
     # ──────────────────────────────────────────────────────────────────────────
     # PAGE 4 – Done
@@ -1358,8 +1396,11 @@ class Installer(tk.Tk):
 
         tk.Frame(c, bg=BORDER, height=1).pack(fill="x", pady=16)
 
+        launcher_name = "NoCode CV.bat" if _IS_WIN else "NoCode CV.sh"
+        launch_hint = (f"double-click  '{launcher_name}'  or the desktop shortcut"
+                       if _IS_WIN else f"run:  bash '{launcher_name}'")
         info_lines = [
-            "• To launch later:  double-click  'NoCode CV.bat'  or the desktop shortcut",
+            f"• To launch later:  {launch_hint}",
             "• App runs at:  http://localhost:8000",
             "• Logs are streamed live during training",
         ]
@@ -1369,11 +1410,14 @@ class Installer(tk.Tk):
 
     def _launch_app(self):
         launcher = os.path.join(ROOT_DIR, "launcher.py")
-        venv_pyw = os.path.join(VENV_DIR, "Scripts", "pythonw.exe")
-        if os.path.isfile(venv_pyw):
-            subprocess.Popen([venv_pyw, launcher], cwd=ROOT_DIR)
+        if _IS_WIN:
+            # Prefer pythonw.exe (no console window) on Windows
+            venv_pyw = os.path.join(VENV_DIR, "Scripts", "pythonw.exe")
+            py = venv_pyw if os.path.isfile(venv_pyw) else (
+                VENV_PY if os.path.isfile(VENV_PY) else sys.executable)
         else:
-            subprocess.Popen([sys.executable, launcher], cwd=ROOT_DIR)
+            py = VENV_PY if os.path.isfile(VENV_PY) else sys.executable
+        subprocess.Popen([py, launcher], cwd=ROOT_DIR)
         self.after(1500, self.destroy)
 
 
