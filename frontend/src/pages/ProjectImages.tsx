@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu } from 'lucide-react'
+import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Badge, Empty } from '../components/ui'
 import { Image as ImageIcon } from 'lucide-react'
+
+interface ImportResult {
+  imported: number
+  annotated: number
+  skipped_duplicates: number
+  classes_updated: boolean
+}
 
 export default function ProjectImages() {
   const { id } = useParams<{ id: string }>()
@@ -12,9 +19,12 @@ export default function ProjectImages() {
   const [images, setImages]     = useState<ImageItem[]>([])
   const [loading, setLoading]   = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileRef   = useRef<HTMLInputElement>(null)
+  const importRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
   const load = async () => {
@@ -37,6 +47,19 @@ export default function ProjectImages() {
       await api.post(`/projects/${projectId}/images`, fd)
       await load()
     } finally { setLoading(false); e.target.value = '' }
+  }
+
+  const handleImportYolo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const fd = new FormData()
+      Array.from(e.target.files).forEach(f => fd.append('files', f))
+      const res = await api.post(`/projects/${projectId}/images/import-yolo`, fd)
+      setImportResult(res.data)
+      await load()
+    } finally { setImporting(false); e.target.value = '' }
   }
 
   const deleteImage = async (imgId: number) => {
@@ -143,12 +166,39 @@ export default function ProjectImages() {
         <Btn variant="ghost" size="sm" href={`/api/projects/${projectId}/export/dataset?format=coco`}>↓ COCO</Btn>
       </div>
 
+      {/* Import result banner */}
+      {importResult && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14,
+          padding: '10px 16px', borderRadius: 8,
+          background: 'rgba(59,165,93,0.1)', border: '1px solid rgba(59,165,93,0.3)',
+        }}>
+          <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>
+            ✓ Import complete
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--text2)' }}>
+            {importResult.imported} image{importResult.imported !== 1 ? 's' : ''} imported
+            · {importResult.annotated} annotated
+            {importResult.skipped_duplicates > 0 && ` · ${importResult.skipped_duplicates} duplicates skipped`}
+            {importResult.classes_updated && ' · class names updated from classes.txt'}
+          </span>
+          <button onClick={() => setImportResult(null)}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none',
+              color: 'var(--text3)', cursor: 'pointer', padding: 2 }}>
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
       {/* Upload + select bar */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
         {!selectMode ? (
           <>
             <Btn variant="primary" onClick={() => fileRef.current?.click()} disabled={loading}>
               <Upload size={13} /> {loading ? 'Uploading…' : 'Upload Images'}
+            </Btn>
+            <Btn variant="secondary" onClick={() => importRef.current?.click()} disabled={importing}>
+              <FolderInput size={13} /> {importing ? 'Importing…' : 'Import YOLO Dataset'}
             </Btn>
             {images.length > 0 && (
               <Btn variant="secondary" onClick={() => setSelectMode(true)}>
@@ -191,6 +241,7 @@ export default function ProjectImages() {
           </>
         )}
         <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleUpload} />
+        <input ref={importRef} type="file" multiple accept="image/*,.txt" style={{ display: 'none' }} onChange={handleImportYolo} />
       </div>
 
       {images.length === 0 ? (

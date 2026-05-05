@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 from typing import List
 from pydantic import BaseModel
-import shutil, uuid, os, hashlib
+import shutil, uuid, os, hashlib, json
 from PIL import Image as PILImage
 
 from database import get_session
@@ -146,6 +146,119 @@ def delete_image(project_id: int, image_id: int, session: Session = Depends(get_
     if os.path.exists(path):
         os.remove(path)
     return {"ok": True}
+
+
+@router.post("/import-yolo")
+async def import_yolo_dataset(
+    project_id: int,
+    files: List[UploadFile] = File(...),
+    session: Session = Depends(get_session),
+):
+    """
+    Import a YOLO-format dataset in one step.
+
+    Upload images and their matching .txt label files together.
+    Each label line: class_id x_center y_center width height  (normalized 0–1)
+    Optionally include classes.txt to auto-populate the project's class list.
+    """
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    image_files: dict[str, UploadFile] = {}
+    label_files: dict[str, str] = {}
+    classes_list: list[str] | None = None
+
+    for file in files:
+        name = file.filename or ""
+        stem = os.path.splitext(name)[0]
+        ext  = os.path.splitext(name)[1].lower()
+
+        if ext in (".jpg", ".jpeg", ".png", ".bmp", ".webp"):
+            image_files[stem] = file
+        elif ext == ".txt":
+            raw = (await file.read()).decode("utf-8", errors="replace")
+            if stem.lower() == "classes":
+                classes_list = [l.strip() for l in raw.splitlines() if l.strip()]
+            else:
+                label_files[stem] = raw
+
+    # Auto-populate class names from classes.txt if provided
+    if classes_list is not None:
+        project.classes_json = json.dumps(classes_list)
+        session.add(project)
+        session.commit()
+
+    imported = 0
+    annotated_count = 0
+    skipped = 0
+
+    for stem, img_file in image_files.items():
+        ext = os.path.splitext(img_file.filename or "")[1].lower()
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        dest = os.path.join(UPLOAD_DIR, unique_name)
+
+        img_file.file.seek(0)
+        with open(dest, "wb") as f:
+            shutil.copyfileobj(img_file.file, f)
+
+        md5 = _md5(dest)
+        existing = session.exec(
+            select(Image).where(Image.project_id == project_id, Image.md5_hash == md5)
+        ).first()
+        if existing:
+            os.remove(dest)
+            skipped += 1
+            continue
+
+        file_size = os.path.getsize(dest)
+        w, h, channels, color_space, is_corrupt = _inspect_image(dest)
+
+        img_record = Image(
+            project_id=project_id,
+            filename=unique_name,
+            original_name=img_file.filename or unique_name,
+            md5_hash=md5, width=w, height=h,
+            channels=channels, color_space=color_space,
+            is_corrupt=is_corrupt, file_size=file_size,
+        )
+        session.add(img_record)
+        session.commit()
+        session.refresh(img_record)
+        imported += 1
+
+        # Match by stem — try exact, then case-insensitive fallback
+        label_content = label_files.get(stem) or label_files.get(stem.lower())
+        if label_content:
+            ann_count = 0
+            for line in label_content.splitlines():
+                parts = line.strip().split()
+                if len(parts) < 5:
+                    continue
+                try:
+                    ann = Annotation(
+                        image_id=img_record.id,
+                        class_id=int(parts[0]),
+                        shape_type="bbox",
+                        x_center=float(parts[1]),
+                        y_center=float(parts[2]),
+                        width=float(parts[3]),
+                        height=float(parts[4]),
+                    )
+                    session.add(ann)
+                    ann_count += 1
+                except ValueError:
+                    continue
+            if ann_count:
+                annotated_count += 1
+            session.commit()
+
+    return {
+        "imported": imported,
+        "annotated": annotated_count,
+        "skipped_duplicates": skipped,
+        "classes_updated": classes_list is not None,
+    }
 
 
 class BulkDeleteBody(BaseModel):
