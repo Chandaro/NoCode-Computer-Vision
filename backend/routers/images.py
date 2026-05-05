@@ -170,7 +170,8 @@ async def import_yolo_dataset(
     classes_list: list[str] | None = None
 
     for file in files:
-        name = file.filename or ""
+        # Strip subdirectory prefix (e.g. "images/dog.jpg" → "dog.jpg")
+        name = os.path.basename(file.filename or "")
         stem = os.path.splitext(name)[0]
         ext  = os.path.splitext(name)[1].lower()
 

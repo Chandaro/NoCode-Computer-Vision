@@ -26,8 +26,9 @@ export default function ProjectImages() {
   const [editingClasses, setEditingClasses] = useState(false)
   const [classInput, setClassInput] = useState('')
   const [savingClasses, setSavingClasses] = useState(false)
-  const fileRef   = useRef<HTMLInputElement>(null)
-  const importRef = useRef<HTMLInputElement>(null)
+  const fileRef        = useRef<HTMLInputElement>(null)
+  const importRef      = useRef<HTMLInputElement>(null)
+  const importFolderRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
   const load = async () => {
@@ -274,8 +275,11 @@ export default function ProjectImages() {
             <Btn variant="primary" onClick={() => fileRef.current?.click()} disabled={loading}>
               <Upload size={13} /> {loading ? 'Uploading…' : 'Upload Images'}
             </Btn>
-            <Btn variant="secondary" onClick={() => importRef.current?.click()} disabled={importing}>
-              <FolderInput size={13} /> {importing ? 'Importing…' : 'Import YOLO Dataset'}
+            <Btn variant="secondary" onClick={() => importFolderRef.current?.click()} disabled={importing}>
+              <FolderInput size={13} /> {importing ? 'Importing…' : 'Import YOLO Folder'}
+            </Btn>
+            <Btn variant="ghost" onClick={() => importRef.current?.click()} disabled={importing}>
+              <FolderInput size={13} /> {importing ? 'Importing…' : 'Import YOLO Files'}
             </Btn>
             {images.length > 0 && (
               <Btn variant="secondary" onClick={() => setSelectMode(true)}>
@@ -319,6 +323,8 @@ export default function ProjectImages() {
         )}
         <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleUpload} />
         <input ref={importRef} type="file" multiple accept="image/*,.txt" style={{ display: 'none' }} onChange={handleImportYolo} />
+        {/* @ts-ignore */}
+        <input ref={importFolderRef} type="file" multiple webkitdirectory="" style={{ display: 'none' }} onChange={handleImportYolo} />
       </div>
 
       {images.length === 0 ? (
