@@ -1,6 +1,6 @@
 # NoCode CV Trainer
 
-A self-hosted desktop application for Windows that lets you annotate images, train computer vision models, and evaluate results without writing code. Everything runs locally — no data leaves the machine.
+A self-hosted desktop application for Windows and macOS that lets you annotate images, train computer vision models, and evaluate results without writing code. Everything runs locally — no data leaves the machine.
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue?style=flat-square)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -333,72 +333,6 @@ Then open `http://localhost:8000` in a browser. The first install takes roughly 
 
 ---
 
-## Manual Setup
-
-**Clone the repository**
-
-```bash
-git clone https://github.com/Chandaro/NoCode-Computer-Vision.git
-cd NoCode-Computer-Vision
-```
-
-**Create a virtual environment**
-
-```bash
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# macOS / Linux
-source venv/bin/activate
-```
-
-**Install PyTorch**
-
-Choose the build that matches your hardware:
-
-```bash
-# CPU only
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-
-# CUDA 11.8  (GTX 10xx / RTX 20xx)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-
-# CUDA 12.x  (RTX 30/40 series)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-
-# CUDA 12.5+ (RTX 40/50 series)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-```
-
-**Install backend dependencies**
-
-```bash
-pip install -r backend/requirements.txt \
-    --prefer-binary \
-    --extra-index-url https://download.pytorch.org/whl/cpu
-```
-
-**Rebuild the frontend** (optional — a pre-built bundle is already included in `frontend/dist/`)
-
-```bash
-cd frontend
-npm install && npm run build
-cd ..
-```
-
-**Start the server**
-
-```bash
-cd backend
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-Open `http://localhost:8000`.
-
----
-
 ## Requirements
 
 | | Minimum | Recommended |
@@ -411,76 +345,6 @@ Open `http://localhost:8000`.
 AMD and Intel GPUs are not supported for CUDA acceleration and fall back to CPU training.
 
 YOLOv8 downloads pretrained base weights (~130 MB) on first use. All subsequent runs are fully offline.
-
----
-
-## Project Structure
-
-```
-NoCode-Computer-Vision/
-├── Install NoCode CV.bat     setup wizard, run once
-├── NoCode CV.bat             application launcher
-├── installer.py              Tkinter GUI installer
-├── launcher.py               starts the backend and opens the browser
-│
-├── backend/
-│   ├── main.py               FastAPI entry point
-│   ├── database.py           SQLite schema via SQLModel
-│   ├── requirements.txt      Python dependencies
-│   └── routers/
-│       ├── images.py         image upload and storage
-│       ├── training.py       YOLOv8 training, SSE log streaming
-│       ├── classification.py PyTorch classification training
-│       ├── custom.py         custom CNN builder and training
-│       ├── infer.py          inference on trained models
-│       ├── analytics.py      dataset statistics
-│       ├── evaluation.py     metrics and evaluation
-│       └── export.py         YOLO and COCO export
-│
-└── frontend/
-    ├── dist/                 pre-built bundle, served by FastAPI
-    └── src/
-        ├── pages/            React page components
-        └── components/       shared UI components
-```
-
-The frontend is a React + TypeScript SPA served as static files directly by FastAPI — one process, one port.
-
----
-
-## Dependencies
-
-**Backend**
-
-| Package | Version | Purpose |
-|---|---|---|
-| FastAPI | 0.115 | HTTP API and static file serving |
-| Uvicorn | 0.32 | ASGI server |
-| SQLModel | 0.0.22 | ORM and SQLite persistence |
-| Ultralytics | 8.4 | YOLOv8 training and inference |
-| PyTorch | 2.x | Classification model training |
-| Pillow | 11.x | Image I/O and preprocessing |
-
-**Frontend**
-
-| Package | Version | Purpose |
-|---|---|---|
-| React | 18 | UI framework |
-| TypeScript | 5.x | Type checking |
-| Vite | 6.x | Build tooling |
-| Three.js | 0.x | 3D CNN architecture visualisation |
-| HTML5 Canvas | — | Annotation drawing engine |
-
----
-
-## Contributing
-
-Fork the repository, create a branch off `main`, and open a pull request. Keep each PR to a single change or fix.
-
-```bash
-git checkout -b your-branch-name
-git push origin your-branch-name
-```
 
 ---
 
