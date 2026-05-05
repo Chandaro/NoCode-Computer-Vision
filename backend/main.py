@@ -19,7 +19,7 @@ from routers import projects, images, annotations, training
 from routers import analytics, evaluation, export, classification, infer, external_models
 from routers import custom as custom_router
 
-app = FastAPI(title="NoCode CV Trainer")
+app = FastAPI(title="NoCode CV Trainer", max_upload_size=500 * 1024 * 1024)  # 500 MB per batch
 
 app.add_middleware(
     CORSMiddleware,

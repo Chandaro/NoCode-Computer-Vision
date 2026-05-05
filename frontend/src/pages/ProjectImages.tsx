@@ -21,6 +21,7 @@ export default function ProjectImages() {
   const [deleting, setDeleting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
   const [editingClasses, setEditingClasses] = useState(false)
@@ -80,16 +81,65 @@ export default function ProjectImages() {
   }
 
   const handleImportYolo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.length) return
+    const allFiles = Array.from(e.target.files || [])
+    if (!allFiles.length) return
+    e.target.value = ''
     setImporting(true)
     setImportResult(null)
+    setImportProgress(null)
+
     try {
-      const fd = new FormData()
-      Array.from(e.target.files).forEach(f => fd.append('files', f))
-      const res = await api.post(`/projects/${projectId}/images/import-yolo`, fd)
-      setImportResult(res.data)
+      // Separate files by type using just the basename
+      const imageMap = new Map<string, File>()
+      const labelMap = new Map<string, File>()
+      let classesFile: File | null = null
+
+      for (const f of allFiles) {
+        const base = f.name
+        const dot  = base.lastIndexOf('.')
+        const stem = dot > 0 ? base.slice(0, dot).toLowerCase() : base.toLowerCase()
+        const ext  = dot > 0 ? base.slice(dot + 1).toLowerCase() : ''
+        if (['jpg','jpeg','png','bmp','webp'].includes(ext)) {
+          imageMap.set(stem, f)
+        } else if (ext === 'txt') {
+          if (stem === 'classes') classesFile = f
+          else labelMap.set(stem, f)
+        }
+      }
+
+      // Pair images with their labels
+      const pairs = Array.from(imageMap.entries()).map(([stem, img]) => ({
+        img, label: labelMap.get(stem) ?? null
+      }))
+
+      const BATCH = 50
+      const total = pairs.length
+      let imported = 0, annotated = 0, skipped = 0, classesUpdated = false
+
+      setImportProgress({ current: 0, total })
+
+      for (let i = 0; i < pairs.length; i += BATCH) {
+        const chunk = pairs.slice(i, i + BATCH)
+        const fd = new FormData()
+        if (i === 0 && classesFile) fd.append('files', classesFile, 'classes.txt')
+        for (const { img, label } of chunk) {
+          fd.append('files', img, img.name)
+          if (label) fd.append('files', label, label.name)
+        }
+        const res = await api.post(`/projects/${projectId}/images/import-yolo`, fd)
+        imported += res.data.imported
+        annotated += res.data.annotated
+        skipped   += res.data.skipped_duplicates
+        if (res.data.classes_updated) classesUpdated = true
+        setImportProgress({ current: Math.min(i + BATCH, total), total })
+      }
+
+      setImportResult({ imported, annotated, skipped_duplicates: skipped, classes_updated: classesUpdated })
       await load()
-    } finally { setImporting(false); e.target.value = '' }
+    } finally {
+      setImporting(false)
+      setImportProgress(null)
+    }
   }
 
   const deleteImage = async (imgId: number) => {
@@ -142,6 +192,29 @@ export default function ProjectImages() {
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+      {/* Import progress overlay */}
+      {importing && importProgress && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+            padding: 32, width: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Importing YOLO Dataset…</p>
+            <div style={{ background: 'var(--surface2)', borderRadius: 6, height: 8, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 6, background: 'var(--accent)',
+                width: `${Math.round(importProgress.current / importProgress.total * 100)}%`,
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text2)' }}>
+              <span>{importProgress.current.toLocaleString()} of {importProgress.total.toLocaleString()} files</span>
+              <span>{Math.round(importProgress.current / importProgress.total * 100)}%</span>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text3)' }}>Please wait, uploading in batches…</p>
+          </div>
+        </div>
+      )}
       <PageHeader
         back={() => navigate('/')}
         title={project?.name ?? '…'}
