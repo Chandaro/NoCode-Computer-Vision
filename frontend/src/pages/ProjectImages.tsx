@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput } from 'lucide-react'
+import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Badge, Empty } from '../components/ui'
 import { Image as ImageIcon } from 'lucide-react'
@@ -23,6 +23,9 @@ export default function ProjectImages() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
+  const [editingClasses, setEditingClasses] = useState(false)
+  const [classInput, setClassInput] = useState('')
+  const [savingClasses, setSavingClasses] = useState(false)
   const fileRef   = useRef<HTMLInputElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
@@ -47,6 +50,32 @@ export default function ProjectImages() {
       await api.post(`/projects/${projectId}/images`, fd)
       await load()
     } finally { setLoading(false); e.target.value = '' }
+  }
+
+  const saveClasses = async (newClasses: string[]) => {
+    if (!project) return
+    setSavingClasses(true)
+    try {
+      await api.put(`/projects/${projectId}`, {
+        name: project.name,
+        description: project.description,
+        classes: newClasses,
+      })
+      await load()
+    } finally { setSavingClasses(false) }
+  }
+
+  const addClass = () => {
+    const t = classInput.trim()
+    if (!t || project?.classes.includes(t)) return
+    const updated = [...(project?.classes ?? []), t]
+    setClassInput('')
+    saveClasses(updated)
+  }
+
+  const removeClass = (idx: number) => {
+    const updated = (project?.classes ?? []).filter((_, i) => i !== idx)
+    saveClasses(updated)
   }
 
   const handleImportYolo = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -132,18 +161,66 @@ export default function ProjectImages() {
         </>}
       />
 
-      {/* Class tags */}
-      {project?.classes && project.classes.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
-          {project.classes.map((c, i) => (
-            <span key={i} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4,
-              background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)',
-              fontFamily: 'JetBrains Mono, monospace' }}>
-              {i}: {c}
-            </span>
-          ))}
+      {/* Class labels editor */}
+      <div style={{ marginBottom: 20, padding: '12px 16px', borderRadius: 8,
+        background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: editingClasses || (project?.classes.length ?? 0) > 0 ? 10 : 0 }}>
+          <Tags size={13} style={{ color: 'var(--text3)' }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Class labels</span>
+          <span style={{ fontSize: 11, color: 'var(--text3)', marginLeft: 2 }}>
+            {project?.classes.length ? `${project.classes.length} defined` : 'none defined'}
+          </span>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => setEditingClasses(v => !v)}
+            style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none',
+              cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}>
+            {editingClasses ? 'Done' : 'Edit'}
+          </button>
         </div>
-      )}
+
+        {/* Tag list */}
+        {(project?.classes.length ?? 0) > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: editingClasses ? 10 : 0 }}>
+            {project!.classes.map((c, i) => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                background: 'var(--surface2)', color: 'var(--text2)',
+                border: '1px solid var(--border)', fontFamily: 'monospace' }}>
+                <span style={{ color: 'var(--text3)' }}>{i}:</span> {c}
+                {editingClasses && (
+                  <button onClick={() => removeClass(i)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text3)',
+                      cursor: 'pointer', padding: 0, lineHeight: 1, fontSize: 13,
+                      display: 'flex', alignItems: 'center' }}>
+                    <X size={10} />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Add input — visible when editing */}
+        {editingClasses && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              value={classInput}
+              onChange={e => setClassInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addClass()}
+              placeholder="Add class name…"
+              style={{ flex: 1, fontSize: 12, padding: '5px 10px', borderRadius: 6,
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                color: 'var(--text)', outline: 'none' }}
+            />
+            <Btn variant="secondary" size="sm" onClick={addClass} disabled={savingClasses || !classInput.trim()}>
+              Add
+            </Btn>
+            <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+              or auto-populate by importing a dataset with <code style={{ fontFamily: 'monospace' }}>classes.txt</code>
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Filter + export bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>

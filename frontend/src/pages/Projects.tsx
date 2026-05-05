@@ -2,34 +2,27 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, X, ChevronRight } from 'lucide-react'
 import api, { type Project } from '../api'
-import { Btn, TextInput, Field, Badge } from '../components/ui'
+import { Btn, TextInput, Field } from '../components/ui'
 
 export default function Projects() {
-  const [projects, setProjects]     = useState<Project[]>([])
-  const [showForm, setShowForm]     = useState(false)
-  const [name, setName]             = useState('')
-  const [desc, setDesc]             = useState('')
-  const [classInput, setClassInput] = useState('')
-  const [classes, setClasses]       = useState<string[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  const [showForm, setShowForm] = useState(false)
+  const [name, setName]         = useState('')
+  const [desc, setDesc]         = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError]           = useState('')
+  const [error, setError]       = useState('')
   const navigate = useNavigate()
 
   const load = () => api.get('/projects').then(r => setProjects(r.data)).catch(() => setError('Failed to load projects. Is the server running?'))
   useEffect(() => { load() }, [])
-
-  const addClass = () => {
-    const t = classInput.trim()
-    if (t && !classes.includes(t)) { setClasses([...classes, t]); setClassInput('') }
-  }
 
   const submit = async () => {
     if (!name.trim() || submitting) return
     setSubmitting(true)
     setError('')
     try {
-      await api.post('/projects', { name: name.trim(), description: desc, classes })
-      setName(''); setDesc(''); setClasses([]); setShowForm(false); load()
+      await api.post('/projects', { name: name.trim(), description: desc, classes: [] })
+      setName(''); setDesc(''); setShowForm(false); load()
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? 'Failed to create project.')
     } finally { setSubmitting(false) }
@@ -138,25 +131,12 @@ export default function Projects() {
               <Field label="Description">
                 <TextInput value={desc} onChange={setDesc} placeholder="Optional" />
               </Field>
-              <Field label="Detection classes">
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <TextInput value={classInput} onChange={setClassInput} placeholder="e.g. smoke"
-                    onKeyDown={e => e.key === 'Enter' && addClass()} />
-                  <Btn variant="secondary" onClick={addClass} size="sm" style={{ flexShrink: 0 }}>Add</Btn>
-                </div>
-                {classes.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {classes.map((c, i) => (
-                      <Badge key={i} color="blue">
-                        {c}
-                        <button onClick={() => setClasses(classes.filter((_, j) => j !== i))}
-                          style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer',
-                            padding: 0, lineHeight: 1, marginLeft: 2, fontSize: 14 }}>×</button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </Field>
+
+              <p style={{ fontSize: 12, color: 'var(--text3)', margin: '-4px 0 0',
+                lineHeight: 1.5, padding: '8px 10px', borderRadius: 6,
+                background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+                Class labels are added on the project page — either manually or auto-populated when you import a YOLO dataset with a <code style={{ fontFamily: 'monospace', fontSize: 11 }}>classes.txt</code>.
+              </p>
 
               {error && (
                 <p style={{ fontSize: 12, color: 'var(--red, #f87171)', marginTop: -4 }}>{error}</p>
