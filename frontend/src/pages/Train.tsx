@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Zap, Download, RefreshCw, ChevronDown, ChevronUp, BarChart2, FileCode, Loader, Cpu } from 'lucide-react'
+import { Zap, Download, RefreshCw, ChevronDown, ChevronUp, BarChart2, FileCode, Loader, Cpu, Square, Trash2 } from 'lucide-react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import api, { type Project, type TrainingRun } from '../api'
 import { Card, Field, Select, Slider, Btn, Badge, PageHeader, LogTerminal, ProgressBar } from '../components/ui'
@@ -41,6 +41,8 @@ export default function Train() {
   const [tfliteStatus,   setTfliteStatus]   = useState<Record<number, string>>({})
   const [trtStatus,      setTrtStatus]      = useState<Record<number, string>>({})
   const [resumeRunId,    setResumeRunId]     = useState('')
+  const [stoppingRun,    setStoppingRun]    = useState<Set<number>>(new Set())
+  const [deletingRun,    setDeletingRun]    = useState<Set<number>>(new Set())
 
   const logRef = useRef<HTMLDivElement>(null)
   const esRef  = useRef<EventSource | null>(null)
@@ -111,9 +113,31 @@ export default function Train() {
 
   const exportOnnx = (runId: number) => startExport(runId, 'onnx', setOnnxStatus)
 
+  const stopRun = async (runId: number) => {
+    setStoppingRun(prev => new Set(prev).add(runId))
+    try {
+      await api.post(`/projects/${projectId}/training/runs/${runId}/stop`)
+      await loadRuns()
+    } finally {
+      setStoppingRun(prev => { const s = new Set(prev); s.delete(runId); return s })
+    }
+  }
+
+  const deleteRun = async (runId: number) => {
+    if (!confirm(`Delete Run #${runId} and all its files? This cannot be undone.`)) return
+    setDeletingRun(prev => new Set(prev).add(runId))
+    try {
+      await api.delete(`/projects/${projectId}/training/runs/${runId}`)
+      setRuns(prev => prev.filter(r => r.id !== runId))
+    } finally {
+      setDeletingRun(prev => { const s = new Set(prev); s.delete(runId); return s })
+    }
+  }
+
   const statusBadge = (s: string) => {
     if (s === 'done')    return <Badge color="green">Done</Badge>
     if (s === 'failed')  return <Badge color="red">Failed</Badge>
+    if (s === 'stopped') return <Badge color="gray">Stopped</Badge>
     if (s === 'running') return <Badge color="yellow">Running</Badge>
     return <Badge color="gray">Pending</Badge>
   }
@@ -319,6 +343,22 @@ export default function Train() {
                             <span style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'JetBrains Mono, monospace' }}>
                               {(run.results.mAP50 * 100).toFixed(1)}%
                             </span>
+                          )}
+                          {run.status === 'running' && (
+                            <Btn variant="ghost" size="sm" disabled={stoppingRun.has(run.id)} onClick={() => stopRun(run.id)}
+                              style={{ color: 'var(--red, #f87171)' }}>
+                              {stoppingRun.has(run.id)
+                                ? <><Loader size={10} className="animate-spin" /> Stopping</>
+                                : <><Square size={10} /> Stop</>}
+                            </Btn>
+                          )}
+                          {run.status !== 'running' && (
+                            <Btn variant="ghost" size="sm" disabled={deletingRun.has(run.id)} onClick={() => deleteRun(run.id)}
+                              style={{ color: 'var(--text3)' }}>
+                              {deletingRun.has(run.id)
+                                ? <Loader size={10} className="animate-spin" />
+                                : <Trash2 size={10} />}
+                            </Btn>
                           )}
                           {run.status === 'done' && (
                             <Btn variant="ghost" size="sm" onClick={() => navigate(`/projects/${projectId}/eval/${run.id}`)}>
