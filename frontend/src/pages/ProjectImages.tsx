@@ -89,27 +89,49 @@ export default function ProjectImages() {
     setImportProgress(null)
 
     try {
-      // Separate files by type using just the basename
-      const imageMap = new Map<string, File>()
-      const labelMap = new Map<string, File>()
+      const imageMap = new Map<string, File>()  // matchKey → file
+      const labelMap = new Map<string, File>()  // matchKey → file
       let classesFile: File | null = null
 
+      const matchKey = (f: File): string => {
+        // Use webkitRelativePath when available (folder upload)
+        const rel = ((f as any).webkitRelativePath as string || f.name).replace(/\\/g, '/')
+        const parts = rel.split('/')
+        const filename = parts[parts.length - 1]
+        const dot = filename.lastIndexOf('.')
+        const stem = (dot > 0 ? filename.slice(0, dot) : filename).toLowerCase()
+
+        // Match by subpath AFTER the images/ or labels/ folder, so nested dirs stay aligned
+        // e.g. "dataset/images/train/fire001.jpg" → key "train/fire001"
+        //      "dataset/labels/train/fire001.txt" → key "train/fire001"
+        const imgIdx = parts.findIndex(p => p.toLowerCase() === 'images')
+        const lblIdx = parts.findIndex(p => p.toLowerCase() === 'labels')
+        const baseIdx = imgIdx >= 0 ? imgIdx : lblIdx >= 0 ? lblIdx : -1
+        if (baseIdx >= 0 && baseIdx < parts.length - 1) {
+          const sub = parts.slice(baseIdx + 1, -1)  // subdirs between images/ and filename
+          return [...sub, stem].join('/').toLowerCase()
+        }
+        return stem
+      }
+
       for (const f of allFiles) {
-        const base = f.name
-        const dot  = base.lastIndexOf('.')
-        const stem = dot > 0 ? base.slice(0, dot).toLowerCase() : base.toLowerCase()
-        const ext  = dot > 0 ? base.slice(dot + 1).toLowerCase() : ''
+        const filename = f.name
+        const dot = filename.lastIndexOf('.')
+        const ext = (dot > 0 ? filename.slice(dot + 1) : '').toLowerCase()
+        const stem = (dot > 0 ? filename.slice(0, dot) : filename).toLowerCase()
+        const key = matchKey(f)
+
         if (['jpg','jpeg','png','bmp','webp'].includes(ext)) {
-          imageMap.set(stem, f)
+          imageMap.set(key, f)
         } else if (ext === 'txt') {
           if (stem === 'classes') classesFile = f
-          else labelMap.set(stem, f)
+          else labelMap.set(key, f)
         }
       }
 
-      // Pair images with their labels
-      const pairs = Array.from(imageMap.entries()).map(([stem, img]) => ({
-        img, label: labelMap.get(stem) ?? null
+      // Pair each image with its matching label using the same key
+      const pairs = Array.from(imageMap.entries()).map(([key, img]) => ({
+        img, label: labelMap.get(key) ?? null
       }))
 
       const BATCH = 50

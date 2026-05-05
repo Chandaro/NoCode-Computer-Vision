@@ -172,14 +172,14 @@ async def import_yolo_dataset(
     for file in files:
         # Strip subdirectory prefix (e.g. "images/dog.jpg" → "dog.jpg")
         name = os.path.basename(file.filename or "")
-        stem = os.path.splitext(name)[0]
+        stem = os.path.splitext(name)[0].lower()   # lowercase for consistent matching
         ext  = os.path.splitext(name)[1].lower()
 
         if ext in (".jpg", ".jpeg", ".png", ".bmp", ".webp"):
             image_files[stem] = file
         elif ext == ".txt":
             raw = (await file.read()).decode("utf-8", errors="replace")
-            if stem.lower() == "classes":
+            if stem == "classes":
                 classes_list = [l.strip() for l in raw.splitlines() if l.strip()]
             else:
                 label_files[stem] = raw
@@ -228,8 +228,8 @@ async def import_yolo_dataset(
         session.refresh(img_record)
         imported += 1
 
-        # Match by stem — try exact, then case-insensitive fallback
-        label_content = label_files.get(stem) or label_files.get(stem.lower())
+        # Stem is already lowercased — direct lookup
+        label_content = label_files.get(stem)
         if label_content:
             ann_count = 0
             for line in label_content.splitlines():
