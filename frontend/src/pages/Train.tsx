@@ -22,16 +22,31 @@ export default function Train() {
   const [valSplit, setValSplit]   = useState(0.2)
   const [showAug, setShowAug]     = useState(false)
 
+  // Optimizer
+  const [optimizer,     setOptimizer]     = useState('auto')
+  const [lr0,           setLr0]           = useState(0.01)
+  const [lrf,           setLrf]           = useState(0.01)
+  const [momentum,      setMomentum]      = useState(0.937)
+  const [weightDecay,   setWeightDecay]   = useState(0.0005)
+  const [warmupEpochs,  setWarmupEpochs]  = useState(3.0)
+  const [patience,      setPatience]      = useState(50)
+  // Geometric aug
   const [fliplr,    setFliplr]    = useState(0.5)
   const [flipud,    setFlipud]    = useState(0.0)
   const [degrees,   setDegrees]   = useState(0.0)
   const [translate, setTranslate] = useState(0.1)
   const [scale,     setScale]     = useState(0.5)
+  const [shear,     setShear]     = useState(0.0)
+  const [perspective, setPerspective] = useState(0.0)
+  // Color aug
   const [hsvH,      setHsvH]      = useState(0.015)
   const [hsvS,      setHsvS]      = useState(0.7)
   const [hsvV,      setHsvV]      = useState(0.4)
+  // Mixing / cutout
   const [mosaic,    setMosaic]    = useState(1.0)
   const [mixup,     setMixup]     = useState(0.0)
+  const [copyPaste, setCopyPaste] = useState(0.0)
+  const [erasing,   setErasing]   = useState(0.4)
 
   const [streaming, setStreaming]   = useState(false)
   const [logs, setLogs]             = useState<string[]>([])
@@ -65,8 +80,11 @@ export default function Train() {
     setLogs([]); setChartData([]); setProgress(null)
     const res = await api.post(`/projects/${projectId}/training/start`, {
       epochs, imgsz, batch, model_base: modelBase, val_split: valSplit,
-      fliplr, flipud, degrees, translate, scale,
-      hsv_h: hsvH, hsv_s: hsvS, hsv_v: hsvV, mosaic, mixup,
+      optimizer, lr0, lrf, momentum, weight_decay: weightDecay,
+      warmup_epochs: warmupEpochs, patience,
+      fliplr, flipud, degrees, translate, scale, shear, perspective,
+      hsv_h: hsvH, hsv_s: hsvS, hsv_v: hsvV,
+      mosaic, mixup, copy_paste: copyPaste, erasing,
       resume_run_id: resumeRunId ? Number(resumeRunId) : null,
     })
     const run: TrainingRun = res.data
@@ -204,6 +222,26 @@ export default function Train() {
             <Slider label="Batch Size" value={batch} onChange={setBatch} min={1} max={64} step={1} />
             <Slider label="Validation Split" value={valSplit} onChange={setValSplit} min={0.1} max={0.4}
               format={v => `${Math.round(v * 100)}%`} />
+            <Slider label="Early Stop Patience" value={patience} onChange={setPatience} min={0} max={100} step={1}
+              format={v => v === 0 ? 'Off' : `${v} ep`} />
+
+            <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginTop: 4 }}>Optimizer</p>
+            <Field label="Algorithm">
+              <Select value={optimizer} onChange={setOptimizer}>
+                <option value="auto">Auto (recommended)</option>
+                <option value="SGD">SGD</option>
+                <option value="Adam">Adam</option>
+                <option value="AdamW">AdamW</option>
+                <option value="NAdam">NAdam</option>
+                <option value="RAdam">RAdam</option>
+                <option value="RMSProp">RMSProp</option>
+              </Select>
+            </Field>
+            <Slider label="Learning Rate (lr0)" value={lr0} onChange={setLr0} min={0.0001} max={0.1} step={0.0001} format={v => v.toFixed(4)} />
+            <Slider label="Final LR (lrf)" value={lrf} onChange={setLrf} min={0.0001} max={0.1} step={0.0001} format={v => v.toFixed(4)} />
+            <Slider label="Momentum" value={momentum} onChange={setMomentum} min={0.6} max={0.98} step={0.001} format={v => v.toFixed(3)} />
+            <Slider label="Weight Decay" value={weightDecay} onChange={setWeightDecay} min={0} max={0.001} step={0.00001} format={v => v.toFixed(5)} />
+            <Slider label="Warmup Epochs" value={warmupEpochs} onChange={setWarmupEpochs} min={0} max={10} step={0.5} format={v => `${v}`} />
           </Card>
 
           {/* Augmentation */}
@@ -221,11 +259,13 @@ export default function Train() {
                 <div style={{ marginTop: 12 }}>
                   <p style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Geometric</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <Slider label="Flip LR"   value={fliplr}    onChange={setFliplr}    min={0} max={1} />
-                    <Slider label="Flip UD"   value={flipud}    onChange={setFlipud}    min={0} max={1} />
-                    <Slider label="Rotation"  value={degrees}   onChange={setDegrees}   min={0} max={45} step={1} format={v => `${v}°`} />
-                    <Slider label="Translate" value={translate} onChange={setTranslate} min={0} max={0.5} />
-                    <Slider label="Scale"     value={scale}     onChange={setScale}     min={0} max={0.9} />
+                    <Slider label="Flip LR"      value={fliplr}      onChange={setFliplr}      min={0} max={1} />
+                    <Slider label="Flip UD"      value={flipud}      onChange={setFlipud}      min={0} max={1} />
+                    <Slider label="Rotation"     value={degrees}     onChange={setDegrees}     min={0} max={180} step={1} format={v => `${v}°`} />
+                    <Slider label="Translate"    value={translate}   onChange={setTranslate}   min={0} max={0.5} />
+                    <Slider label="Scale"        value={scale}       onChange={setScale}       min={0} max={0.9} />
+                    <Slider label="Shear"        value={shear}       onChange={setShear}       min={0} max={45} step={0.5} format={v => `${v}°`} />
+                    <Slider label="Perspective"  value={perspective} onChange={setPerspective} min={0} max={0.001} step={0.0001} format={v => v.toFixed(4)} />
                   </div>
                 </div>
                 <div>
@@ -237,10 +277,12 @@ export default function Train() {
                   </div>
                 </div>
                 <div>
-                  <p style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Mixing</p>
+                  <p style={{ fontSize: 10, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Mixing & Cutout</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <Slider label="Mosaic" value={mosaic} onChange={setMosaic} min={0} max={1} />
-                    <Slider label="Mixup"  value={mixup}  onChange={setMixup}  min={0} max={1} />
+                    <Slider label="Mosaic"      value={mosaic}     onChange={setMosaic}     min={0} max={1} />
+                    <Slider label="Mixup"       value={mixup}      onChange={setMixup}      min={0} max={1} />
+                    <Slider label="Copy-Paste"  value={copyPaste}  onChange={setCopyPaste}  min={0} max={1} />
+                    <Slider label="Erasing"     value={erasing}    onChange={setErasing}    min={0} max={0.9} />
                   </div>
                 </div>
               </div>

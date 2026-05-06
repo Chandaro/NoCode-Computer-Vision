@@ -24,17 +24,31 @@ class TrainConfig(BaseModel):
     batch: int = 16
     model_base: str = "yolo11n.pt"
     val_split: float = 0.2
-    # Augmentation params (YOLO defaults)
+    # Optimizer
+    optimizer: str = "auto"       # auto | SGD | Adam | AdamW | NAdam | RAdam | RMSProp
+    lr0: float = 0.01
+    lrf: float = 0.01
+    momentum: float = 0.937
+    weight_decay: float = 0.0005
+    warmup_epochs: float = 3.0
+    patience: int = 50            # early stopping patience (0 = off)
+    # Geometric augmentation
     fliplr: float = 0.5
     flipud: float = 0.0
     degrees: float = 0.0
     translate: float = 0.1
     scale: float = 0.5
+    shear: float = 0.0
+    perspective: float = 0.0
+    # Color augmentation
     hsv_h: float = 0.015
     hsv_s: float = 0.7
     hsv_v: float = 0.4
+    # Mixing / cutout
     mosaic: float = 1.0
     mixup: float = 0.0
+    copy_paste: float = 0.0
+    erasing: float = 0.4
     resume_run_id: Optional[int] = None
 
 
@@ -181,15 +195,26 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
         output_dir = os.path.join(RUNS_DIR, f"train_{run_id}")
         os.makedirs(output_dir, exist_ok=True)
 
-        push(f"🚀 Training started — {config.epochs} epochs, imgsz={config.imgsz}, batch={config.batch}")
+        push(f"🚀 Training started — {config.epochs} epochs, imgsz={config.imgsz}, "
+             f"batch={config.batch}, optimizer={config.optimizer}, lr0={config.lr0}")
         results = model.train(
             data=yaml_path, epochs=config.epochs, imgsz=config.imgsz,
             batch=config.batch, project=output_dir, name="weights",
             exist_ok=True, verbose=False, device=device,
+            # Optimizer
+            optimizer=config.optimizer, lr0=config.lr0, lrf=config.lrf,
+            momentum=config.momentum, weight_decay=config.weight_decay,
+            warmup_epochs=config.warmup_epochs,
+            patience=config.patience,
+            # Geometric augmentation
             fliplr=config.fliplr, flipud=config.flipud, degrees=config.degrees,
             translate=config.translate, scale=config.scale,
+            shear=config.shear, perspective=config.perspective,
+            # Color augmentation
             hsv_h=config.hsv_h, hsv_s=config.hsv_s, hsv_v=config.hsv_v,
+            # Mixing / cutout
             mosaic=config.mosaic, mixup=config.mixup,
+            copy_paste=config.copy_paste, erasing=config.erasing,
         )
 
         # ── Locate artifacts ──────────────────────────────────────────────
