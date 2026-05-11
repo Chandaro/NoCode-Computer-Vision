@@ -74,7 +74,11 @@ async def pose_image_infer_url(
         from fastapi import HTTPException
         raise HTTPException(400, f"Failed to fetch image: {exc}")
 
-    img = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
+    try:
+        img = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
+    except Exception as exc:
+        from fastapi import HTTPException as _HTTPException
+        raise _HTTPException(400, f"URL did not return a valid image: {exc}")
     arr = np.array(img)
 
     device = "0" if torch.cuda.is_available() else "cpu"

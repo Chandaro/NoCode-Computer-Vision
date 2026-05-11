@@ -116,7 +116,10 @@ async def detection_infer_url(
 
     import io, torch, numpy as np
     from PIL import Image as PILImage
-    img = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
+    try:
+        img = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
+    except Exception as exc:
+        raise HTTPException(400, f"URL did not return a valid image: {exc}")
     arr = np.array(img)
 
     from ultralytics import YOLO
@@ -529,11 +532,13 @@ def _download_from_url(url: str) -> tuple:
     os.makedirs(dl_dir, exist_ok=True)
 
     ydl_opts = {
-        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best",
+        # Prefer a single pre-merged file so ffmpeg is not required.
+        # Falls back to best single-file if the mp4 variant isn't available.
+        "format": "best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best",
         "outtmpl": os.path.join(dl_dir, "video.%(ext)s"),
-        "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
+        "abort_on_error": False,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
