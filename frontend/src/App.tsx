@@ -8,6 +8,8 @@ import Analytics from './pages/Analytics'
 import Evaluation from './pages/Evaluation'
 import Classification from './pages/Classification'
 import CustomModel from './pages/CustomModel'
+import Webcam from './pages/Webcam'
+import Pose from './pages/Pose'
 
 function Nav() {
   return (
@@ -49,6 +51,8 @@ export default function App() {
             <Route path="/projects/:id/eval/:runId"       element={<Evaluation />} />
             <Route path="/projects/:id/classify"          element={<Classification />} />
             <Route path="/projects/:id/custom"            element={<CustomModel />} />
+            <Route path="/projects/:id/webcam"            element={<Webcam />} />
+            <Route path="/projects/:id/pose"              element={<Pose />} />
           </Routes>
         </main>
       </div>

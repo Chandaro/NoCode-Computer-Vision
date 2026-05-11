@@ -8,6 +8,8 @@ aiofiles==24.1.0
 
 # ─── Computer Vision ──────────────────────────────────────────────────────────
 ultralytics==8.4.41
+opencv-python>=4.8.0
+yt-dlp>=2024.1.0
 # torchvision is pulled in automatically by ultralytics (do NOT add it here — the
 # installer installs the correct CUDA build separately and pins it via constraints)
 

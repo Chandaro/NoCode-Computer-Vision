@@ -416,12 +416,15 @@ class Installer(tk.Tk):
 
         # Feature cards
         features = [
-            (ACCENT,  "🖼",  "Annotation Studio",    "Bounding box, polygon & point tools with undo / redo"),
-            (SUCCESS, "⚡",  "YOLOv8 Training",       "Real-time training logs, augmentation control"),
-            (WARN,    "🔬",  "Evaluation & Inference", "mAP metrics, per-class breakdown, live inference"),
-            (INFO,    "🏷",  "Classification",         "ResNet / MobileNet / EfficientNet transfer learning"),
-            (PURPLE,  "🧱",  "Custom CNN Builder",     "Design your own neural network architecture visually"),
-            (SUCCESS, "📦",  "Dataset Export",         "YOLO & COCO zip export in one click"),
+            (ACCENT,  "🖼",  "Annotation Studio",       "Bounding box, polygon & point tools with undo / redo"),
+            (SUCCESS, "⚡",  "YOLO Training",            "Real-time training logs, augmentation preview, seg/det models"),
+            (WARN,    "🔬",  "Evaluation & Inference",   "mAP metrics, per-class breakdown, image & URL inference"),
+            (INFO,    "🏷",  "Classification",            "ResNet / MobileNet / EfficientNet transfer learning"),
+            (PURPLE,  "🧱",  "Custom CNN Builder",        "Design your own neural network architecture visually"),
+            (SUCCESS, "📦",  "Dataset Export",            "YOLO & COCO zip export in one click"),
+            (INFO,    "📹",  "Video Inference + Tracking","Run YOLO on video files or URLs (YouTube, TikTok, etc.)"),
+            (ACCENT,  "🎯",  "Pose Estimation",           "COCO 17-keypoint skeleton detection on image / video / webcam"),
+            (SUCCESS, "📷",  "Live Webcam Inference",     "Real-time detection overlay at ~7 FPS on any webcam"),
         ]
 
         for accent_col, icon, title, desc in features:

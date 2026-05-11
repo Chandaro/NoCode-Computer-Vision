@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlmodel import Session, select
 from pydantic import BaseModel
-import os, json, shutil, threading, time
+import os, json, shutil, threading, time, random
 from datetime import datetime
 
 from database import get_session, DATABASE_URL
@@ -31,6 +31,30 @@ class RunBody(BaseModel):
     epochs: int = 20
     batch: int = 32
     lr: float = 0.001
+    val_split: float = 0.2
+    patience: int = 0           # early stop; 0 = disabled
+    # Optimizer
+    optimizer: str = "Adam"     # Adam | AdamW | SGD
+    weight_decay: float = 0.0
+    momentum: float = 0.9
+    warmup_epochs: int = 0
+    # LR Scheduler
+    lr_scheduler: str = "cosine"  # cosine | step | none
+    step_size: int = 10
+    step_gamma: float = 0.1
+    # Regularisation
+    label_smoothing: float = 0.0
+    # Augmentation
+    fliplr: float = 0.5
+    flipud: float = 0.0
+    degrees: float = 0.0
+    translate: float = 0.0
+    scale: float = 0.0
+    brightness: float = 0.2
+    contrast: float = 0.2
+    saturation: float = 0.2
+    erasing: float = 0.0
+    mixup: float = 0.0
 
 
 class ConfigOut(BaseModel):
@@ -153,7 +177,8 @@ def get_run(project_id: int, run_id: int, session: Session = Depends(get_session
 # ── Dataset builder ────────────────────────────────────────────────────────────
 
 def _build_custom_dataset(project_id: int, run_id: int, classes: list,
-                           input_h: int, input_w: int, session: Session) -> tuple[str, int, dict]:
+                           input_h: int, input_w: int,
+                           val_split: float, session: Session) -> tuple[str, int, dict]:
     """Build ImageFolder layout resized to input_h×input_w.
     Returns (dataset_dir, total_skipped, skip_reason_counts).
     """
@@ -163,14 +188,15 @@ def _build_custom_dataset(project_id: int, run_id: int, classes: list,
     if os.path.exists(dataset_dir):
         shutil.rmtree(dataset_dir)
 
-    images = session.exec(select(Image).where(Image.project_id == project_id)).all()
+    images = list(session.exec(select(Image).where(Image.project_id == project_id)).all())
+    random.shuffle(images)
 
     for split in ["train", "val"]:
         for cls in classes:
             safe = cls.replace("/", "_").replace("\\", "_")
             os.makedirs(os.path.join(dataset_dir, split, safe), exist_ok=True)
 
-    n_val = max(1, int(len(images) * 0.2))
+    n_val = max(1, int(len(images) * val_split))
     val_ids = {img.id for img in images[:n_val]}
 
     reasons = {"no_annotation": 0, "class_id_out_of_range": 0, "file_not_found": 0, "corrupt": 0}
@@ -293,17 +319,22 @@ def _build_torch_model(layers: list, input_h: int, input_w: int, num_classes: in
 
 # ── Training thread ────────────────────────────────────────────────────────────
 
-def _run_custom_training(run_id: int, project_id: int, config_id: int,
-                          epochs: int, batch: int, lr: float):
+def _run_custom_training(run_id: int, project_id: int, body: RunBody):
     import torch
     import torch.nn as nn
     import torchvision.transforms as T
     import torchvision.datasets as D
     from torch.utils.data import DataLoader
+    from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR, StepLR
     from sqlmodel import create_engine, Session as S
 
+    epochs    = body.epochs
+    batch     = body.batch
+    lr        = body.lr
+    config_id = body.config_id
+
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-    _custom_state[run_id] = {"logs": [], "done": False}
+    _custom_state[run_id] = {"logs": [], "done": False, "stop_requested": False}
 
     def push(msg: str):
         _custom_state[run_id]["logs"].append(msg)
@@ -327,7 +358,7 @@ def _run_custom_training(run_id: int, project_id: int, config_id: int,
 
             push("Building dataset…")
             dataset_dir, skipped, reasons, placed = _build_custom_dataset(
-                project_id, run_id, classes, input_h, input_w, session
+                project_id, run_id, classes, input_h, input_w, body.val_split, session
             )
             push(f"Dataset ready — {placed} images placed, {skipped} skipped")
             if reasons["no_annotation"] > 0:
@@ -359,15 +390,44 @@ def _run_custom_training(run_id: int, project_id: int, config_id: int,
         device = torch.device("cuda" if use_cuda else "cpu")
         push(f"Device: {device}  |  Classes: {len(classes)}  |  Input: {input_h}x{input_w}")
 
-        # Transforms
-        tf = T.Compose([
+        # ── Augmentation transforms ────────────────────────────────────────
+        aug = [T.Resize((input_h, input_w))]
+        if body.fliplr > 0:
+            aug.append(T.RandomHorizontalFlip(p=body.fliplr))
+        if body.flipud > 0:
+            aug.append(T.RandomVerticalFlip(p=body.flipud))
+        affine_kw: dict = {}
+        if body.degrees > 0:
+            affine_kw["degrees"] = body.degrees
+        if body.translate > 0:
+            affine_kw["translate"] = (body.translate, body.translate)
+        if body.scale > 0:
+            affine_kw["scale"] = (1 - body.scale, 1 + body.scale)
+        if affine_kw:
+            affine_kw.setdefault("degrees", 0)
+            aug.append(T.RandomAffine(**affine_kw))
+        if body.brightness > 0 or body.contrast > 0 or body.saturation > 0:
+            aug.append(T.ColorJitter(
+                brightness=body.brightness,
+                contrast=body.contrast,
+                saturation=body.saturation,
+            ))
+        aug.extend([
+            T.ToTensor(),
+            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ])
+        if body.erasing > 0:
+            aug.append(T.RandomErasing(p=body.erasing))
+
+        train_tf = T.Compose(aug)
+        val_tf   = T.Compose([
             T.Resize((input_h, input_w)),
             T.ToTensor(),
             T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
 
-        train_ds = D.ImageFolder(os.path.join(dataset_dir, "train"), transform=tf)
-        val_ds   = D.ImageFolder(os.path.join(dataset_dir, "val"),   transform=tf)
+        train_ds = D.ImageFolder(os.path.join(dataset_dir, "train"), transform=train_tf)
+        val_ds   = D.ImageFolder(os.path.join(dataset_dir, "val"),   transform=val_tf)
 
         if len(train_ds) == 0:
             raise ValueError("No training images found — annotate more images")
@@ -386,25 +446,75 @@ def _run_custom_training(run_id: int, project_id: int, config_id: int,
         n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         push(f"Model built — {n_params:,} trainable parameters")
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        criterion = nn.CrossEntropyLoss()
+        # ── Optimizer ─────────────────────────────────────────────────────
+        opt_name = body.optimizer.lower()
+        if opt_name == "sgd":
+            optim = torch.optim.SGD(
+                model.parameters(), lr=lr,
+                momentum=body.momentum, weight_decay=body.weight_decay)
+        elif opt_name == "adamw":
+            optim = torch.optim.AdamW(
+                model.parameters(), lr=lr, weight_decay=body.weight_decay)
+        else:
+            optim = torch.optim.Adam(
+                model.parameters(), lr=lr, weight_decay=body.weight_decay)
 
+        # ── LR scheduler ──────────────────────────────────────────────────
+        wu = max(0, min(body.warmup_epochs, epochs - 1))
+        sched_name = body.lr_scheduler.lower()
+
+        if sched_name == "step":
+            base_sched = StepLR(optim, step_size=max(1, body.step_size), gamma=body.step_gamma)
+        elif sched_name == "none":
+            base_sched = None
+        else:  # cosine (default)
+            base_sched = CosineAnnealingLR(optim, T_max=max(1, epochs - wu), eta_min=lr * 0.01)
+
+        if wu > 0 and base_sched is not None:
+            warmup_sched = LinearLR(optim, start_factor=0.01, total_iters=wu)
+            scheduler    = SequentialLR(optim, schedulers=[warmup_sched, base_sched],
+                                        milestones=[wu])
+        else:
+            scheduler = base_sched
+
+        criterion = nn.CrossEntropyLoss(
+            label_smoothing=max(0.0, min(0.5, body.label_smoothing)))
         run_dir   = os.path.join(RUNS_DIR, f"custom_train_{run_id}")
         os.makedirs(run_dir, exist_ok=True)
         best_acc  = 0.0
         best_path = os.path.join(run_dir, "best.pth")
+        patience_counter = 0
 
-        push(f"Training started — {epochs} epochs, batch={batch}, lr={lr}")
+        push(f"Training — {epochs} ep  {body.optimizer}  lr={lr}  "
+             f"sched={body.lr_scheduler}  wd={body.weight_decay}  "
+             f"smooth={body.label_smoothing:.2f}"
+             + (f"  warmup={wu} ep" if wu > 0 else "")
+             + (f"  early-stop patience={body.patience}" if body.patience > 0 else ""))
 
         for epoch in range(1, epochs + 1):
             model.train()
+            train_loss = 0.0
             for imgs, labels in train_dl:
                 imgs, labels = imgs.to(device), labels.to(device)
-                optimizer.zero_grad()
-                out  = model(imgs)
-                loss = criterion(out, labels)
-                loss.backward()
-                optimizer.step()
+
+                # Mixup
+                if body.mixup > 0 and torch.rand(1).item() < body.mixup:
+                    lam = float(torch.distributions.Beta(
+                        torch.tensor(0.4), torch.tensor(0.4)).sample())
+                    idx  = torch.randperm(imgs.size(0), device=device)
+                    imgs = lam * imgs + (1 - lam) * imgs[idx]
+                    loss = lam * criterion(model(imgs), labels) + \
+                           (1 - lam) * criterion(model(imgs), labels[idx])
+                    optim.zero_grad(); loss.backward(); optim.step()
+                else:
+                    optim.zero_grad()
+                    loss = criterion(model(imgs), labels)
+                    loss.backward(); optim.step()
+                train_loss += loss.item()
+
+            if scheduler is not None:
+                scheduler.step()
+            current_lr = optim.param_groups[0]["lr"]
 
             model.eval()
             correct = total = 0
@@ -412,23 +522,90 @@ def _run_custom_training(run_id: int, project_id: int, config_id: int,
             with torch.no_grad():
                 for imgs, labels in val_dl:
                     imgs, labels = imgs.to(device), labels.to(device)
-                    out      = model(imgs)
+                    out       = model(imgs)
                     val_loss += criterion(out, labels).item()
-                    preds    = out.argmax(dim=1)
-                    correct += (preds == labels).sum().item()
-                    total   += labels.size(0)
+                    correct  += (out.argmax(dim=1) == labels).sum().item()
+                    total    += labels.size(0)
 
             acc   = correct / max(total, 1)
             vloss = val_loss / max(len(val_dl), 1)
+            tloss = train_loss / max(len(train_dl), 1)
 
             if acc > best_acc:
                 best_acc = acc
+                patience_counter = 0
                 torch.save(model.state_dict(), best_path)
+            else:
+                patience_counter += 1
 
-            push(f"__PROGRESS__:{epoch}/{epochs}:{acc:.4f}")
-            push(f"  Epoch {epoch}/{epochs} — val_acc={acc*100:.1f}%  val_loss={vloss:.4f}")
+            # format: epoch/total:acc:train_loss:val_loss
+            push(f"__PROGRESS__:{epoch}/{epochs}:{acc:.4f}:{tloss:.4f}:{vloss:.4f}")
+            push(f"  Epoch {epoch}/{epochs} — val_acc={acc*100:.1f}%  "
+                 f"val_loss={vloss:.4f}  train_loss={tloss:.4f}  lr={current_lr:.6f}")
 
-        metrics = {"top1_acc": round(best_acc, 4), "epochs": epochs}
+            if _custom_state[run_id].get("stop_requested"):
+                push("[STOPPED] Stop requested — saving best weights and exiting early")
+                break
+
+            if body.patience > 0 and patience_counter >= body.patience:
+                push(f"[STOPPED] Early stopping at epoch {epoch} "
+                     f"(no improvement for {body.patience} epochs)")
+                break
+
+        # ── Final per-class evaluation ─────────────────────────────────────
+        if os.path.exists(best_path):
+            model.load_state_dict(torch.load(best_path, weights_only=False))
+        model.eval()
+        n_classes        = len(classes)
+        class_correct    = [0] * n_classes
+        class_total      = [0] * n_classes
+        all_true: list   = []
+        all_pred: list   = []
+        top5_correct = top5_total = 0
+        k = min(5, n_classes)
+
+        with torch.no_grad():
+            for imgs, labels in val_dl:
+                imgs, labels = imgs.to(device), labels.to(device)
+                out   = model(imgs)
+                preds = out.argmax(dim=1)
+                top_k = out.topk(k, dim=1).indices
+                for t, p, pk in zip(labels, preds, top_k):
+                    ti, pi = int(t), int(p)
+                    class_total[ti]  += 1
+                    class_correct[ti] += int(ti == pi)
+                    all_true.append(ti)
+                    all_pred.append(pi)
+                    top5_correct += int(t in pk)
+                    top5_total   += 1
+
+        cm = [[0] * n_classes for _ in range(n_classes)]
+        for t, p in zip(all_true, all_pred):
+            if 0 <= t < n_classes and 0 <= p < n_classes:
+                cm[t][p] += 1
+
+        per_class_metrics: dict = {}
+        for i in range(n_classes):
+            tp        = cm[i][i]
+            fp        = sum(cm[j][i] for j in range(n_classes) if j != i)
+            fn        = sum(cm[i][j] for j in range(n_classes) if j != i)
+            precision = tp / max(tp + fp, 1)
+            recall    = tp / max(tp + fn, 1)
+            f1        = 2 * precision * recall / max(precision + recall, 1e-9)
+            per_class_metrics[classes[i]] = {
+                "accuracy":  round(class_correct[i] / max(class_total[i], 1), 4),
+                "precision": round(precision, 4),
+                "recall":    round(recall, 4),
+                "f1":        round(f1, 4),
+                "support":   class_total[i],
+            }
+
+        metrics = {
+            "top1_acc":         round(best_acc, 4),
+            "top5_acc":         round(top5_correct / max(top5_total, 1), 4),
+            "per_class":        per_class_metrics,
+            "confusion_matrix": cm,
+        }
 
         with S(engine) as session:
             run = session.get(CustomTrainingRun, run_id)
@@ -438,7 +615,7 @@ def _run_custom_training(run_id: int, project_id: int, config_id: int,
             run.results_json = json.dumps(metrics)
             session.add(run); session.commit()
 
-        push(f"Done! Best val accuracy: {best_acc*100:.1f}%")
+        push(f"[DONE] Best val accuracy: {best_acc*100:.1f}%")
         push(f"__DONE__:{json.dumps(metrics)}")
 
     except Exception as exc:
@@ -485,7 +662,7 @@ def start_run(project_id: int, body: RunBody,
 
     threading.Thread(
         target=_run_custom_training,
-        args=(run.id, project_id, body.config_id, body.epochs, body.batch, body.lr),
+        args=(run.id, project_id, body),
         daemon=True,
     ).start()
 
@@ -535,3 +712,81 @@ def stream_run(project_id: int, run_id: int,
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── Stop / Delete ──────────────────────────────────────────────────────────────
+
+@router.post("/runs/{run_id}/stop")
+def stop_run(project_id: int, run_id: int, session: Session = Depends(get_session)):
+    run = session.get(CustomTrainingRun, run_id)
+    if not run or run.project_id != project_id:
+        raise HTTPException(404, "Run not found")
+    st = _custom_state.get(run_id, {})
+    if st:
+        st["stop_requested"] = True
+    if run.status == "running":
+        run.status = "stopped"
+        session.add(run); session.commit()
+    return {"ok": True}
+
+
+@router.delete("/runs/{run_id}")
+def delete_run(project_id: int, run_id: int, session: Session = Depends(get_session)):
+    run = session.get(CustomTrainingRun, run_id)
+    if not run or run.project_id != project_id:
+        raise HTTPException(404, "Run not found")
+    if run.status == "running":
+        raise HTTPException(400, "Stop the run before deleting")
+    session.delete(run); session.commit()
+    return {"ok": True}
+
+
+@router.get("/runs/{run_id}/download")
+def download_run_model(project_id: int, run_id: int,
+                       session: Session = Depends(get_session)):
+    run = session.get(CustomTrainingRun, run_id)
+    if not run or run.project_id != project_id:
+        raise HTTPException(404, "Run not found")
+    if not run.model_path or not os.path.exists(run.model_path):
+        raise HTTPException(404, "Model file not found")
+    return FileResponse(run.model_path, filename=f"custom_model_run{run_id}.pth",
+                        media_type="application/octet-stream")
+
+
+@router.post("/runs/{run_id}/export-onnx")
+def export_run_onnx(project_id: int, run_id: int,
+                    session: Session = Depends(get_session)):
+    """Export best checkpoint to ONNX."""
+    import torch
+
+    run = session.get(CustomTrainingRun, run_id)
+    if not run or run.project_id != project_id:
+        raise HTTPException(404, "Run not found")
+    if not run.model_path or not os.path.exists(run.model_path):
+        raise HTTPException(404, "Model file not found — train the run first")
+
+    project   = session.get(Project, project_id)
+    cfg       = session.get(CustomModelConfig, run.config_id)
+    if not cfg:
+        raise HTTPException(404, "Config not found")
+
+    n_classes = len(project.classes)
+    layers    = json.loads(cfg.layers_json)
+    onnx_path = run.model_path.replace(".pth", ".onnx")
+
+    if not os.path.exists(onnx_path):
+        model = _build_torch_model(layers, cfg.input_h, cfg.input_w, n_classes)
+        model.load_state_dict(torch.load(run.model_path, map_location="cpu", weights_only=False))
+        model.eval()
+        dummy = torch.randn(1, 3, cfg.input_h, cfg.input_w)
+        torch.onnx.export(
+            model, dummy, onnx_path,
+            input_names=["input"], output_names=["output"],
+            dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
+            opset_version=17,
+        )
+
+    return FileResponse(onnx_path, filename=f"custom_model_run{run_id}.onnx",
+                        media_type="application/octet-stream")
+
+

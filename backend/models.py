@@ -96,7 +96,7 @@ class ExternalModel(SQLModel, table=True):
 class ClassificationRun(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="project.id")
-    status: str = "pending"     # pending | running | done | failed
+    status: str = "pending"     # pending | running | done | failed | stopped
     epochs: int = 10
     imgsz: int = 224
     batch: int = 32

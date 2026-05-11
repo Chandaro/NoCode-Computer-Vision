@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Zap, Download, Loader, RefreshCw, CheckCircle, XCircle, Upload } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { Zap, Download, Loader, RefreshCw, CheckCircle, XCircle, Upload, Square, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import api, { type Project, type ClassificationRun, type ClsInferResult } from '../api'
 import {
   Card, Label, PageHeader, Btn, Field, Select, Slider,
@@ -9,13 +9,16 @@ import {
 } from '../components/ui'
 
 interface Progress   { epoch: number; total: number; accuracy: number }
-interface ChartPoint { epoch: number; accuracy: number }
+interface ChartPoint { epoch: number; accuracy: number; trainLoss: number; valLoss: number }
 
 const BASE_MODELS = [
-  { value: 'resnet18',           label: 'ResNet-18 (fastest)'         },
-  { value: 'resnet50',           label: 'ResNet-50'                    },
-  { value: 'mobilenet_v3_small', label: 'MobileNet V3 Small'           },
-  { value: 'efficientnet_b0',    label: 'EfficientNet-B0 (best acc.)'  },
+  { value: 'resnet18',           label: 'ResNet-18 (fastest)'             },
+  { value: 'resnet34',           label: 'ResNet-34'                       },
+  { value: 'resnet50',           label: 'ResNet-50'                       },
+  { value: 'mobilenet_v3_small', label: 'MobileNet V3 Small (lightweight)'},
+  { value: 'efficientnet_b0',    label: 'EfficientNet-B0'                 },
+  { value: 'efficientnet_b1',    label: 'EfficientNet-B1 (best acc.)'     },
+  { value: 'convnext_tiny',      label: 'ConvNeXt-Tiny (modern)'          },
 ]
 
 const TT = {
@@ -24,6 +27,9 @@ const TT = {
     borderRadius: 6, fontSize: 11,
   },
 }
+
+const SEC = { fontSize: 10, fontWeight: 600, color: 'var(--text3)',
+  textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginTop: 6 }
 
 export default function Classification() {
   const { id } = useParams<{ id: string }>()
@@ -38,6 +44,33 @@ export default function Classification() {
   const [baseModel, setBaseModel] = useState('resnet18')
   const [lr,        setLr]        = useState('0.001')
   const [freeze,    setFreeze]    = useState(true)
+  const [valSplit,  setValSplit]  = useState(0.2)
+  const [patience,  setPatience]  = useState(0)
+  const [resumeRunId, setResumeRunId] = useState('')
+  // Optimizer
+  const [optimizer,    setOptimizer]    = useState('Adam')
+  const [weightDecay,  setWeightDecay]  = useState(0.0)
+  const [momentum,     setMomentum]     = useState(0.9)
+  const [warmupEpochs, setWarmupEpochs] = useState(0)
+  // LR Scheduler
+  const [lrScheduler, setLrScheduler] = useState('cosine')
+  const [stepSize,    setStepSize]    = useState(10)
+  const [stepGamma,   setStepGamma]   = useState(0.1)
+  // Regularisation
+  const [labelSmoothing, setLabelSmoothing] = useState(0.0)
+  const [dropoutHead,    setDropoutHead]    = useState(0.0)
+  // Augmentation
+  const [showAug,    setShowAug]    = useState(false)
+  const [fliplr,     setFliplr]     = useState(0.5)
+  const [flipud,     setFlipud]     = useState(0.0)
+  const [degrees,    setDegrees]    = useState(0.0)
+  const [translate,  setTranslate]  = useState(0.0)
+  const [scale,      setScale]      = useState(0.0)
+  const [brightness, setBrightness] = useState(0.2)
+  const [contrast,   setContrast]   = useState(0.2)
+  const [saturation, setSaturation] = useState(0.2)
+  const [erasing,    setErasing]    = useState(0.0)
+  const [mixup,      setMixup]      = useState(0.0)
 
   const [streaming, setStreaming]  = useState(false)
   const [logs,      setLogs]       = useState<string[]>([])
@@ -45,11 +78,13 @@ export default function Classification() {
   const [chartData, setChartData]  = useState<ChartPoint[]>([])
 
   // ── Inference ──────────────────────────────────────────────────────────────
-  const [inferRunId,   setInferRunId]   = useState('')
-  const [inferFile,    setInferFile]    = useState<File | null>(null)
-  const [inferName,    setInferName]    = useState('')
-  const [inferRunning, setInferRunning] = useState(false)
-  const [inferResult,  setInferResult]  = useState<ClsInferResult | null>(null)
+  const [inferRunId,    setInferRunId]    = useState('')
+  const [inferFile,     setInferFile]     = useState<File | null>(null)
+  const [inferName,     setInferName]     = useState('')
+  const [inferPreview,  setInferPreview]  = useState<string | null>(null)
+  const [inferRunning,  setInferRunning]  = useState(false)
+  const [inferResult,   setInferResult]   = useState<ClsInferResult | null>(null)
+  const [onnxExporting, setOnnxExporting] = useState<number | null>(null)
   const inferFileRef = useRef<HTMLInputElement>(null)
 
   // ── Confusion matrix expand ────────────────────────────────────────────────
@@ -80,6 +115,13 @@ export default function Classification() {
     const res = await api.post(`/projects/${projectId}/classification/start`, {
       epochs, imgsz, batch, base_model: baseModel,
       lr: Number(lr), freeze_backbone: freeze,
+      val_split: valSplit, patience,
+      resume_run_id: resumeRunId ? Number(resumeRunId) : null,
+      optimizer, weight_decay: weightDecay, momentum, warmup_epochs: warmupEpochs,
+      lr_scheduler: lrScheduler, step_size: stepSize, step_gamma: stepGamma,
+      label_smoothing: labelSmoothing, dropout_head: dropoutHead,
+      fliplr, flipud, degrees, translate, scale,
+      brightness, contrast, saturation, erasing, mixup,
     })
     const run: ClassificationRun = res.data
     setStreaming(true)
@@ -93,14 +135,17 @@ export default function Classification() {
         es.close(); esRef.current = null; setStreaming(false); loadRuns(); return
       }
       if (msg.startsWith('__PROGRESS__:')) {
+        // format: __PROGRESS__:epoch/total:acc:train_loss:val_loss
         const parts = msg.split(':')
         if (parts.length < 5) return
-        const [, ep,, acc] = parts
+        const [, ep, accStr, tlossStr, vlossStr] = parts
         const epochNum = Number(ep.split('/')[0])
         const totalNum = Number(ep.split('/')[1])
-        const accVal   = Number(acc)
+        const accVal   = Number(accStr)
+        const tloss    = Number(tlossStr)
+        const vloss    = Number(vlossStr)
         setProgress({ epoch: epochNum, total: totalNum, accuracy: accVal })
-        setChartData(prev => [...prev, { epoch: epochNum, accuracy: accVal }])
+        setChartData(prev => [...prev, { epoch: epochNum, accuracy: accVal, trainLoss: tloss, valLoss: vloss }])
         return
       }
       if (msg.startsWith('__DONE__:') || msg === '__FAILED__') {
@@ -110,7 +155,23 @@ export default function Classification() {
     }
     es.onerror = () => {
       es.close(); esRef.current = null; setStreaming(false); loadRuns()
-      setLogs(prev => [...prev, '⚠️ Connection lost'])
+      setLogs(prev => [...prev, '[WARN] Connection lost'])
+    }
+  }
+
+  const exportOnnx = async (runId: number) => {
+    setOnnxExporting(runId)
+    try {
+      const res = await api.post(
+        `/projects/${projectId}/classification/runs/${runId}/export-onnx`,
+        {}, { responseType: 'blob' }
+      )
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url; a.download = `cls_model_run${runId}.onnx`; a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setOnnxExporting(null)
     }
   }
 
@@ -136,7 +197,19 @@ export default function Classification() {
     if (s === 'done')    return <Badge color="green"><CheckCircle size={11} /> done</Badge>
     if (s === 'failed')  return <Badge color="red"><XCircle size={11} /> failed</Badge>
     if (s === 'running') return <Badge color="yellow"><Loader size={11} className="animate-spin" /> running</Badge>
+    if (s === 'stopped') return <Badge color="gray"><Square size={11} /> stopped</Badge>
     return <Badge color="gray">pending</Badge>
+  }
+
+  const stopRun = async (runId: number) => {
+    await api.post(`/projects/${projectId}/classification/runs/${runId}/stop`)
+    esRef.current?.close(); esRef.current = null; setStreaming(false)
+    loadRuns()
+  }
+
+  const deleteRun = async (runId: number) => {
+    await api.delete(`/projects/${projectId}/classification/runs/${runId}`)
+    loadRuns()
   }
 
   const doneRuns = runs.filter(r => r.status === 'done')
@@ -160,16 +233,16 @@ export default function Classification() {
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 12, alignItems: 'start' }}>
 
         {/* ── Config ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Card style={{ padding: 16 }}>
-          <Label>Model Config</Label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 8 }}>
-            <Field label="Base Model">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            <p style={SEC}>Model</p>
+            <Field label="Architecture">
               <Select value={baseModel} onChange={setBaseModel}>
                 {BASE_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </Select>
             </Field>
-            <Slider label="Epochs" value={epochs} onChange={setEpochs}
-              min={1} max={100} step={1} format={v => String(v)} />
+            <Slider label="Epochs"     value={epochs} onChange={setEpochs} min={1} max={200} step={1} format={v => String(v)} />
             <Field label="Image Size">
               <Select value={String(imgsz)} onChange={v => setImgsz(Number(v))}>
                 {[128, 224, 256, 384].map(s => (
@@ -177,40 +250,116 @@ export default function Classification() {
                 ))}
               </Select>
             </Field>
-            <Slider label="Batch Size" value={batch} onChange={setBatch}
-              min={4} max={128} step={4} format={v => String(v)} />
-            <Field label="Learning Rate">
-              <Select value={lr} onChange={setLr}>
-                {['0.01','0.001','0.0001','0.00001'].map(v => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </Select>
-            </Field>
+            <Slider label="Batch Size" value={batch} onChange={setBatch} min={4} max={128} step={4} format={v => String(v)} />
+            <Slider label="Val Split"  value={valSplit} onChange={setValSplit} min={0.1} max={0.4} step={0.05} format={v => `${Math.round(v*100)}%`} />
+            <Slider label="Early Stop Patience" value={patience} onChange={setPatience} min={0} max={50} step={1} format={v => v === 0 ? 'Off' : `${v} ep`} />
 
             {/* Freeze backbone toggle */}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10,
-              cursor: 'pointer', userSelect: 'none' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
               <div onClick={() => setFreeze(f => !f)}
                 style={{ width: 32, height: 18, borderRadius: 9,
                   background: freeze ? 'var(--accent)' : 'var(--surface3)',
                   border: `1px solid ${freeze ? 'var(--accent)' : 'var(--border2)'}`,
-                  position: 'relative', flexShrink: 0,
-                  transition: 'background 0.15s', cursor: 'pointer' }}>
+                  position: 'relative', flexShrink: 0, transition: 'background 0.15s', cursor: 'pointer' }}>
                 <div style={{ position: 'absolute', top: 2, left: freeze ? 14 : 2,
-                  width: 12, height: 12, borderRadius: '50%', background: '#fff',
-                  transition: 'left 0.15s' }} />
+                  width: 12, height: 12, borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
               </div>
-              <span style={{ fontSize: 12, color: 'var(--text2)' }}>Freeze backbone (faster)</span>
+              <span style={{ fontSize: 12, color: 'var(--text2)' }}>Freeze backbone</span>
             </label>
 
-            <Btn variant="primary" onClick={startTraining} disabled={streaming}
-              style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}>
-              {streaming
-                ? <><Loader size={13} className="animate-spin" /> Training…</>
-                : <><Zap size={13} strokeWidth={2.5} /> Start Training</>}
-            </Btn>
+            <p style={SEC}>Optimizer</p>
+            <Field label="Algorithm">
+              <Select value={optimizer} onChange={setOptimizer}>
+                <option value="Adam">Adam (default)</option>
+                <option value="AdamW">AdamW</option>
+                <option value="SGD">SGD</option>
+              </Select>
+            </Field>
+            <Field label="Learning Rate">
+              <input
+                type="number" value={lr}
+                onChange={e => setLr(e.target.value)}
+                step="0.0001" min="0.00001" max="1"
+                style={{
+                  width: '100%', background: 'var(--surface2)',
+                  border: '1px solid var(--border)', borderRadius: 5,
+                  color: 'var(--text)', padding: '5px 8px', fontSize: 12,
+                }}
+              />
+            </Field>
+            <Slider label="Weight Decay"   value={weightDecay}  onChange={setWeightDecay}  min={0} max={0.01} step={0.0001} format={v => v.toFixed(4)} />
+            <Slider label="Momentum (SGD)" value={momentum}     onChange={setMomentum}     min={0.5} max={0.99} step={0.01} format={v => v.toFixed(2)} />
+            <Slider label="Warmup Epochs"  value={warmupEpochs} onChange={setWarmupEpochs} min={0} max={10} step={1} format={v => String(v)} />
+
+            <p style={SEC}>LR Scheduler</p>
+            <Field label="Schedule">
+              <Select value={lrScheduler} onChange={setLrScheduler}>
+                <option value="cosine">Cosine Annealing (default)</option>
+                <option value="step">Step LR</option>
+                <option value="none">None (constant LR)</option>
+              </Select>
+            </Field>
+            {lrScheduler === 'step' && (<>
+              <Slider label="Step Size"  value={stepSize}  onChange={setStepSize}  min={1} max={50} step={1} format={v => `${v} ep`} />
+              <Slider label="Step Gamma" value={stepGamma} onChange={setStepGamma} min={0.01} max={0.9} step={0.01} format={v => v.toFixed(2)} />
+            </>)}
+
+            <p style={SEC}>Regularisation</p>
+            <Slider label="Label Smoothing" value={labelSmoothing} onChange={setLabelSmoothing} min={0} max={0.3} step={0.01} format={v => v.toFixed(2)} />
+            <Slider label="Head Dropout"    value={dropoutHead}    onChange={setDropoutHead}    min={0} max={0.7} step={0.05} format={v => v.toFixed(2)} />
+
+            {runs.filter(r => r.status === 'done').length > 0 && (<>
+              <p style={SEC}>Resume</p>
+              <Field label="Continue from run">
+                <Select value={resumeRunId} onChange={setResumeRunId}>
+                  <option value="">— Start fresh —</option>
+                  {runs.filter(r => r.status === 'done').map(r => {
+                    const acc = (r.results as Record<string, unknown>)?.top1_acc
+                    return <option key={r.id} value={r.id}>
+                      Run #{r.id} · {r.base_model}{typeof acc === 'number' ? ` · ${(acc*100).toFixed(1)}%` : ''}
+                    </option>
+                  })}
+                </Select>
+              </Field>
+            </>)}
           </div>
         </Card>
+
+        {/* Augmentation */}
+        <Card>
+          <button onClick={() => setShowAug(v => !v)}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--text2)', fontSize: 12, fontWeight: 600 }}>
+            <span style={{ textTransform: 'uppercase', letterSpacing: '0.07em', fontSize: 11, color: 'var(--text3)' }}>Augmentation</span>
+            {showAug ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </button>
+          {showAug && (
+            <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)' }}>
+              <p style={{ ...SEC, marginTop: 12 }}>Geometric</p>
+              <Slider label="Flip LR"    value={fliplr}    onChange={setFliplr}    min={0} max={1} step={0.05} />
+              <Slider label="Flip UD"    value={flipud}    onChange={setFlipud}    min={0} max={1} step={0.05} />
+              <Slider label="Rotation"   value={degrees}   onChange={setDegrees}   min={0} max={180} step={1} format={v => `${v}°`} />
+              <Slider label="Translate"  value={translate} onChange={setTranslate} min={0} max={0.5} step={0.05} />
+              <Slider label="Scale"      value={scale}     onChange={setScale}     min={0} max={0.5} step={0.05} />
+              <p style={SEC}>Color</p>
+              <Slider label="Brightness" value={brightness} onChange={setBrightness} min={0} max={0.8} step={0.05} />
+              <Slider label="Contrast"   value={contrast}   onChange={setContrast}   min={0} max={0.8} step={0.05} />
+              <Slider label="Saturation" value={saturation} onChange={setSaturation} min={0} max={0.8} step={0.05} />
+              <p style={SEC}>Mixing & Cutout</p>
+              <Slider label="Mixup"   value={mixup}   onChange={setMixup}   min={0} max={1} step={0.05} />
+              <Slider label="Erasing" value={erasing} onChange={setErasing} min={0} max={0.9} step={0.05} />
+            </div>
+          )}
+        </Card>
+
+        <Btn variant="primary" onClick={startTraining} disabled={streaming}
+          style={{ width: '100%', justifyContent: 'center', padding: '9px 14px' }}>
+          {streaming
+            ? <><Loader size={13} className="animate-spin" /> Training…</>
+            : <><Zap size={13} strokeWidth={2.5} /> Start Training</>}
+        </Btn>
+        </div>
 
         {/* ── Right column ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -261,8 +410,62 @@ export default function Classification() {
                   <Tooltip {...TT} formatter={(v: unknown) =>
                     [`${((v as number) * 100).toFixed(2)}%`]} />
                   <Line type="monotone" dataKey="accuracy" stroke="var(--accent)"
-                    strokeWidth={2} dot={false} name="Accuracy" />
+                    strokeWidth={2} dot={false} name="Val Accuracy" />
                 </LineChart>
+              </ResponsiveContainer>
+            </Card>
+          )}
+
+          {/* Loss chart */}
+          {chartData.length > 1 && (
+            <Card style={{ padding: 16 }}>
+              <Label>Training & Validation Loss</Label>
+              <ResponsiveContainer width="100%" height={150}>
+                <LineChart data={chartData} margin={{ left: -16 }}>
+                  <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" />
+                  <XAxis dataKey="epoch" stroke="var(--text3)" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="var(--text3)" tick={{ fontSize: 11 }}
+                    tickFormatter={v => (v as number).toFixed(2)} />
+                  <Tooltip {...TT} formatter={(v: unknown) =>
+                    [(v as number).toFixed(4)]} />
+                  <Line type="monotone" dataKey="trainLoss" stroke="#f97316"
+                    strokeWidth={2} dot={false} name="Train Loss" strokeDasharray="4 2" />
+                  <Line type="monotone" dataKey="valLoss" stroke="#22c55e"
+                    strokeWidth={2} dot={false} name="Val Loss" />
+                </LineChart>
+              </ResponsiveContainer>
+              <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
+                <span style={{ fontSize: 11, color: '#f97316', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ display: 'inline-block', width: 14, height: 2, background: '#f97316', borderTop: '2px dashed #f97316' }} />
+                  Train Loss
+                </span>
+                <span style={{ fontSize: 11, color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ display: 'inline-block', width: 14, height: 2, background: '#22c55e' }} />
+                  Val Loss
+                </span>
+              </div>
+            </Card>
+          )}
+
+          {/* Run comparison */}
+          {runs.filter(r => r.status === 'done').length > 1 && (
+            <Card style={{ padding: 16 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 14 }}>Run Comparison — Top-1 Accuracy</p>
+              <ResponsiveContainer width="100%" height={110}>
+                <BarChart data={runs.filter(r => r.status === 'done').map(r => {
+                  const acc = (r.results as Record<string, unknown>)?.top1_acc
+                  return { name: `#${r.id}`, acc: typeof acc === 'number' ? acc * 100 : 0 }
+                })} margin={{ left: -16 }}>
+                  <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" />
+                  <XAxis dataKey="name" stroke="var(--text3)" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="var(--text3)" tick={{ fontSize: 11 }} domain={[0, 100]} tickFormatter={v => `${v}%`} />
+                  <Tooltip {...TT} formatter={(v: unknown) => [`${(v as number).toFixed(1)}%`, 'Top-1']} />
+                  <Bar dataKey="acc" radius={[3,3,0,0]}>
+                    {runs.filter(r => r.status === 'done').map((_, i) => (
+                      <Cell key={i} fill={['#5865f2','#22c55e','#f59e0b','#06b6d4','#a855f7','#ec4899'][i % 6]} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </Card>
           )}
@@ -301,7 +504,10 @@ export default function Classification() {
                       style={{ display: 'none' }}
                       onChange={e => {
                         const f = e.target.files?.[0]
-                        if (f) { setInferFile(f); setInferName(f.name); setInferResult(null) }
+                        if (f) {
+                          setInferFile(f); setInferName(f.name); setInferResult(null)
+                          setInferPreview(URL.createObjectURL(f))
+                        }
                       }} />
                     <span style={{ fontSize: 11, color: 'var(--text3)',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -316,8 +522,13 @@ export default function Classification() {
                   </Btn>
                 </div>
 
-                {/* Result */}
+                {/* Preview + Result */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {inferPreview && (
+                    <img src={inferPreview} alt="preview"
+                      style={{ width: '100%', maxHeight: 120, objectFit: 'cover',
+                        borderRadius: 6, border: '1px solid var(--border)' }} />
+                  )}
                   {inferResult ? (
                     <>
                       {inferResult.top1 && (
@@ -372,11 +583,13 @@ export default function Classification() {
               ? <p style={{ fontSize: 13, color: 'var(--text3)' }}>No runs yet.</p>
               : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {[...runs].reverse().map(run => {
-                    const res  = run.results as Record<string, unknown>
-                    const acc1 = typeof res?.top1_acc === 'number' ? res.top1_acc : null
-                    const acc5 = typeof res?.top5_acc === 'number' ? res.top5_acc : null
-                    const cm   = Array.isArray(res?.confusion_matrix)
+                    const res        = run.results as Record<string, unknown>
+                    const acc1       = typeof res?.top1_acc === 'number' ? res.top1_acc : null
+                    const acc5       = typeof res?.top5_acc === 'number' ? res.top5_acc : null
+                    const cm         = Array.isArray(res?.confusion_matrix)
                       ? res.confusion_matrix as number[][] : null
+                    const perClass   = (res?.per_class && typeof res.per_class === 'object' && !Array.isArray(res.per_class))
+                      ? res.per_class as Record<string, Record<string, number>> : null
                     const isCmExpanded = expandedCm === run.id
 
                     return (
@@ -420,72 +633,142 @@ export default function Classification() {
                                 CM
                               </Btn>
                             )}
-                            {run.status === 'done' && run.model_path && (
+                            {run.status === 'done' && run.model_path && (<>
                               <Btn variant="secondary" size="sm"
                                 href={`/api/projects/${projectId}/classification/runs/${run.id}/download`}>
                                 <Download size={12} /> .pth
+                              </Btn>
+                              <Btn variant="secondary" size="sm"
+                                disabled={onnxExporting === run.id}
+                                onClick={() => exportOnnx(run.id)}>
+                                {onnxExporting === run.id
+                                  ? <><Loader size={11} className="animate-spin" /> ONNX…</>
+                                  : <><Download size={11} /> .onnx</>}
+                              </Btn>
+                            </>)}
+                            {run.status === 'running' && (
+                              <Btn variant="ghost" size="sm"
+                                onClick={() => stopRun(run.id)}
+                                style={{ color: 'var(--warn)' }}>
+                                <Square size={12} /> Stop
+                              </Btn>
+                            )}
+                            {run.status !== 'running' && (
+                              <Btn variant="ghost" size="sm"
+                                onClick={() => deleteRun(run.id)}
+                                style={{ color: 'var(--error, #f87171)' }}>
+                                <Trash2 size={12} />
                               </Btn>
                             )}
                           </div>
                         </div>
 
-                        {/* Confusion matrix */}
-                        {isCmExpanded && cm && project && (
-                          <div style={{ padding: '0 14px 14px',
-                            borderTop: '1px solid var(--border)' }}>
-                            <p style={{ fontSize: 11, color: 'var(--text3)', margin: '10px 0 6px',
-                              textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500 }}>
-                              Confusion Matrix
-                            </p>
-                            <div style={{ overflowX: 'auto' }}>
-                              <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
-                                <thead>
-                                  <tr>
-                                    <th style={{ padding: '3px 8px', color: 'var(--text3)',
-                                      textAlign: 'right', fontWeight: 400 }}>↓ True \ Pred →</th>
-                                    {project.classes.map((c, j) => (
-                                      <th key={j} style={{ padding: '3px 8px',
-                                        color: 'var(--text3)', fontWeight: 500,
-                                        whiteSpace: 'nowrap', maxWidth: 80,
-                                        overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {c}
-                                      </th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {cm.map((row, i) => {
-                                    const rowTotal = row.reduce((a, b) => a + b, 0)
-                                    return (
-                                      <tr key={i}>
-                                        <td style={{ padding: '3px 8px', color: 'var(--text2)',
-                                          fontWeight: 500, whiteSpace: 'nowrap' }}>
-                                          {project.classes[i] ?? `cls${i}`}
-                                        </td>
-                                        {row.map((val, j) => {
-                                          const intensity = rowTotal > 0 ? val / rowTotal : 0
-                                          const isCorrect = i === j
-                                          return (
-                                            <td key={j} style={{
-                                              padding: '3px 8px', textAlign: 'center',
-                                              background: isCorrect
-                                                ? `rgba(34,197,94,${intensity * 0.6})`
-                                                : intensity > 0.1 ? `rgba(248,113,113,${intensity * 0.5})` : 'transparent',
-                                              color: intensity > 0.4 ? '#fff' : 'var(--text2)',
-                                              fontFamily: 'JetBrains Mono, monospace',
-                                              fontWeight: isCorrect ? 600 : 400,
-                                              borderRadius: 3,
-                                            }}>
-                                              {val}
-                                            </td>
-                                          )
-                                        })}
+                        {/* Expanded details: per-class metrics + confusion matrix */}
+                        {isCmExpanded && (
+                          <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border)' }}>
+
+                            {/* Per-class Precision / Recall / F1 table */}
+                            {perClass && (
+                              <>
+                                <p style={{ fontSize: 11, color: 'var(--text3)', margin: '10px 0 6px',
+                                  textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500 }}>
+                                  Per-Class Metrics
+                                </p>
+                                <div style={{ overflowX: 'auto', marginBottom: 12 }}>
+                                  <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%' }}>
+                                    <thead>
+                                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                        {['Class','Accuracy','Precision','Recall','F1','Support'].map(h => (
+                                          <th key={h} style={{ padding: '3px 8px', color: 'var(--text3)',
+                                            fontWeight: 500, textAlign: h === 'Class' ? 'left' : 'center' }}>
+                                            {h}
+                                          </th>
+                                        ))}
                                       </tr>
-                                    )
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
+                                    </thead>
+                                    <tbody>
+                                      {Object.entries(perClass).map(([cls, m]) => (
+                                        <tr key={cls} style={{ borderBottom: '1px solid var(--border2,var(--border))' }}>
+                                          <td style={{ padding: '4px 8px', color: 'var(--text2)', fontWeight: 500 }}>{cls}</td>
+                                          {(['accuracy','precision','recall','f1'] as const).map(k => {
+                                            const v = m[k] as number
+                                            const good = v >= 0.7
+                                            return (
+                                              <td key={k} style={{ padding: '4px 8px', textAlign: 'center',
+                                                fontFamily: 'JetBrains Mono, monospace',
+                                                color: good ? 'var(--success,#22c55e)' : v < 0.4 ? 'var(--danger,#f87171)' : 'var(--warn,#f59e0b)' }}>
+                                                {(v * 100).toFixed(1)}%
+                                              </td>
+                                            )
+                                          })}
+                                          <td style={{ padding: '4px 8px', textAlign: 'center',
+                                            color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+                                            {m.support}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </>
+                            )}
+
+                            {/* Confusion matrix */}
+                            {cm && project && (
+                              <>
+                                <p style={{ fontSize: 11, color: 'var(--text3)', margin: '10px 0 6px',
+                                  textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500 }}>
+                                  Confusion Matrix
+                                </p>
+                                <div style={{ overflowX: 'auto' }}>
+                                  <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+                                    <thead>
+                                      <tr>
+                                        <th style={{ padding: '3px 8px', color: 'var(--text3)',
+                                          textAlign: 'right', fontWeight: 400 }}>↓ True \ Pred →</th>
+                                        {project.classes.map((c, j) => (
+                                          <th key={j} style={{ padding: '3px 8px', color: 'var(--text3)',
+                                            fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                            {c}
+                                          </th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {cm.map((row, i) => {
+                                        const rowTotal = row.reduce((a, b) => a + b, 0)
+                                        return (
+                                          <tr key={i}>
+                                            <td style={{ padding: '3px 8px', color: 'var(--text2)',
+                                              fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                              {project.classes[i] ?? `cls${i}`}
+                                            </td>
+                                            {row.map((val, j) => {
+                                              const intensity = rowTotal > 0 ? val / rowTotal : 0
+                                              const isCorrect = i === j
+                                              return (
+                                                <td key={j} style={{
+                                                  padding: '3px 8px', textAlign: 'center',
+                                                  background: isCorrect
+                                                    ? `rgba(34,197,94,${intensity * 0.6})`
+                                                    : intensity > 0.1 ? `rgba(248,113,113,${intensity * 0.5})` : 'transparent',
+                                                  color: intensity > 0.4 ? '#fff' : 'var(--text2)',
+                                                  fontFamily: 'JetBrains Mono, monospace',
+                                                  fontWeight: isCorrect ? 600 : 400,
+                                                  borderRadius: 3,
+                                                }}>
+                                                  {val}
+                                                </td>
+                                              )
+                                            })}
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>

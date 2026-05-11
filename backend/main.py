@@ -18,6 +18,7 @@ import models as _models  # noqa: F401
 from routers import projects, images, annotations, training
 from routers import analytics, evaluation, export, classification, infer, external_models
 from routers import custom as custom_router
+from routers import pose as pose_router
 
 app = FastAPI(title="NoCode CV Trainer", max_upload_size=500 * 1024 * 1024)  # 500 MB per batch
 
@@ -54,6 +55,7 @@ api.include_router(classification.router)
 api.include_router(infer.router)
 api.include_router(external_models.router)
 api.include_router(custom_router.router)
+api.include_router(pose_router.router)
 app.include_router(api)
 
 

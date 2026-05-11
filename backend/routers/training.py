@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from pydantic import BaseModel
-from typing import Optional
-import os, json, shutil, threading, time, uuid, random
+from typing import Optional, List
+import os, json, shutil, threading, time, uuid, random, io, base64
 from datetime import datetime
 
 from database import get_session, DATABASE_URL
@@ -62,7 +62,14 @@ class TrainingRunOut(BaseModel):
 
 
 # ─── Dataset builder ─────────────────────────────────────────────────────────
-def _build_dataset(project_id: int, val_split: float, session: Session) -> str:
+def _build_dataset(project_id: int, val_split: float, session: Session,
+                   task: str = "detect") -> str:
+    """Build a YOLO dataset directory.
+
+    task='detect'  → labels use  <cls> cx cy w h
+    task='segment' → labels use  <cls> x1 y1 x2 y2 … (polygon, ≥3 pts)
+                     bbox annotations are converted to 4-corner polygons.
+    """
     project     = session.get(Project, project_id)
     dataset_dir = os.path.join(RUNS_DIR, f"dataset_{project_id}_{uuid.uuid4().hex[:6]}")
 
@@ -71,12 +78,9 @@ def _build_dataset(project_id: int, val_split: float, session: Session) -> str:
         os.makedirs(os.path.join(dataset_dir, "labels", split), exist_ok=True)
 
     all_images = session.exec(select(Image).where(Image.project_id == project_id)).all()
-
-    # Only include images that have at least one annotation
     images = [img for img in all_images
               if session.exec(select(Annotation).where(Annotation.image_id == img.id)).first()]
 
-    # Random shuffle so val set is representative, not just the first N
     shuffled = list(images)
     random.shuffle(shuffled)
     n_val   = max(1, int(len(shuffled) * val_split))
@@ -96,21 +100,35 @@ def _build_dataset(project_id: int, val_split: float, session: Session) -> str:
                 if ann.shape_type == "polygon":
                     pts = json.loads(ann.points_json or "[]")
                     if len(pts) >= 3:
-                        f.write(f"{ann.class_id} " + " ".join(f"{p[0]:.6f} {p[1]:.6f}" for p in pts) + "\n")
+                        f.write(f"{ann.class_id} " +
+                                " ".join(f"{p[0]:.6f} {p[1]:.6f}" for p in pts) + "\n")
                 elif ann.shape_type == "point":
                     pts = json.loads(ann.points_json or "[]")
                     if pts:
                         x, y = pts[0]
                         f.write(f"{ann.class_id} {x:.6f} {y:.6f} 0.008 0.008\n")
                 else:
-                    f.write(f"{ann.class_id} {ann.x_center:.6f} {ann.y_center:.6f} "
-                            f"{ann.width:.6f} {ann.height:.6f}\n")
+                    # bbox annotation
+                    cx, cy, w, h = ann.x_center, ann.y_center, ann.width, ann.height
+                    if task == "segment":
+                        # Convert bbox to 4-corner polygon for YOLO-seg
+                        x1, y1 = cx - w / 2, cy - h / 2
+                        x2, y2 = cx + w / 2, cy - h / 2
+                        x3, y3 = cx + w / 2, cy + h / 2
+                        x4, y4 = cx - w / 2, cy + h / 2
+                        f.write(f"{ann.class_id} "
+                                f"{x1:.6f} {y1:.6f} {x2:.6f} {y2:.6f} "
+                                f"{x3:.6f} {y3:.6f} {x4:.6f} {y4:.6f}\n")
+                    else:
+                        f.write(f"{ann.class_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n")
 
     classes   = project.classes
     yaml_path = os.path.join(dataset_dir, f"{project.name.replace(' ','_')}.yaml")
     with open(yaml_path, "w") as f:
         f.write(f"path: {dataset_dir}\ntrain: images/train\nval: images/val\n\n")
         f.write(f"nc: {len(classes)}\nnames: {json.dumps(classes)}\n")
+        if task == "segment":
+            f.write("task: segment\n")
 
     return yaml_path
 
@@ -128,10 +146,11 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
         _state[run_id]["logs"].append(msg)
 
     try:
+        task = "segment" if "seg" in config.model_base else "detect"
         with S(engine) as session:
-            push("⏳ Building dataset…")
-            yaml_path = _build_dataset(project_id, config.val_split, session)
-            push(f"✅ Dataset ready ({yaml_path})")
+            push("Building dataset…")
+            yaml_path = _build_dataset(project_id, config.val_split, session, task=task)
+            push(f"Dataset ready — {yaml_path}")
             run = session.get(TrainingRun, run_id)
             run.status = "running"
             run.aug_config_json = json.dumps({
@@ -152,8 +171,8 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
                 torch.zeros(1).cuda()
             except RuntimeError:
                 device = "cpu"
-                push("⚠️ CUDA detected but kernel incompatible — falling back to CPU")
-        push(f"📦 Loading base model: {config.model_base}  |  device: {'GPU (CUDA)' if device == '0' else 'CPU'}")
+                push("[WARN] CUDA detected but kernel incompatible — falling back to CPU")
+        push(f"Loading base model: {config.model_base}  |  device: {'GPU (CUDA)' if device == '0' else 'CPU'}")
 
         if config.resume_run_id:
             with S(engine) as sess:
@@ -163,13 +182,13 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
                 if not os.path.exists(last_pt):
                     last_pt = os.path.join(prev.run_dir, "last.pt")
                 if os.path.exists(last_pt):
-                    push(f"📦 Resuming from Run #{config.resume_run_id} ({last_pt})")
+                    push(f"Resuming from Run #{config.resume_run_id} ({last_pt})")
                     model = YOLO(last_pt)
                 else:
-                    push(f"⚠️ last.pt not found for run #{config.resume_run_id}, using base model")
+                    push(f"[WARN] last.pt not found for run #{config.resume_run_id}, using base model")
                     model = YOLO(config.model_base)
             else:
-                push(f"⚠️ Run #{config.resume_run_id} not found, using base model")
+                push(f"[WARN] Run #{config.resume_run_id} not found, using base model")
                 model = YOLO(config.model_base)
         else:
             model = YOLO(config.model_base)
@@ -195,8 +214,8 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
         output_dir = os.path.join(RUNS_DIR, f"train_{run_id}")
         os.makedirs(output_dir, exist_ok=True)
 
-        push(f"🚀 Training started — {config.epochs} epochs, imgsz={config.imgsz}, "
-             f"batch={config.batch}, optimizer={config.optimizer}, lr0={config.lr0}")
+        push(f"Training started — {config.epochs} epochs  imgsz={config.imgsz}  "
+             f"batch={config.batch}  optimizer={config.optimizer}  lr0={config.lr0}")
         results = model.train(
             data=yaml_path, epochs=config.epochs, imgsz=config.imgsz,
             batch=config.batch, project=output_dir, name="weights",
@@ -259,12 +278,12 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
             run.results_json = json.dumps(metrics)
             session.add(run); session.commit()
 
-        push(f"✅ Training complete! mAP50={metrics.get('mAP50', 0):.4f}  "
+        push(f"[DONE] Training complete  mAP50={metrics.get('mAP50', 0):.4f}  "
              f"precision={metrics.get('precision', 0):.4f}  recall={metrics.get('recall', 0):.4f}")
         push(f"__DONE__:{json.dumps(metrics)}")
 
     except Exception as exc:
-        push(f"❌ Error: {exc}")
+        push(f"[ERROR] {exc}")
         push("__FAILED__")
         try:
             with S(engine) as session:
@@ -339,7 +358,7 @@ def stream_logs(project_id: int, run_id: int, session: Session = Depends(get_ses
                 return
             time.sleep(0.5)
 
-        yield "data: ⚠️ Stream timeout (4 h limit reached)\n\n"
+        yield "data: [WARN] Stream timeout (4 h limit reached)\n\n"
         yield "data: __END__\n\n"
         _state.pop(run_id, None)
 
@@ -387,6 +406,103 @@ def delete_run(project_id: int, run_id: int, session: Session = Depends(get_sess
     session.delete(run)
     session.commit()
     return {"ok": True}
+
+
+# ─── Augmentation preview ────────────────────────────────────────────────────
+class AugPreviewBody(BaseModel):
+    fliplr:     float = 0.5
+    flipud:     float = 0.0
+    degrees:    float = 0.0
+    translate:  float = 0.1
+    scale:      float = 0.5
+    hsv_h:      float = 0.015
+    hsv_s:      float = 0.7
+    hsv_v:      float = 0.4
+    mosaic:     float = 1.0
+    n:          int   = 6
+
+
+def _apply_aug_transforms(img_path: str, body: AugPreviewBody):
+    """Apply approximate YOLO augmentations using torchvision + PIL."""
+    import torchvision.transforms as T
+    from PIL import Image as PILImage
+
+    img = PILImage.open(img_path).convert("RGB")
+    w, h = img.size
+    augs = []
+
+    if body.fliplr > 0:
+        augs.append(T.RandomHorizontalFlip(p=body.fliplr))
+    if body.flipud > 0:
+        augs.append(T.RandomVerticalFlip(p=body.flipud))
+
+    affine_kw: dict = {"degrees": body.degrees if body.degrees > 0 else 0}
+    if body.translate > 0:
+        affine_kw["translate"] = (body.translate, body.translate)
+    if body.scale > 0:
+        affine_kw["scale"] = (max(0.1, 1 - body.scale), 1 + body.scale)
+    if body.degrees > 0 or body.translate > 0 or body.scale > 0:
+        affine_kw["fill"] = [114, 114, 114]
+        augs.append(T.RandomAffine(**affine_kw))
+
+    jitter_kw: dict = {}
+    if body.hsv_v > 0:
+        jitter_kw["brightness"] = min(body.hsv_v, 0.8)
+        jitter_kw["contrast"]   = min(body.hsv_v * 0.5, 0.5)
+    if body.hsv_s > 0:
+        jitter_kw["saturation"] = min(body.hsv_s * 0.6, 0.8)
+    if body.hsv_h > 0:
+        jitter_kw["hue"] = min(body.hsv_h * 3, 0.5)
+    if jitter_kw:
+        augs.append(T.ColorJitter(**jitter_kw))
+
+    if augs:
+        img = T.Compose(augs)(img)
+
+    # Simulate mosaic: paste 4 tiny copies into one image
+    if body.mosaic > 0 and random.random() < body.mosaic * 0.6:
+        half = (w // 2, h // 2)
+        canvas = PILImage.new("RGB", (w, h), (114, 114, 114))
+        for row in range(2):
+            for col in range(2):
+                tile = img.resize(half, PILImage.LANCZOS)
+                canvas.paste(tile, (col * half[0], row * half[1]))
+        img = canvas
+
+    img.thumbnail((400, 400), PILImage.LANCZOS)
+    return img
+
+
+@router.post("/augmentation-preview")
+def augmentation_preview(
+    project_id: int,
+    body: AugPreviewBody,
+    session: Session = Depends(get_session),
+):
+    """Return N base64-encoded preview thumbnails with augmentation applied."""
+    all_images = session.exec(select(Image).where(Image.project_id == project_id)).all()
+    annotated  = [img for img in all_images
+                  if session.exec(select(Annotation).where(Annotation.image_id == img.id)).first()]
+    if not annotated:
+        raise HTTPException(400, "No annotated images in this project")
+
+    samples  = random.choices(annotated, k=min(body.n, len(annotated)))
+    previews: List[str] = []
+
+    for img_rec in samples:
+        img_path = os.path.join(UPLOAD_DIR, img_rec.filename)
+        if not os.path.exists(img_path):
+            continue
+        try:
+            pil_img = _apply_aug_transforms(img_path, body)
+            buf = io.BytesIO()
+            pil_img.save(buf, format="JPEG", quality=82)
+            previews.append("data:image/jpeg;base64," +
+                            base64.b64encode(buf.getvalue()).decode())
+        except Exception:
+            pass
+
+    return {"previews": previews}
 
 
 def _run_to_out(r: TrainingRun) -> TrainingRunOut:

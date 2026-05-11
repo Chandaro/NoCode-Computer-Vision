@@ -4,6 +4,10 @@ import * as THREE from 'three'
 import api from '../api'
 import { PageHeader, Btn, Badge } from '../components/ui'
 import { Cpu } from 'lucide-react'
+import {
+  LineChart, Line, BarChart, Bar, Cell,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from 'recharts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,31 +47,31 @@ interface CustomRun {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const LAYER_COLORS: Record<string, number> = {
-  input:       0x8b8b9a,
-  conv2d:      0x5865f2,
-  batchnorm2d: 0x22c55e,
-  maxpool2d:   0xf97316,
-  avgpool2d:   0xfb923c,
-  relu:        0xef4444,
-  gelu:        0xf43f5e,
-  sigmoid:     0xec4899,
-  dropout:     0xeab308,
-  flatten:     0xa855f7,
-  linear:      0x06b6d4,
+  input:       0x58586e,
+  conv2d:      0x7c6af7,
+  batchnorm2d: 0x4e9e8c,
+  maxpool2d:   0x5b8cd6,
+  avgpool2d:   0x5b8cd6,
+  relu:        0xd4865a,
+  gelu:        0xc47a6a,
+  sigmoid:     0xb87898,
+  dropout:     0x9e9c64,
+  flatten:     0x7a7a90,
+  linear:      0x8878b8,
 }
 
 const LAYER_CSS: Record<string, string> = {
-  input:       '#8b8b9a',
-  conv2d:      '#5865f2',
-  batchnorm2d: '#22c55e',
-  maxpool2d:   '#f97316',
-  avgpool2d:   '#fb923c',
-  relu:        '#ef4444',
-  gelu:        '#f43f5e',
-  sigmoid:     '#ec4899',
-  dropout:     '#eab308',
-  flatten:     '#a855f7',
-  linear:      '#06b6d4',
+  input:       '#58586e',
+  conv2d:      '#7c6af7',
+  batchnorm2d: '#4e9e8c',
+  maxpool2d:   '#5b8cd6',
+  avgpool2d:   '#5b8cd6',
+  relu:        '#d4865a',
+  gelu:        '#c47a6a',
+  sigmoid:     '#b87898',
+  dropout:     '#9e9c64',
+  flatten:     '#7a7a90',
+  linear:      '#8878b8',
 }
 
 const ALL_LAYER_TYPES: LayerType[] = [
@@ -274,7 +278,29 @@ function uid(): string {
 }
 
 const LAYER_DISPLAY: Record<string, string> = {
-  linear: 'linear (FC)',
+  conv2d:      'Conv 2D',
+  batchnorm2d: 'Batch Norm',
+  maxpool2d:   'Max Pool',
+  avgpool2d:   'Avg Pool',
+  relu:        'ReLU',
+  gelu:        'GELU',
+  sigmoid:     'Sigmoid',
+  dropout:     'Dropout',
+  flatten:     'Flatten',
+  linear:      'Linear',
+}
+
+const LAYER_CATEGORY: Record<string, string> = {
+  conv2d:      'CONV',
+  batchnorm2d: 'NORM',
+  maxpool2d:   'POOL',
+  avgpool2d:   'POOL',
+  relu:        'ACTIV',
+  gelu:        'ACTIV',
+  sigmoid:     'ACTIV',
+  dropout:     'REG',
+  flatten:     'SHAPE',
+  linear:      'DENSE',
 }
 
 const LAYER_DESCRIPTIONS: Record<string, { label: string; what: string; why: string; analogy: string }> = {
@@ -282,61 +308,61 @@ const LAYER_DESCRIPTIONS: Record<string, { label: string; what: string; why: str
     label: 'Convolutional Layer',
     what: 'Slides a small learnable filter (kernel) over the image, computing dot products at each position to detect local patterns.',
     why: 'Each filter learns to detect one feature — edges, curves, textures. More filters = richer feature extraction.',
-    analogy: '🔍 Like scanning a photo with a magnifying glass that lights up when it sees a specific shape.',
+    analogy: 'Like scanning a photo with a small window that lights up when it sees a specific shape.',
   },
   batchnorm2d: {
     label: 'Batch Normalization',
     what: 'Normalizes each batch of activations to have zero mean and unit variance, then scales and shifts with learned parameters.',
     why: 'Prevents exploding/vanishing gradients, allows higher learning rates, and speeds up training significantly.',
-    analogy: '⚖️ Like a referee ensuring all players play at the same energy level before each round.',
+    analogy: 'Like ensuring all values stay in a consistent range before each processing step.',
   },
   maxpool2d: {
     label: 'Max Pooling',
     what: 'Divides the feature map into small windows and keeps only the maximum value from each window.',
     why: 'Reduces spatial size, cuts computation, and makes features robust to small shifts/translations.',
-    analogy: '📸 Like thumbnail-ing an image — keeps the most prominent signal and throws away fine detail.',
+    analogy: 'Like downsampling an image — keeps the strongest signal and discards fine detail.',
   },
   avgpool2d: {
     label: 'Average Pooling',
     what: 'Like max pooling but takes the average of values in each window instead of the maximum.',
     why: 'Produces smoother feature maps. Often used in the final stage before classification.',
-    analogy: '🌫️ Like blurring a photo — takes a soft summary of a region rather than the sharpest peak.',
+    analogy: 'Takes a soft summary of a region rather than the sharpest peak.',
   },
   relu: {
     label: 'ReLU Activation',
     what: 'Sets all negative values to zero, keeps positive values unchanged: f(x) = max(0, x).',
     why: 'Adds non-linearity so the network can learn complex patterns. Simple yet very effective.',
-    analogy: '💡 Like a switch — neuron is "silent" when negative, "fires" when positive.',
+    analogy: 'Like a gate — neuron is silent when negative, active when positive.',
   },
   gelu: {
     label: 'GELU Activation',
     what: 'A smooth, differentiable approximation of ReLU that slightly activates for small negative values.',
     why: 'Used in modern architectures (BERT, GPT). Tends to train slightly better than ReLU.',
-    analogy: '🎚️ A smoother dimmer switch instead of a hard on/off toggle.',
+    analogy: 'A smoother version of ReLU with a soft curve instead of a hard cutoff.',
   },
   sigmoid: {
     label: 'Sigmoid Activation',
     what: 'Squashes any input to a value between 0 and 1 using f(x) = 1 / (1 + e⁻ˣ).',
     why: 'Useful for binary classification outputs. Rarely used in hidden layers due to vanishing gradients.',
-    analogy: '📊 Like a confidence meter that always reads between 0% and 100%.',
+    analogy: 'Like a confidence meter that always reads between 0% and 100%.',
   },
   dropout: {
     label: 'Dropout',
     what: 'Randomly zeros out a fraction (p) of neurons during training. Disabled at inference time.',
     why: 'Prevents overfitting by forcing the network not to rely on any single neuron.',
-    analogy: '🎲 Like randomly benching players during practice — the team learns to work without any one star.',
+    analogy: 'Like randomly muting inputs during training — the network learns to be robust.',
   },
   flatten: {
     label: 'Flatten',
     what: 'Reshapes a 3D tensor (Channels × Height × Width) into a single 1D vector.',
     why: 'Required to bridge spatial feature maps with fully connected layers.',
-    analogy: '📄 Like unrolling a folded map into a single long strip.',
+    analogy: 'Like unrolling a grid into a single list of numbers.',
   },
   linear: {
     label: 'Fully Connected (Linear)',
     what: 'Every input neuron connects to every output neuron with a learned weight.',
     why: 'Combines all extracted features to make a final decision or produce class scores.',
-    analogy: '🗳️ Like a committee vote — every piece of evidence contributes to the final answer.',
+    analogy: 'Like combining all evidence to reach a final classification verdict.',
   },
 }
 
@@ -1361,11 +1387,52 @@ export default function CustomModel() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // Training state
-  const [epochs, setEpochs] = useState(20)
-  const [batch,  setBatch]  = useState(32)
-  const [lr,     setLr]     = useState(0.001)
+  const [epochs,    setEpochs]    = useState(20)
+  const [batch,     setBatch]     = useState(32)
+  const [lr,        setLr]        = useState(0.001)
+  const [valSplit,  setValSplit]   = useState(0.2)
+  const [patience,  setPatience]  = useState(0)
+  // Optimizer
+  const [optimizer,    setOptimizer]    = useState('Adam')
+  const [weightDecay,  setWeightDecay]  = useState(0.0)
+  const [momentum,     setMomentum]     = useState(0.9)
+  const [warmupEpochs, setWarmupEpochs] = useState(0)
+  // Augmentation
+  // LR Scheduler
+  const [lrScheduler, setLrScheduler] = useState('cosine')
+  const [stepSize,    setStepSize]    = useState(10)
+  const [stepGamma,   setStepGamma]   = useState(0.1)
+  // Regularisation
+  const [labelSmoothing, setLabelSmoothing] = useState(0.0)
+  // Augmentation
+  const [showAug,    setShowAug]    = useState(false)
+  const [fliplr,     setFliplr]     = useState(0.5)
+  const [flipud,     setFlipud]     = useState(0.0)
+  const [degrees,    setDegrees]    = useState(0.0)
+  const [translate,  setTranslate]  = useState(0.0)
+  const [scale,      setScale]      = useState(0.0)
+  const [brightness, setBrightness] = useState(0.2)
+  const [contrast,   setContrast]   = useState(0.2)
+  const [saturation, setSaturation] = useState(0.2)
+  const [erasing,    setErasing]    = useState(0.0)
+  const [mixup,      setMixup]      = useState(0.0)
+  // Chart
+  const [chartData, setChartData] = useState<{epoch:number; accuracy:number; trainLoss:number; valLoss:number}[]>([])
+  // All runs (for comparison)
+  const [allRuns, setAllRuns] = useState<CustomRun[]>([])
+
   const [activeRun, setActiveRun] = useState<CustomRun | null>(null)
   const [logs,   setLogs]   = useState<string[]>([])
+
+  // ── Inference ─────────────────────────────────────────────────────────────
+  const [inferRunId,    setInferRunId]    = useState('')
+  const [inferFile,     setInferFile]     = useState<File | null>(null)
+  const [inferPreview,  setInferPreview]  = useState<string | null>(null)
+  const [inferRunning,  setInferRunning]  = useState(false)
+  const [inferResult,   setInferResult]   = useState<{top1:{class_name:string;probability:number};top5:{class_name:string;probability:number}[]} | null>(null)
+  const [onnxExporting, setOnnxExporting] = useState<number | null>(null)
+  const [expandedRun,   setExpandedRun]   = useState<number | null>(null)
+  const inferFileRef = useRef<HTMLInputElement>(null)
   const logRef  = useRef<HTMLDivElement>(null)
   const sseRef  = useRef<EventSource | null>(null)
 
@@ -1416,12 +1483,14 @@ export default function CustomModel() {
     const load = async () => {
       setLoading(true)
       try {
-        const [pRes, cfgRes] = await Promise.all([
+        const [pRes, cfgRes, runsRes] = await Promise.all([
           api.get(`/projects/${projectId}`),
           api.get(`/projects/${projectId}/custom/configs`),
+          api.get(`/projects/${projectId}/custom/runs`),
         ])
         setProjectName(pRes.data.name)
         setNumClasses(pRes.data.classes?.length ?? 2)
+        setAllRuns(runsRes.data)
         const cfgs: CustomConfig[] = cfgRes.data
         if (cfgs.length > 0) {
           const cfg = cfgs[cfgs.length - 1]
@@ -1716,18 +1785,25 @@ export default function CustomModel() {
 
   // ── Training ──────────────────────────────────────────────────────────────
 
+  const loadAllRuns = () =>
+    api.get(`/projects/${projectId}/custom/runs`).then(r => setAllRuns(r.data))
+
   const startTraining = async () => {
     if (!savedConfig) {
       alert('Config is still saving, please wait a moment.')
       return
     }
-    setLogs([])
+    setLogs([]); setChartData([])
     try {
       const res = await api.post(`/projects/${projectId}/custom/runs`, {
         config_id: savedConfig.id,
-        epochs,
-        batch,
-        lr,
+        epochs, batch, lr,
+        val_split: valSplit, patience,
+        optimizer, weight_decay: weightDecay, momentum, warmup_epochs: warmupEpochs,
+        lr_scheduler: lrScheduler, step_size: stepSize, step_gamma: stepGamma,
+        label_smoothing: labelSmoothing,
+        fliplr, flipud, degrees, translate, scale,
+        brightness, contrast, saturation, erasing, mixup,
       })
       const run: CustomRun = res.data
       setActiveRun(run)
@@ -1738,6 +1814,45 @@ export default function CustomModel() {
     }
   }
 
+  const stopRun = async () => {
+    if (!activeRun) return
+    await api.post(`/projects/${projectId}/custom/runs/${activeRun.id}/stop`)
+    setActiveRun(prev => prev ? { ...prev, status: 'stopped' } : prev)
+    sseRef.current?.close()
+  }
+
+  const deleteRun = async () => {
+    if (!activeRun || activeRun.status === 'running') return
+    await api.delete(`/projects/${projectId}/custom/runs/${activeRun.id}`)
+    setActiveRun(null); setLogs([]); loadAllRuns()
+  }
+
+  const exportOnnx = async (runId: number) => {
+    setOnnxExporting(runId)
+    try {
+      const res = await api.post(`/projects/${projectId}/custom/runs/${runId}/export-onnx`,
+        {}, { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url; a.download = `custom_model_run${runId}.onnx`; a.click()
+      URL.revokeObjectURL(url)
+    } finally { setOnnxExporting(null) }
+  }
+
+  const runInference = async () => {
+    if (!inferFile || !inferRunId) return
+    setInferRunning(true); setInferResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', inferFile)
+      const res = await api.post(
+        `/projects/${projectId}/custom/runs/${inferRunId}/infer`, fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      )
+      setInferResult(res.data)
+    } finally { setInferRunning(false) }
+  }
+
   const openSSE = (runId: number) => {
     sseRef.current?.close()
     const es = new EventSource(`/api/projects/${projectId}/custom/runs/${runId}/stream`)
@@ -1746,19 +1861,22 @@ export default function CustomModel() {
       const data = e.data as string
       if (data === '__END__') {
         es.close()
-        // Refresh run status
         api.get(`/projects/${projectId}/custom/runs/${runId}`)
-          .then(r => setActiveRun(r.data))
+          .then(r => { setActiveRun(r.data); loadAllRuns() })
           .catch(() => {})
         return
       }
       if (data.startsWith('__PROGRESS__:')) {
+        // format: epoch/total:acc:train_loss:val_loss
         const parts = data.split(':')
         const [ep, total] = parts[1].split('/')
-        const acc = parseFloat(parts[2])
+        const acc   = parseFloat(parts[2])
+        const tloss = parseFloat(parts[3] ?? '0')
+        const vloss = parseFloat(parts[4] ?? '0')
         setActiveRun(prev => prev ? { ...prev, status: 'running' } : prev)
+        setChartData(prev => [...prev, { epoch: Number(ep), accuracy: acc, trainLoss: tloss, valLoss: vloss }])
         setLogs(prev => [...prev.filter(l => !l.startsWith('[PROG]')),
-          `[PROG] Epoch ${ep}/${total} — acc ${(acc * 100).toFixed(1)}%`])
+          `[PROG] Epoch ${ep}/${total} — acc ${(acc * 100).toFixed(1)}%  loss ${vloss.toFixed(4)}`])
         return
       }
       if (data === '__FAILED__') {
@@ -1975,9 +2093,8 @@ export default function CustomModel() {
                     {isDropTarget ? (
                       <div style={{
                         position: 'absolute', inset: '4px 6px',
-                        borderRadius: 2, height: 3,
+                        borderRadius: 2, height: 2,
                         background: color,
-                        boxShadow: `0 0 14px ${color}, 0 0 6px ${color}`,
                       }} />
                     ) : (
                       <div style={{ width: 1, height: '100%', background: `linear-gradient(${LAYER_CSS[layers[index - 1]?.type] ?? color}, ${color})`, opacity: 0.22 }} />
@@ -1993,71 +2110,109 @@ export default function CustomModel() {
                     onDragEnd={onLayerDragEnd}
                     style={{
                       display: 'flex', borderRadius: 8, overflow: 'hidden',
-                      border: `1px solid ${isSelected ? color + '55' : 'rgba(255,255,255,0.055)'}`,
+                      border: `1px solid ${isSelected ? color + '44' : 'rgba(255,255,255,0.055)'}`,
                       background: isSelected
-                        ? `linear-gradient(120deg, ${color}14 0%, ${color}07 100%)`
+                        ? `${color}0d`
                         : isDragging ? 'rgba(255,255,255,0.015)' : 'rgba(255,255,255,0.028)',
                       opacity: isDragging ? 0.22 : 1,
-                      boxShadow: isSelected ? `0 0 0 1px ${color}22, 0 4px 22px ${color}12` : 'none',
+                      boxShadow: 'none',
                       transition: 'border-color 0.14s, box-shadow 0.14s, background 0.14s, opacity 0.14s',
                     }}
                   >
+                    {/* Accent bar */}
+                    <div style={{ width: 3, flexShrink: 0, background: color, opacity: 0.8 }} />
+
                     {/* Drag handle */}
                     <div
                       style={{
-                        width: 22, flexShrink: 0, cursor: 'grab',
-                        background: `${color}0c`,
-                        borderRight: '1px solid rgba(255,255,255,0.04)',
+                        width: 20, flexShrink: 0, cursor: 'grab',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        opacity: 0.3,
                       }}
                       title="Drag to reorder"
                     >
                       <svg width="8" height="12" viewBox="0 0 8 12" fill="none">
                         {([[2,1],[6,1],[2,5],[6,5],[2,9],[6,9]] as [number,number][]).map(([cx,cy],i) => (
-                          <circle key={i} cx={cx} cy={cy} r="1.25" fill={`${color}55`} />
+                          <circle key={i} cx={cx} cy={cy} r="1.3" fill="var(--text2)" />
                         ))}
                       </svg>
                     </div>
 
-                    {/* Accent bar */}
-                    <div style={{ width: 2.5, flexShrink: 0, background: `linear-gradient(to bottom, ${color}, ${color}55)` }} />
-
                     {/* Content */}
                     <div
-                      style={{ flex: 1, padding: '8px 9px 7px', minWidth: 0, cursor: dragIdx !== null ? 'grabbing' : 'pointer' }}
+                      style={{ flex: 1, padding: '9px 10px 8px 4px', minWidth: 0, cursor: dragIdx !== null ? 'grabbing' : 'pointer' }}
                       onClick={() => { if (didDragRef.current) return; setSelectedId(isSelected ? null : layer.id) }}
                     >
-                      {/* Row 1 */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '-0.02em', fontFamily: 'JetBrains Mono, monospace', lineHeight: 1, color: valid ? color : '#f87171', flex: 1, minWidth: 0 }}>
+                      {/* Row 1: name + category tag + shape + delete */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{
+                          fontSize: 13, fontWeight: 600, letterSpacing: '-0.02em',
+                          fontFamily: 'inherit', lineHeight: 1,
+                          color: valid ? 'var(--text)' : '#f87171',
+                          flex: 1, minWidth: 0,
+                        }}>
                           {LAYER_DISPLAY[layer.type] ?? layer.type}
                         </span>
-                        <span style={{ fontSize: 9, letterSpacing: '-0.02em', fontFamily: 'monospace', lineHeight: 1, color: valid ? 'rgba(130,130,150,0.55)' : '#f87171', flexShrink: 0 }}>
+                        {valid && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                            fontFamily: 'JetBrains Mono, monospace',
+                            color: color, opacity: 0.9,
+                            background: `${color}15`,
+                            padding: '1px 5px', borderRadius: 3,
+                            flexShrink: 0, lineHeight: '16px',
+                          }}>
+                            {LAYER_CATEGORY[layer.type] ?? ''}
+                          </span>
+                        )}
+                        <span style={{
+                          fontSize: 10, fontFamily: 'JetBrains Mono, monospace',
+                          lineHeight: 1, color: 'var(--text3)', flexShrink: 0,
+                          fontVariantNumeric: 'tabular-nums',
+                        }}>
                           {shapeStr}
                         </span>
                         <button
                           onClick={e => { e.stopPropagation(); deleteLayer(layer.id) }}
-                          style={{ width: 15, height: 15, flexShrink: 0, background: 'none', border: 'none', padding: 0, color: 'rgba(200,70,70,0.4)', cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 3, transition: 'color 0.12s' }}
+                          style={{
+                            width: 16, height: 16, flexShrink: 0,
+                            background: 'none', border: 'none', padding: 0,
+                            color: 'var(--text3)', cursor: 'pointer', fontSize: 10,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            borderRadius: 3, transition: 'color 0.1s',
+                          }}
                           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f87171' }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(200,70,70,0.4)' }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text3)' }}
                         >✕</button>
                       </div>
 
                       {/* Row 2: params preview */}
                       {!isSelected && (
-                        <div style={{ fontSize: 9, marginTop: 3, color: `${color}55`, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+                        <div style={{
+                          fontSize: 10, marginTop: 4,
+                          color: 'var(--text3)',
+                          fontFamily: 'JetBrains Mono, monospace',
+                          letterSpacing: '-0.01em',
+                          overflow: 'hidden', textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap', lineHeight: 1.3,
+                        }}>
                           {getParamsPreview(layer)}
                         </div>
                       )}
 
                       {/* Expanded: desc + param editor */}
                       {isSelected && (
-                        <div style={{ marginTop: 9, paddingTop: 8, borderTop: `1px solid ${color}18` }}>
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
                           {desc && (
-                            <div style={{ marginBottom: 9, padding: '7px 9px', background: `${color}0b`, borderRadius: 5, borderLeft: `2.5px solid ${color}60` }}>
-                              <p style={{ fontSize: 10, fontWeight: 700, color: `${color}ee`, marginBottom: 4 }}>{desc.label}</p>
-                              <p style={{ fontSize: 10, color: 'rgba(150,150,172,0.8)', lineHeight: 1.55, marginBottom: 4 }}>{desc.what}</p>
-                              <p style={{ fontSize: 10, color: `${color}80`, lineHeight: 1.4 }}>{desc.analogy}</p>
+                            <div style={{
+                              marginBottom: 10, padding: '9px 11px',
+                              background: 'var(--surface2)',
+                              borderRadius: 6,
+                              borderLeft: `2px solid ${color}`,
+                            }}>
+                              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', marginBottom: 5 }}>{desc.label}</p>
+                              <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 5 }}>{desc.what}</p>
+                              <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5, fontStyle: 'italic' }}>{desc.analogy}</p>
                             </div>
                           )}
                           <ParamEditor layer={layer} onChange={params => updateLayerParams(layer.id, params)} />
@@ -2229,44 +2384,93 @@ export default function CustomModel() {
         </div>
 
         {/* ── Right panel: Training ───────────────────────────────────────── */}
-        <div style={{ ...panelStyle, width: 260, flexShrink: 0 }}>
+        <div style={{ ...panelStyle, width: 260, flexShrink: 0, overflowY: 'auto' }}>
           {sectionLabel('Training')}
 
-          <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[
-              { label: 'Epochs', val: epochs, set: setEpochs, min: 1,   max: 200, step: 1    },
-              { label: 'Batch',  val: batch,  set: setBatch,  min: 4,   max: 128, step: 4    },
-            ].map(({ label, val, set, min, max, step }) => (
+          {/* ── Numeric inputs helper ── */}
+          {(() => {
+            const numInput = (label: string, val: number, set: (v: number) => void,
+              min: number, max: number, step: number) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ fontSize: 12, color: 'var(--text2)', width: 50, flexShrink: 0 }}>{label}</label>
-                <input
-                  type="number" min={min} max={max} step={step}
-                  value={val}
+                <label style={{ fontSize: 11, color: 'var(--text2)', width: 74, flexShrink: 0 }}>{label}</label>
+                <input type="number" min={min} max={max} step={step} value={val}
                   onChange={e => set(Number(e.target.value))}
-                  style={{
-                    flex: 1, padding: '5px 8px',
-                    background: 'var(--surface2)', border: '1px solid var(--border)',
-                    borderRadius: 5, color: 'var(--text)', fontSize: 12,
-                  }}
-                />
+                  style={{ flex: 1, padding: '4px 6px', background: 'var(--surface2)',
+                    border: '1px solid var(--border)', borderRadius: 5,
+                    color: 'var(--text)', fontSize: 11 }} />
               </div>
-            ))}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={{ fontSize: 12, color: 'var(--text2)', width: 50, flexShrink: 0 }}>LR</label>
-              <input
-                type="number" min={0.00001} max={0.1} step={0.0001}
-                value={lr}
-                onChange={e => setLr(Number(e.target.value))}
-                style={{
-                  flex: 1, padding: '5px 8px',
-                  background: 'var(--surface2)', border: '1px solid var(--border)',
-                  borderRadius: 5, color: 'var(--text)', fontSize: 12,
-                }}
-              />
-            </div>
-          </div>
+            )
+            const secHdr = (t: string) => (
+              <p style={{ fontSize: 9, fontWeight: 600, color: 'var(--text3)',
+                textTransform: 'uppercase', letterSpacing: '0.07em', marginTop: 6 }}>{t}</p>
+            )
+            return (
+              <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {secHdr('Basic')}
+                {numInput('Epochs',   epochs,   setEpochs,   1,    200,  1)}
+                {numInput('Batch',    batch,    setBatch,    4,    128,  4)}
+                {numInput('LR',       lr,       setLr,       0.00001, 0.1, 0.0001)}
+                {numInput('Val Split %', valSplit * 100, v => setValSplit(v / 100), 10, 40, 5)}
+                {numInput('Patience', patience, setPatience, 0,    100,  1)}
 
-          <div style={{ padding: '0 12px 10px' }}>
+                {secHdr('Optimizer')}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <label style={{ fontSize: 11, color: 'var(--text2)', width: 74, flexShrink: 0 }}>Algorithm</label>
+                  <select value={optimizer} onChange={e => setOptimizer(e.target.value)}
+                    style={{ flex: 1, padding: '4px 6px', background: 'var(--surface2)',
+                      border: '1px solid var(--border)', borderRadius: 5,
+                      color: 'var(--text)', fontSize: 11 }}>
+                    <option value="Adam">Adam</option>
+                    <option value="AdamW">AdamW</option>
+                    <option value="SGD">SGD</option>
+                  </select>
+                </div>
+                {numInput('Weight Decay', weightDecay,  setWeightDecay,  0,   0.01,  0.0001)}
+                {numInput('Momentum',     momentum,     setMomentum,     0.5, 0.99,  0.01)}
+                {numInput('Warmup Ep',    warmupEpochs, setWarmupEpochs, 0,   20,    1)}
+
+                {secHdr('LR Scheduler')}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <label style={{ fontSize: 11, color: 'var(--text2)', width: 74, flexShrink: 0 }}>Schedule</label>
+                  <select value={lrScheduler} onChange={e => setLrScheduler(e.target.value)}
+                    style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)',
+                      borderRadius: 4, color: 'var(--text)', padding: '3px 6px', fontSize: 11 }}>
+                    <option value="cosine">Cosine</option>
+                    <option value="step">Step LR</option>
+                    <option value="none">None</option>
+                  </select>
+                </div>
+                {lrScheduler === 'step' && (<>
+                  {numInput('Step Size',  stepSize,  setStepSize,  1, 50,  1)}
+                  {numInput('Step Gamma', stepGamma, setStepGamma, 0.01, 0.9, 0.01)}
+                </>)}
+
+                {secHdr('Regularisation')}
+                {numInput('Label Smooth', labelSmoothing, setLabelSmoothing, 0, 0.3, 0.01)}
+
+                {secHdr('Augmentation')}
+                <button onClick={() => setShowAug(v => !v)}
+                  style={{ textAlign: 'left', fontSize: 11, color: 'var(--accent)',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  {showAug ? '▲ Hide' : '▼ Show augmentation'}
+                </button>
+                {showAug && (<>
+                  {numInput('Flip LR',    fliplr,     setFliplr,     0, 1,   0.05)}
+                  {numInput('Flip UD',    flipud,     setFlipud,     0, 1,   0.05)}
+                  {numInput('Rotation °', degrees,    setDegrees,    0, 180, 5)}
+                  {numInput('Translate',  translate,  setTranslate,  0, 0.5, 0.05)}
+                  {numInput('Scale',      scale,      setScale,      0, 0.5, 0.05)}
+                  {numInput('Brightness', brightness, setBrightness, 0, 0.8, 0.05)}
+                  {numInput('Contrast',   contrast,   setContrast,   0, 0.8, 0.05)}
+                  {numInput('Saturation', saturation, setSaturation, 0, 0.8, 0.05)}
+                  {numInput('Erasing',    erasing,    setErasing,    0, 0.9, 0.05)}
+                  {numInput('Mixup',      mixup,      setMixup,      0, 1,   0.05)}
+                </>)}
+              </div>
+            )
+          })()}
+
+          <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <Btn
               variant="primary"
               onClick={startTraining}
@@ -2275,6 +2479,18 @@ export default function CustomModel() {
             >
               {activeRun?.status === 'running' ? 'Training…' : 'Train'}
             </Btn>
+            {activeRun?.status === 'running' && (
+              <Btn variant="ghost" size="sm" onClick={stopRun}
+                style={{ width: '100%', justifyContent: 'center', color: 'var(--warn)' }}>
+                ■ Stop
+              </Btn>
+            )}
+            {activeRun && activeRun.status !== 'running' && (
+              <Btn variant="ghost" size="sm" onClick={deleteRun}
+                style={{ width: '100%', justifyContent: 'center', color: 'var(--error, #f87171)' }}>
+                🗑 Delete run
+              </Btn>
+            )}
           </div>
 
           {/* Status */}
@@ -2291,11 +2507,11 @@ export default function CustomModel() {
           <div
             ref={logRef}
             style={{
-              flex: 1, overflowY: 'auto', margin: '0 10px 10px',
+              height: 200, overflowY: 'auto', margin: '0 10px 10px',
               background: '#07070a', border: '1px solid var(--border)',
               borderRadius: 5, padding: '8px 10px',
               fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 1.65,
-              minHeight: 0,
+              flexShrink: 0,
             }}
           >
             {logs.length === 0
@@ -2304,9 +2520,9 @@ export default function CustomModel() {
                 <div
                   key={i}
                   style={{
-                    color: l.startsWith('Error') || l.includes('❌') ? 'var(--danger)'
-                      : l.startsWith('[PROG]') ? 'var(--accent)'
-                      : l.includes('Done') || l.includes('✅') ? 'var(--success)'
+                    color: l.startsWith('[ERROR]') || l.toLowerCase().includes('error') ? 'var(--danger)'
+                      : l.startsWith('[DONE]') ? 'var(--success)'
+                      : l.startsWith('[WARN]') || l.startsWith('[STOPPED]') ? 'var(--warn)'
                       : 'var(--text2)',
                   }}
                 >
@@ -2314,6 +2530,283 @@ export default function CustomModel() {
                 </div>
               ))}
           </div>
+
+          {/* ── Live accuracy chart ── */}
+          {chartData.length > 1 && (
+            <div style={{ margin: '0 10px 10px', flexShrink: 0 }}>
+              {sectionLabel('Validation Accuracy')}
+              <div style={{
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                borderRadius: 6, padding: '12px 8px 8px',
+              }}>
+                <ResponsiveContainer width="100%" height={140}>
+                  <LineChart data={chartData} margin={{ left: -16 }}>
+                    <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" />
+                    <XAxis dataKey="epoch" stroke="var(--text3)" tick={{ fontSize: 10 }} />
+                    <YAxis stroke="var(--text3)" tick={{ fontSize: 10 }} domain={[0, 1]}
+                      tickFormatter={(v: number) => `${Math.round(v * 100)}%`} />
+                    <Tooltip
+                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }}
+                      formatter={(v: unknown) => [`${((v as number) * 100).toFixed(2)}%`, 'Accuracy']}
+                    />
+                    <Line type="monotone" dataKey="accuracy" stroke="var(--accent)"
+                      strokeWidth={2} dot={false} name="Accuracy" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* ── Run comparison bar chart ── */}
+          {allRuns.filter(r => r.status === 'done').length > 1 && (
+            <div style={{ margin: '0 10px 10px', flexShrink: 0 }}>
+              {sectionLabel('Run Comparison — Accuracy')}
+              <div style={{
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                borderRadius: 6, padding: '12px 8px 8px',
+              }}>
+                <ResponsiveContainer width="100%" height={110}>
+                  <BarChart
+                    data={allRuns.filter(r => r.status === 'done').map(r => {
+                      const res = r.results as Record<string, unknown>
+                      const acc = typeof res?.top1_acc === 'number' ? res.top1_acc * 100
+                        : typeof res?.val_acc === 'number' ? res.val_acc * 100
+                        : typeof res?.accuracy === 'number' ? res.accuracy * 100 : 0
+                      return { name: `#${r.id}`, acc }
+                    })}
+                    margin={{ left: -16 }}
+                  >
+                    <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" />
+                    <XAxis dataKey="name" stroke="var(--text3)" tick={{ fontSize: 10 }} />
+                    <YAxis stroke="var(--text3)" tick={{ fontSize: 10 }} domain={[0, 100]}
+                      tickFormatter={(v: number) => `${v}%`} />
+                    <Tooltip
+                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }}
+                      formatter={(v: unknown) => [`${(v as number).toFixed(1)}%`, 'Accuracy']}
+                    />
+                    <Bar dataKey="acc" radius={[3, 3, 0, 0]}>
+                      {allRuns.filter(r => r.status === 'done').map((_, i) => (
+                        <Cell key={i} fill={['#5865f2','#22c55e','#f59e0b','#06b6d4','#a855f7','#ec4899'][i % 6]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* ── Loss chart ── */}
+          {chartData.length > 1 && (
+            <div style={{ margin: '0 10px 10px', flexShrink: 0 }}>
+              {sectionLabel('Train & Val Loss')}
+              <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '12px 8px 8px' }}>
+                <ResponsiveContainer width="100%" height={130}>
+                  <LineChart data={chartData} margin={{ left: -16 }}>
+                    <CartesianGrid strokeDasharray="2 2" stroke="var(--border)" />
+                    <XAxis dataKey="epoch" stroke="var(--text3)" tick={{ fontSize: 10 }} />
+                    <YAxis stroke="var(--text3)" tick={{ fontSize: 10 }} tickFormatter={(v: number) => v.toFixed(2)} />
+                    <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }}
+                      formatter={(v: unknown) => [(v as number).toFixed(4)]} />
+                    <Line type="monotone" dataKey="trainLoss" stroke="#f97316" strokeWidth={2} dot={false} name="Train Loss" strokeDasharray="4 2" />
+                    <Line type="monotone" dataKey="valLoss"   stroke="#22c55e" strokeWidth={2} dot={false} name="Val Loss" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* ── Run history ── */}
+          {allRuns.length > 0 && (
+            <div style={{ margin: '0 10px 10px', flexShrink: 0 }}>
+              {sectionLabel('Run History')}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[...allRuns].reverse().map(run => {
+                  const res      = run.results as Record<string, unknown>
+                  const acc1     = typeof res?.top1_acc === 'number' ? res.top1_acc : null
+                  const perClass = (res?.per_class && typeof res.per_class === 'object' && !Array.isArray(res.per_class))
+                    ? res.per_class as Record<string, Record<string, number>> : null
+                  const cm       = Array.isArray(res?.confusion_matrix) ? res.confusion_matrix as number[][] : null
+                  const isExp    = expandedRun === run.id
+
+                  return (
+                    <div key={run.id} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', gap: 6 }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                            <Badge color={statusColor(run.status)}>{run.status}</Badge>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>#{run.id}</span>
+                            <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+                              {run.epochs}ep · lr{run.lr}
+                            </span>
+                          </div>
+                          {acc1 !== null && (
+                            <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>
+                              {(acc1 * 100).toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          {run.status === 'done' && (perClass || cm) && (
+                            <Btn variant="ghost" size="sm" onClick={() => setExpandedRun(isExp ? null : run.id)}>
+                              {isExp ? '▲' : 'CM'}
+                            </Btn>
+                          )}
+                          {run.status === 'done' && run.model_path && (<>
+                            <Btn variant="secondary" size="sm"
+                              href={`/api/projects/${projectId}/custom/runs/${run.id}/download`}>
+                              ↓.pth
+                            </Btn>
+                            <Btn variant="secondary" size="sm"
+                              disabled={onnxExporting === run.id}
+                              onClick={() => exportOnnx(run.id)}>
+                              {onnxExporting === run.id ? '…' : '↓.onnx'}
+                            </Btn>
+                          </>)}
+                          {run.status === 'running' && (
+                            <Btn variant="ghost" size="sm" onClick={stopRun} style={{ color: 'var(--warn)' }}>■ Stop</Btn>
+                          )}
+                          {run.status !== 'running' && (
+                            <Btn variant="ghost" size="sm"
+                              onClick={async () => { await api.delete(`/projects/${projectId}/custom/runs/${run.id}`); loadAllRuns() }}
+                              style={{ color: 'var(--error,#f87171)' }}>🗑</Btn>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expanded: per-class metrics + confusion matrix */}
+                      {isExp && (
+                        <div style={{ padding: '0 10px 10px', borderTop: '1px solid var(--border)' }}>
+                          {perClass && (
+                            <>
+                              <p style={{ fontSize: 10, color: 'var(--text3)', margin: '8px 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Per-Class Metrics</p>
+                              <div style={{ overflowX: 'auto' }}>
+                                <table style={{ borderCollapse: 'collapse', fontSize: 10, width: '100%' }}>
+                                  <thead>
+                                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                      {['Class','Acc','Prec','Rec','F1','N'].map(h => (
+                                        <th key={h} style={{ padding: '2px 6px', color: 'var(--text3)', fontWeight: 500, textAlign: h === 'Class' ? 'left' : 'center' }}>{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {Object.entries(perClass).map(([cls, m]) => (
+                                      <tr key={cls} style={{ borderBottom: '1px solid var(--border)' }}>
+                                        <td style={{ padding: '3px 6px', color: 'var(--text2)', fontWeight: 500 }}>{cls}</td>
+                                        {(['accuracy','precision','recall','f1'] as const).map(k => {
+                                          const v = m[k] as number
+                                          return (
+                                            <td key={k} style={{ padding: '3px 6px', textAlign: 'center', fontFamily: 'JetBrains Mono, monospace',
+                                              color: v >= 0.7 ? 'var(--success,#22c55e)' : v < 0.4 ? 'var(--danger,#f87171)' : 'var(--warn,#f59e0b)' }}>
+                                              {(v * 100).toFixed(0)}%
+                                            </td>
+                                          )
+                                        })}
+                                        <td style={{ padding: '3px 6px', textAlign: 'center', color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>{m.support}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </>
+                          )}
+                          {cm && (
+                            <>
+                              <p style={{ fontSize: 10, color: 'var(--text3)', margin: '8px 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confusion Matrix</p>
+                              <div style={{ overflowX: 'auto' }}>
+                                <table style={{ borderCollapse: 'collapse', fontSize: 10 }}>
+                                  <tbody>
+                                    {cm.map((row, i) => {
+                                      const rowTotal = row.reduce((a, b) => a + b, 0)
+                                      return (
+                                        <tr key={i}>
+                                          {row.map((val, j) => {
+                                            const intensity = rowTotal > 0 ? val / rowTotal : 0
+                                            return (
+                                              <td key={j} style={{ padding: '2px 6px', textAlign: 'center',
+                                                background: i === j ? `rgba(34,197,94,${intensity * 0.6})` : intensity > 0.1 ? `rgba(248,113,113,${intensity * 0.5})` : 'transparent',
+                                                color: intensity > 0.4 ? '#fff' : 'var(--text2)',
+                                                fontFamily: 'JetBrains Mono, monospace', borderRadius: 3 }}>
+                                                {val}
+                                              </td>
+                                            )
+                                          })}
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Inference ── */}
+          {allRuns.filter(r => r.status === 'done').length > 0 && (
+            <div style={{ margin: '0 10px 14px', flexShrink: 0 }}>
+              {sectionLabel('Test Model')}
+              <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <label style={{ fontSize: 11, color: 'var(--text2)', flexShrink: 0, width: 30 }}>Run</label>
+                  <select value={inferRunId} onChange={e => setInferRunId(e.target.value)}
+                    style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', padding: '3px 6px', fontSize: 11 }}>
+                    <option value="">Select run…</option>
+                    {allRuns.filter(r => r.status === 'done').map(r => {
+                      const acc = (r.results as Record<string,unknown>)?.top1_acc
+                      return <option key={r.id} value={r.id}>#{r.id}{typeof acc === 'number' ? ` · ${(acc*100).toFixed(1)}%` : ''}</option>
+                    })}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <Btn variant="secondary" size="sm" onClick={() => inferFileRef.current?.click()}>
+                    ↑ Image
+                  </Btn>
+                  <input ref={inferFileRef} type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => {
+                      const f = e.target.files?.[0]
+                      if (f) { setInferFile(f); setInferPreview(URL.createObjectURL(f)); setInferResult(null) }
+                    }} />
+                  <span style={{ fontSize: 10, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {inferFile?.name ?? 'No file'}
+                  </span>
+                </div>
+                {inferPreview && (
+                  <img src={inferPreview} alt="preview"
+                    style={{ width: '100%', maxHeight: 100, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)' }} />
+                )}
+                <Btn variant="primary" size="sm" onClick={runInference}
+                  disabled={!inferFile || !inferRunId || inferRunning}
+                  style={{ justifyContent: 'center' }}>
+                  {inferRunning ? '⏳ Running…' : '▶ Classify'}
+                </Btn>
+                {inferResult && (
+                  <div>
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 5, padding: '8px 10px', marginBottom: 6 }}>
+                      <p style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Top prediction</p>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{inferResult.top1?.class_name}</p>
+                      <p style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>
+                        {((inferResult.top1?.probability ?? 0) * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                    {inferResult.top5.slice(1).map((p, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text2)', padding: '2px 0', borderTop: i === 0 ? '1px solid var(--border)' : 'none' }}>
+                        <span>{p.class_name}</span>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text3)', fontSize: 10 }}>
+                          {(p.probability * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

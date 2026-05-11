@@ -92,57 +92,85 @@ What is reported:
 
 ---
 
-### YOLOv8 Object Detection Training
+### YOLO Object Detection Training
 
-Object detection is the task of finding objects in an image and drawing a box around each one. YOLOv8 (You Only Look Once, version 8) is one of the fastest and most accurate object detection architectures available. Given an image, it outputs a list of bounding boxes, each with a class label (what the object is) and a confidence score (how certain the model is).
+Object detection is the task of finding objects in an image and drawing a box around each one. NoCode CV supports the full YOLO family — YOLO11, YOLOv10, YOLOv9, and YOLOv8 — all of which are fast, accurate single-stage detectors. Given an image, a YOLO model outputs a list of bounding boxes, each with a class label (what the object is) and a confidence score (how certain the model is).
 
-Training a YOLOv8 model means starting from weights that were already trained on a large general dataset (COCO, with 80 common object categories), then continuing to train on your specific images and classes. The model forgets nothing about what it already knows — it simply learns to also recognize your new categories. This process is called fine-tuning and requires far less data than training from scratch.
+Training starts from weights that were already trained on a large general dataset (COCO, with 80 common object categories), then continues on your specific images and classes. The model forgets nothing about what it already knows — it simply learns to also recognize your new categories. This process is called fine-tuning and requires far less data than training from scratch.
 
-**Choosing a model size**
+**Importing an existing YOLO dataset**
 
-Five pretrained model sizes are available. Smaller models train faster and use less GPU memory but are less accurate. Larger models need more resources but produce better results on complex tasks.
+If you already have a labeled dataset in standard YOLO format (an `images/` folder and a `labels/` folder), you can import it directly:
 
-| Model | Parameters | Best use |
-|---|---|---|
-| yolov8n.pt (nano) | ~3M | Quick experiments, edge devices with limited compute |
-| yolov8s.pt (small) | ~11M | Devices with moderate compute, mobile deployment |
-| yolov8m.pt (medium) | ~26M | General-purpose tasks with a decent GPU |
-| yolov8l.pt (large) | ~44M | High-accuracy tasks where speed is less critical |
-| yolov8x.pt (extra-large) | ~68M | Maximum accuracy, requires a powerful GPU |
+- Click **Import YOLO Folder** and select the folder that contains `images/` and `labels/` sub-folders. The app matches each image to its label file by filename and imports all pairs automatically.
+- Click **Import YOLO Files** to select individual image and label files from any location.
 
-If you are just starting out or testing a new dataset, begin with yolov8n.pt. Upgrade to a larger model once you know your data is good.
+Large datasets (thousands of images) are uploaded in batches and a progress indicator shows how many pairs have been processed. Only images that have a matching label file are imported as annotated; unpaired images are uploaded without annotations.
+
+**Choosing a model architecture**
+
+NoCode CV ships with pretrained weights for four YOLO generations. Newer generations generally produce better accuracy at the same model size. All models are downloaded automatically on first use and cached locally.
+
+| Family | Nano | Small | Medium | Large | Extra-large |
+|---|---|---|---|---|---|
+| YOLO11 | yolo11n.pt | yolo11s.pt | yolo11m.pt | yolo11l.pt | yolo11x.pt |
+| YOLOv10 | yolov10n.pt | yolov10s.pt | yolov10m.pt | yolov10l.pt | yolov10x.pt |
+| YOLOv9 | yolov9t.pt | yolov9s.pt | yolov9m.pt | yolov9c.pt | yolov9e.pt |
+| YOLOv8 | yolov8n.pt | yolov8s.pt | yolov8m.pt | yolov8l.pt | yolov8x.pt |
+
+Smaller models (nano, small) train faster and use less GPU memory but are less accurate. Larger models need more resources but produce better results on complex tasks. If you are just starting out or testing a new dataset, begin with **yolo11n.pt**. Upgrade to a larger model once you know your data is good.
 
 **Training parameters**
 
 - **Epochs** — one epoch means the model has seen every image in your training set once. More epochs give the model more time to learn, but too many cause overfitting — the model memorizes your training images rather than learning to generalize. Start with 50 and adjust based on the validation metrics.
-- **Image size** — all images are resized to this square resolution (in pixels) before being passed to the model. 640 is the standard for YOLOv8. Larger values like 1280 preserve more detail for small objects but require significantly more GPU memory and time.
+- **Image size** — all images are resized to this square resolution (in pixels) before being passed to the model. 640 is the standard. Larger values like 1280 preserve more detail for small objects but require significantly more GPU memory and time.
 - **Batch size** — how many images the model processes in one forward and backward pass before updating its weights. Larger batches produce more stable gradient updates but require more GPU memory. If training crashes with an out-of-memory error, halve the batch size.
-- **Validation split** — the fraction of your images withheld from training and used purely for evaluation. At the end of each epoch, the model is tested on these images and its precision, recall, and mAP are recorded. This lets you monitor whether the model is improving or overfitting.
+- **Validation split** — the fraction of your images withheld from training and used purely for evaluation. At the end of each epoch, the model is tested on these images and its precision, recall, and mAP are recorded. This lets you monitor whether the model is improving or overfitting. Images are assigned to the validation set randomly so the split is representative of the full dataset.
+
+**Optimizer & training hyperparameters**
+
+These settings control how the model updates its weights during training. The defaults work well for most datasets; change them only if you have a reason to.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Optimizer | auto | Weight-update algorithm. `auto` lets YOLO choose the best optimizer for the selected architecture. Other options: `SGD`, `Adam`, `AdamW`, `NAdam`, `RAdam`, `RMSProp`. |
+| Initial learning rate (lr0) | 0.01 | Step size at the start of training. Too large and training is unstable; too small and it converges slowly. |
+| Final learning rate (lrf) | 0.01 | Fraction of lr0 to decay to by the last epoch. The scheduler interpolates between lr0 and lr0×lrf over training. |
+| Momentum | 0.937 | Controls how much of the previous gradient is carried into the next step (SGD/SGD-based optimizers). Higher values smooth noisy gradients. |
+| Weight decay | 0.0005 | L2 regularization coefficient. Penalizes large weights and reduces overfitting. |
+| Warmup epochs | 3.0 | Number of epochs at the start of training where the learning rate ramps up gradually from near-zero to lr0. Prevents unstable updates in the first steps. |
+| Early stop patience | 50 | If validation mAP does not improve for this many epochs, training stops automatically. Prevents wasting time on runs that have already converged. Set to 0 to disable. |
 
 **Augmentation**
 
 Augmentation means the training pipeline randomly transforms each image before feeding it to the model. The model never sees the exact same image twice, which forces it to become more robust. These are the available augmentation options:
 
-| Augmentation | Effect |
-|---|---|
-| Horizontal flip | Randomly mirrors images left-to-right. Useful when objects can face either direction. |
-| Vertical flip | Randomly mirrors images top-to-bottom. Useful for aerial or overhead imagery. |
-| Rotation | Randomly rotates images by up to ±N degrees. Helps the model handle tilted cameras. |
-| Translation | Randomly shifts images horizontally and vertically by a fraction of the image size. |
-| Scale | Randomly zooms images in or out. Makes the model robust to objects at different distances. |
-| HSV hue | Randomly shifts the hue of image colors. Helps with color variation in lighting conditions. |
-| HSV saturation | Randomly changes color saturation. Models trained without this may fail on faded or oversaturated images. |
-| HSV brightness | Randomly changes image brightness. Helps with dim or overexposed conditions. |
-| Mosaic | Cuts four training images into quarters and assembles them into one composite image. Forces the model to detect objects at different scales and positions. Enabled by default. |
-| Mixup | Blends two images and their labels with a random opacity. Creates soft boundary examples that can improve generalization. |
+| Augmentation | Default | Effect |
+|---|---|---|
+| Horizontal flip | 0.5 | Randomly mirrors images left-to-right. Useful when objects can face either direction. |
+| Vertical flip | 0.0 | Randomly mirrors images top-to-bottom. Useful for aerial or overhead imagery. |
+| Rotation | 0.0° | Randomly rotates images by up to ±N degrees. Helps the model handle tilted cameras. |
+| Translation | 0.1 | Randomly shifts images horizontally and vertically by a fraction of the image size. |
+| Scale | 0.5 | Randomly zooms images in or out. Makes the model robust to objects at different distances. |
+| Shear | 0.0° | Randomly shears images along the horizontal axis by up to ±N degrees. Helps when objects appear at oblique angles. |
+| Perspective | 0.0 | Applies a random perspective warp (0.0–0.001). Simulates the effect of a camera viewing the scene from a different angle. |
+| HSV hue | 0.015 | Randomly shifts the hue of image colors. Helps with color variation in lighting conditions. |
+| HSV saturation | 0.7 | Randomly changes color saturation. Models trained without this may fail on faded or oversaturated images. |
+| HSV brightness | 0.4 | Randomly changes image brightness. Helps with dim or overexposed conditions. |
+| Mosaic | 1.0 | Cuts four training images into quarters and assembles them into one composite image. Forces the model to detect objects at different scales and positions. Set to 0 to disable. |
+| Mixup | 0.0 | Blends two images and their labels with a random opacity. Creates soft boundary examples that can improve generalization. |
+| Copy-paste | 0.0 | Copies annotated objects from one image and pastes them into another. Effectively multiplies the number of object instances the model sees, which is especially useful for rare classes. |
+| Random erasing | 0.4 | Randomly blacks out a rectangular region of each image. Forces the model to identify objects from partial views and reduces sensitivity to occlusion. |
 
 **Live training log**
 
-Once training starts, every line of output from the YOLO process is streamed to the browser in real time. You can watch the loss decrease and the mAP increase epoch by epoch without opening a terminal.
+Once training starts, every line of output from the YOLO process is streamed to the browser in real time. You can watch the loss decrease and the mAP increase epoch by epoch without opening a terminal. A summary bar shows the current epoch, mAP50, precision, and recall at a glance.
 
-**Resume training**
+**Stop and resume training**
 
-If a training run was interrupted, or you want to continue from a previous checkpoint to train for more epochs, you can select an existing run on the training page and resume from its last saved weights rather than starting over.
+- To cancel a run that is in progress, click the **Stop** button next to it in the run history. The run is marked as stopped and its last saved weights are preserved.
+- To continue from a previous checkpoint and train for more epochs, select an existing completed or stopped run and click **Resume**. Training picks up from the last saved weights rather than starting over.
+- Completed runs that are no longer needed can be removed with the **Delete** button.
 
 ---
 
@@ -157,6 +185,10 @@ Classification is appropriate when:
 
 NoCode CV trains classification models using transfer learning. A model that was already trained on 1.2 million images (ImageNet) is used as a starting point. Only the final decision-making layers are retrained on your data. This works well even with a few hundred images per class.
 
+**How labels are assigned**
+
+The class label for each image is taken from the **first annotation drawn on that image** in the Annotate page. Each class needs at least 2 annotated images, and the project must have at least 2 classes to start training. Unannotated images are silently skipped.
+
 **Base models**
 
 | Model | Notes |
@@ -169,10 +201,26 @@ NoCode CV trains classification models using transfer learning. A model that was
 **Training parameters**
 
 - **Epochs** — classification models typically converge in 10–30 epochs. Start at 10 and increase if accuracy is still improving.
-- **Image size** — all images are resized to this square resolution. 224×224 is the standard because it matches the resolution the base models were originally trained on.
+- **Image size** — all images are resized to this square resolution before training. Available sizes: 128, 224 (default), 256, 384. 224 matches the resolution the base models were originally trained on.
 - **Batch size** — number of images per training step. 32 is a safe default.
-- **Learning rate** — the step size used when updating model weights. 0.001 is a standard starting value for fine-tuning. If the model diverges (loss goes up instead of down), try a smaller value like 0.0001.
+- **Learning rate** — the step size used when updating model weights. Options: 0.01, 0.001 (default), 0.0001, 0.00001. Use 0.001 for fine-tuning. Drop to 0.0001 if the model diverges (loss goes up instead of down).
 - **Freeze backbone** — when enabled, the convolutional layers that extract features from images are kept frozen at their pretrained values. Only the final classification layer is trained. This is faster and works better when your dataset is small. When disabled, all layers are updated, which can improve accuracy on larger datasets but risks overwriting the useful pretrained features (catastrophic forgetting).
+
+**Built-in augmentation**
+
+During training, images are automatically augmented with random horizontal flips and random color jitter (brightness, contrast, saturation) to help the model generalize. Validation images are not augmented.
+
+**Results and metrics**
+
+After training completes, the run history shows:
+- **Top-1 accuracy** — the fraction of validation images where the model's single best guess was correct.
+- **Top-5 accuracy** — the fraction where the correct class appeared anywhere in the model's top 5 predictions.
+- **Per-class accuracy** — accuracy broken down by each individual class. Reveals if the model is failing on a specific category.
+- **Confusion matrix** — a color-coded grid showing which classes the model confuses with each other. Click CM on any run to expand it.
+
+**Built-in inference**
+
+Once a run is completed, an inference panel appears directly on the Classification page. Upload any image, select a run, and click Classify. The result shows the top predicted class with its confidence score, followed by the next four most likely classes. No need to go to a separate inference page.
 
 ---
 
@@ -180,7 +228,7 @@ NoCode CV trains classification models using transfer learning. A model that was
 
 The Custom CNN Builder is for users who want to design and experiment with their own neural network architecture instead of using a pretrained one. You add layers one by one using a visual interface, set each layer's parameters, and then train the resulting network on your project's classified images.
 
-This feature is educational as well as practical — it lets you see how adding or removing layers changes the network, and how those choices affect training performance.
+This feature is educational as well as practical — it lets you see how adding or removing layers changes the network, and how those choices affect training performance. Unlike the transfer-learning classification trainer, the custom CNN starts from randomly initialized weights (trained from scratch).
 
 **What a convolutional neural network does**
 
@@ -190,34 +238,52 @@ A CNN reads an image as a grid of pixel values and passes it through a sequence 
 
 | Layer | What it does |
 |---|---|
-| Conv2D | The core building block. Applies a set of learned filters to the image to extract features. You choose the number of filters and their size. More filters = more capacity to learn patterns. |
-| BatchNorm2D | Normalizes the output of the previous layer so values stay in a stable range. Makes training faster and more reliable. Usually placed after Conv2D. |
-| ReLU | Activation function. Replaces every negative value with zero. Without activations, a stack of Conv2D layers is just one big matrix multiplication. |
-| GELU | A smoother activation function than ReLU. Used in more modern architectures. |
-| Sigmoid | Squashes values to the range 0–1. Used in the final layer for binary classification (two classes). |
-| MaxPool2D | Reduces the spatial size of the feature map by keeping only the maximum value in each local window. Reduces memory and computation, and makes the network less sensitive to exact object position. |
-| AvgPool2D | Same as MaxPool2D but uses the average instead of the maximum. |
-| Dropout | During training, randomly sets a fraction of activations to zero. This prevents the network from relying too heavily on any single feature, which reduces overfitting. |
-| Flatten | Converts the 2D feature map into a 1D vector. Required before any Linear layer. |
-| Linear | A fully connected layer that multiplies the 1D vector by a weight matrix. Usually placed at the end to map features to class scores. |
+| Conv2D | The core building block. Applies a set of learned filters to the image to extract features. You choose the number of filters, kernel size, stride, and padding. More filters = more capacity to learn patterns. |
+| BatchNorm2D | Normalizes each batch of activations to zero mean and unit variance. Prevents exploding/vanishing gradients and speeds up training. Usually placed after Conv2D. |
+| ReLU | Activation function. Replaces every negative value with zero. Without activations, a stack of Conv2D layers collapses into one big matrix multiplication. |
+| GELU | A smoother activation function than ReLU. Used in more modern architectures like Transformers. |
+| Sigmoid | Squashes values to the range 0–1. Useful in binary classification output heads. |
+| MaxPool2D | Reduces the spatial size of the feature map by keeping only the maximum value in each local window. Reduces memory and computation, and makes features robust to small shifts. |
+| AvgPool2D | Same as MaxPool2D but uses the average instead of the maximum. Produces smoother downsampling. |
+| Dropout | During training, randomly zeroes a fraction of activations. Prevents the network from relying too heavily on any single feature, reducing overfitting. Set the probability (p) from 0 to 1. |
+| Flatten | Converts the 2D feature map into a 1D vector. Required before any Linear layer. Added automatically if you add a Linear without one. |
+| Linear (FC) | A fully connected layer. Usually placed at the end to map learned features to class scores. |
 
-**3D visualization**
+**Architecture presets**
 
-Each layer in your architecture is rendered as a 3D block in an interactive scene. The block dimensions scale with the layer's parameters (number of filters, kernel size), giving you a visual sense of how the network's internal representation grows and shrinks as data flows through it.
+Five ready-made architectures are available as starting points:
 
-**Presets**
+| Preset | Description |
+|---|---|
+| Minimal | Single conv block → flatten → linear. Best for quick experiments and tiny datasets. |
+| LeNet | Two conv blocks. A classic baseline, reliable for most tasks. |
+| VGG-mini | Three deep conv blocks. Good accuracy on complex or large images. |
+| BN Net | Two conv blocks with BatchNorm after each. Trains faster and more stably than the plain versions. |
+| RegNet | Two conv blocks with BatchNorm and Dropout. Strong regularization — good when your dataset is small and overfitting is a concern. |
 
-Pre-built architectures are available as starting points: a minimal classifier, a deeper classifier, and others. Select one, inspect it, then modify it to suit your needs.
+Select a preset, inspect the layers, then add, remove, or modify to suit your needs.
 
 **Input dimensions**
 
-Set the expected image size (width and height in pixels). As you add layers, the builder computes the output dimensions at each step and warns you if a layer configuration would produce an invalid (zero or negative) spatial size.
+Set the expected image width and height in pixels. All uploaded images are resized to this size before training. As you add layers, the builder computes the output shape at each step in real time and shows it next to each layer row. If a layer configuration would produce an invalid (zero or negative) spatial size, the builder flags it immediately so you can fix it before training.
+
+A live **parameter count** is displayed as you build, giving you a rough sense of how large the model is before committing to training.
+
+**Training parameters**
+
+- **Epochs** — how many full passes through the training set. Custom CNNs often need more epochs than pretrained models (start with 20–50).
+- **Batch size** — number of images per training step. 32 is a safe default; reduce if you run out of memory.
+- **Learning rate** — step size for weight updates. 0.001 is a standard starting point for Adam (the optimizer used automatically).
+
+**Results**
+
+After training completes, the run history shows the best validation accuracy achieved. The model is saved as a `.pth` file and can be downloaded. Per-class breakdown and confusion matrix are not shown for custom runs (only top-1 accuracy).
 
 ---
 
 ### Evaluation
 
-After a YOLOv8 training run completes, the Evaluation page shows the full set of performance metrics and diagnostic charts generated during training. This page helps you understand how well the model works and where it struggles.
+After a YOLO training run completes, the Evaluation page shows the full set of performance metrics and diagnostic charts generated during training. This page helps you understand how well the model works and where it struggles.
 
 **Core metrics**
 
@@ -234,11 +300,11 @@ The same precision, recall, and mAP numbers are shown for each class individuall
 
 **Diagnostic plots**
 
-YOLOv8 saves a set of charts during training. These are displayed directly in the browser:
+YOLO saves a set of charts during training. These are displayed directly in the browser:
 
 | Plot | What to look for |
 |---|---|
-| results.png | Training loss should decrease over epochs. Validation mAP should increase. If validation mAP flattens while training loss keeps dropping, the model is overfitting. |
+| results.png | Training loss should decrease over epochs. Validation mAP should increase. If validation mAP flattens while training loss keeps dropping, the model is overfitting. Early stopping will halt training automatically once improvement stalls. |
 | Confusion matrix | Each row is a true class; each column is a predicted class. The diagonal shows correct predictions. Off-diagonal entries show which classes the model confuses with each other. |
 | Confusion matrix (normalized) | Same as above, but expressed as percentages of each true class. Easier to read when class sizes differ. |
 | PR curve | Plots precision against recall at different confidence thresholds. A curve that stays near the top-right corner indicates a good model. |
@@ -255,7 +321,7 @@ Inference means giving a trained model a brand-new image — one it has never se
 
 **Object detection inference**
 
-Upload any image and select a completed YOLOv8 training run. The model runs detection on the image and returns all detected objects. The result is displayed as an overlay on the image, with bounding boxes, class labels, and confidence scores.
+Upload any image and select a completed YOLO training run. The model runs detection on the image and returns all detected objects. The result is displayed as an overlay on the image, with bounding boxes, class labels, and confidence scores.
 
 Two parameters control what gets shown:
 
@@ -271,13 +337,13 @@ Upload any image and select a completed classification training run. The model r
 
 **External model inference**
 
-You can upload a pre-trained YOLOv8 `.pt` model file from outside the app — for example, a model you downloaded, received from a colleague, or trained on another machine. Register it under External Models, then run detection inference on any image using that model. This lets you test any compatible model without tying it to a project training run.
+You can upload a pre-trained YOLO `.pt` model file from outside the app — for example, a model you downloaded, received from a colleague, or trained on another machine. Register it under External Models, then run detection inference on any image using that model. This lets you test any compatible model without tying it to a project training run.
 
 ---
 
 ### Model Export
 
-Once a YOLOv8 detection model is trained, you may want to deploy it somewhere other than this app — in a Python script, a phone app, a web API, or on specialized hardware. The Export page converts the trained model to different deployment formats.
+Once a YOLO detection model is trained, you may want to deploy it somewhere other than this app — in a Python script, a phone app, a web API, or on specialized hardware. The Export page converts the trained model to different deployment formats.
 
 - **ONNX** — Open Neural Network Exchange. An open, hardware-agnostic format supported by almost every inference runtime: ONNX Runtime, OpenCV DNN, TensorRT, CoreML, and more. This is the best choice if you want maximum compatibility and plan to run the model in a Python script or a cross-platform application.
 - **TFLite** — TensorFlow Lite. A compact format designed for mobile and embedded devices: Android apps, Raspberry Pi, Edge TPU (Google Coral), and microcontrollers. Produces smaller files with lower memory requirements than full TensorFlow.
@@ -298,7 +364,7 @@ If you want to use your annotated data outside of NoCode CV — to train a model
 
 ### External Model Management
 
-You can register pre-trained YOLOv8 `.pt` model files from outside the app. Once registered, these models appear in the inference page and can be used to run detections on any image. This is useful when you receive a trained model from someone else, download one from the internet, or want to compare multiple models on the same image without re-training.
+You can register pre-trained YOLO `.pt` model files from outside the app. Once registered, these models appear in the inference page and can be used to run detections on any image. This is useful when you receive a trained model from someone else, download one from the internet, or want to compare multiple models on the same image without re-training.
 
 Registered external models are stored on disk inside the app's `external_models/` folder and tracked in the database. They can be deleted from the interface when no longer needed.
 
@@ -344,7 +410,7 @@ Then open `http://localhost:8000` in a browser. The first install takes roughly 
 
 AMD and Intel GPUs are not supported for CUDA acceleration and fall back to CPU training.
 
-YOLOv8 downloads pretrained base weights (~130 MB) on first use. All subsequent runs are fully offline.
+YOLO pretrained base weights (~6–130 MB depending on model size) are downloaded automatically on first use. All subsequent runs are fully offline.
 
 ---
 
