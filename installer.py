@@ -424,6 +424,7 @@ class Installer(tk.Tk):
             (SUCCESS, "📦",  "Dataset Export",            "YOLO & COCO zip export in one click"),
             (INFO,    "📹",  "Video Inference + Tracking","Run YOLO on video files or URLs (YouTube, TikTok, etc.)"),
             (ACCENT,  "🎯",  "Pose Estimation",           "COCO 17-keypoint skeleton detection on image / video / webcam"),
+            (PURPLE,  "🧩",  "Instance Segmentation",     "Pixel-level masks on image / video / webcam — bring your own .pt model"),
             (SUCCESS, "📷",  "Live Webcam Inference",     "Real-time detection overlay at ~7 FPS on any webcam"),
         ]
 
