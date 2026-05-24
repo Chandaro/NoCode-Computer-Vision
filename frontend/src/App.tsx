@@ -10,6 +10,7 @@ import Classification from './pages/Classification'
 import CustomModel from './pages/CustomModel'
 import Webcam from './pages/Webcam'
 import Pose from './pages/Pose'
+import Segmentation from './pages/Segmentation'
 
 function Nav() {
   return (
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/projects/:id/custom"            element={<CustomModel />} />
             <Route path="/projects/:id/webcam"            element={<Webcam />} />
             <Route path="/projects/:id/pose"              element={<Pose />} />
+            <Route path="/projects/:id/segment"           element={<Segmentation />} />
           </Routes>
         </main>
       </div>
