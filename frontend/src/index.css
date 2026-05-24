@@ -19,11 +19,17 @@
   --text2:     #888888;
   --text3:     #444444;
 
-  /* Accent — electric blue (the only non-neutral colour) */
+  /* Accent — electric blue */
   --accent:    #2563eb;
   --accent-h:  #1d4ed8;
   --accent-s:  rgba(37, 99, 235, 0.10);
   --accent-t:  rgba(37, 99, 235, 0.05);
+
+  /* Secondary — violet */
+  --secondary:   #7c3aed;
+  --secondary-h: #6d28d9;
+  --secondary-s: rgba(124, 58, 237, 0.10);
+  --secondary-t: rgba(124, 58, 237, 0.05);
 
   /* Semantic — kept muted so they don't compete with the two-colour rule */
   --success:   #4ade80;
@@ -88,9 +94,9 @@ code, pre, .mono {
   background: var(--accent-h) !important;
 }
 .btn-secondary:hover:not(:disabled) {
-  background: var(--surface3) !important;
-  border-color: var(--border2) !important;
-  color: var(--text) !important;
+  background: var(--secondary-s) !important;
+  border-color: var(--secondary) !important;
+  color: var(--secondary) !important;
 }
 .btn-ghost:hover:not(:disabled) {
   background: var(--surface2) !important;
