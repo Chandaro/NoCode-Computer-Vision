@@ -641,12 +641,12 @@ async def start_video_infer(
     if run.status != "done":
         raise HTTPException(400, "Run has not completed")
     if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, "Model weights not found")
+        raise HTTPException(404, f"Model weights not found — the trained .pt file is missing from disk. Re-train the run to regenerate it.")
 
     try:
         import cv2  # noqa: F401
     except ImportError:
-        raise HTTPException(500, "OpenCV (cv2) is not installed on this server")
+        raise HTTPException(500, "OpenCV (cv2) is not installed on this server. Run: pip install opencv-python")
 
     project = session.get(Project, project_id)
     class_names = project.classes if project else []
@@ -685,7 +685,12 @@ async def start_video_infer_url(
     if run.status != "done":
         raise HTTPException(400, "Run has not completed")
     if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, "Model weights not found")
+        raise HTTPException(404, f"Model weights not found — the trained .pt file is missing from disk. Re-train the run to regenerate it.")
+
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        raise HTTPException(500, "OpenCV (cv2) is not installed on this server. Run: pip install opencv-python")
 
     project     = session.get(Project, project_id)
     class_names = project.classes if project else []

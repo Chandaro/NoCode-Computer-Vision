@@ -187,6 +187,7 @@ export default function Train() {
   const [videoTracker,   setVideoTracker]   = useState(false)
   const [videoJobId,     setVideoJobId]     = useState('')
   const [videoStatus,    setVideoStatus]    = useState<'idle'|'uploading'|'running'|'done'|'failed'>('idle')
+  const [videoError,     setVideoError]     = useState('')
   const [videoProgress,  setVideoProgress]  = useState({ processed: 0, total: 0 })
   const videoPollerRef                      = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -317,7 +318,7 @@ export default function Train() {
     if (videoInputMode === 'file' && !videoFile) return
     if (videoInputMode === 'url' && !videoUrl.trim()) return
     if (videoPollerRef.current) clearInterval(videoPollerRef.current)
-    setVideoStatus('uploading'); setVideoJobId('')
+    setVideoStatus('uploading'); setVideoJobId(''); setVideoError('')
     setVideoProgress({ processed: 0, total: 0 })
     try {
       const fd = new FormData()
@@ -346,14 +347,15 @@ export default function Train() {
             setVideoStatus('done')
           } else if (s.data.status === 'failed') {
             clearInterval(videoPollerRef.current!)
+            setVideoError(s.data.error ?? 'Unknown error')
             setVideoStatus('failed')
-            alert('Video processing failed: ' + (s.data.error ?? 'unknown error'))
           }
         } catch { /* keep polling */ }
       }, 1500)
     } catch (e: any) {
+      const msg = e?.response?.data?.detail ?? e.message ?? 'Unknown error'
+      setVideoError(msg)
       setVideoStatus('failed')
-      alert('Upload failed: ' + (e?.response?.data?.detail ?? e.message))
     }
   }
 
@@ -991,7 +993,7 @@ export default function Train() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <select
                   value={videoRunId}
-                  onChange={e => { setVideoRunId(e.target.value); setVideoStatus('idle'); setVideoJobId('') }}
+                  onChange={e => { setVideoRunId(e.target.value); setVideoStatus('idle'); setVideoJobId(''); setVideoError('') }}
                   style={{
                     padding: '7px 10px', background: 'var(--surface2)',
                     border: '1px solid var(--border)', borderRadius: 6,
@@ -1110,7 +1112,7 @@ export default function Train() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   {(videoFile || videoUrl) && videoStatus !== 'running' && videoStatus !== 'uploading' && (
                     <Btn variant="ghost" size="sm" onClick={() => {
-                      setVideoFile(null); setVideoUrl(''); setVideoStatus('idle')
+                      setVideoFile(null); setVideoUrl(''); setVideoStatus('idle'); setVideoError('')
                     }}>
                       <X size={12} /> Clear
                     </Btn>
@@ -1138,10 +1140,29 @@ export default function Train() {
                     Processing complete — {videoProgress.processed} frames annotated.
                   </p>
                 )}
-                {videoStatus === 'failed' && (
-                  <p style={{ fontSize: 11, color: 'var(--red, #f87171)' }}>
-                    Processing failed. Check that OpenCV is installed on the server.
-                  </p>
+                {videoStatus === 'failed' && videoError && (
+                  <div style={{
+                    padding: '10px 13px',
+                    background: 'var(--danger-s)',
+                    border: '1px solid rgba(248,113,113,0.2)',
+                    borderRadius: 'var(--radius)',
+                    fontSize: 12,
+                  }}>
+                    <p style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 2 }}>
+                      Processing failed
+                    </p>
+                    <p style={{ color: 'var(--text2)', lineHeight: 1.6 }}>{videoError}</p>
+                    {videoError.toLowerCase().includes('opencv') && (
+                      <p style={{ color: 'var(--text3)', marginTop: 6, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+                        → pip install opencv-python
+                      </p>
+                    )}
+                    {videoError.toLowerCase().includes('weights not found') && (
+                      <p style={{ color: 'var(--text3)', marginTop: 6, fontSize: 11 }}>
+                        → The trained model file was deleted. Re-train this run to restore it.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </Card>
