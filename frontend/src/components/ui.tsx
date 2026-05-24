@@ -271,39 +271,84 @@ export function Empty({ icon: Icon, message, sub }: {
 
 // ── Log terminal ──────────────────────────────────────────────────────────────
 import { type RefObject } from 'react'
+
+function termColor(l: string): string {
+  const lo = l.toLowerCase()
+  if (l.startsWith('[ERROR]') || lo.includes('error') || lo.includes('traceback')) return '#ff5555'
+  if (l.startsWith('[DONE]')  || lo.includes('finished') || lo.includes('complete')) return '#50fa7b'
+  if (l.startsWith('[WARN]')  || l.startsWith('[STOPPED]') || lo.includes('warning')) return '#f1fa8c'
+  if (lo.includes('epoch'))  return '#8be9fd'
+  if (lo.includes('loss') || lo.includes('map') || lo.includes('precision') || lo.includes('recall')) return '#bd93f9'
+  if (l.startsWith('[INFO]')) return '#8be9fd'
+  return '#cdd6f4'
+}
+
 export function LogTerminal({ logs, logRef }: {
   logs: string[]; logRef: RefObject<HTMLDivElement | null>
 }) {
   return (
-    <div
-      ref={logRef}
-      style={{
-        height: 200, overflowY: 'auto', flexShrink: 0,
-        background: '#080808',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        padding: '12px 14px',
-        fontFamily: 'JetBrains Mono, monospace',
-        fontSize: 11.5, lineHeight: 1.8,
-      }}
-    >
-      {logs.length === 0
-        ? <span style={{ color: 'var(--text3)' }}>Waiting for training to start…</span>
-        : logs.map((l, i) => {
-          const color =
-            l.startsWith('[ERROR]') || l.toLowerCase().includes('error') ? 'var(--danger)' :
-            l.startsWith('[DONE]')                                         ? 'var(--success)' :
-            l.startsWith('[WARN]') || l.startsWith('[STOPPED]')           ? 'var(--warn)' :
-            'var(--text3)'
-          return (
-            <div key={i} style={{ color, display: 'flex', gap: 8 }}>
-              <span style={{ color: '#2a2a2a', userSelect: 'none', flexShrink: 0 }}>
-                {String(i + 1).padStart(3, ' ')}
-              </span>
-              <span>{l}</span>
-            </div>
-          )
-        })}
+    <div style={{
+      border: '1px solid #222',
+      borderRadius: 'var(--radius)',
+      overflow: 'hidden',
+      flexShrink: 0,
+    }}>
+      {/* ── macOS title bar ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '9px 14px',
+        background: '#161616',
+        borderBottom: '1px solid #222',
+        userSelect: 'none',
+      }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', flexShrink: 0 }} />
+          <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', flexShrink: 0 }} />
+          <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', flexShrink: 0 }} />
+        </div>
+        <span style={{
+          flex: 1, textAlign: 'center', marginRight: 45,
+          fontSize: 11, color: '#444',
+          fontFamily: "'JetBrains Mono','SF Mono',Menlo,Monaco,monospace",
+          letterSpacing: '0.04em',
+        }}>
+          training.log
+        </span>
+      </div>
+
+      {/* ── Terminal body ── */}
+      <div
+        ref={logRef}
+        style={{
+          height: 220, overflowY: 'auto',
+          background: '#0d0d0d',
+          padding: '12px 16px',
+          fontFamily: "'JetBrains Mono','SF Mono',Menlo,Monaco,Consolas,monospace",
+          fontSize: 11.5, lineHeight: 2,
+        }}
+      >
+        {logs.length === 0 ? (
+          <span style={{ color: '#444' }}>
+            <span style={{ color: '#50fa7b' }}>➜</span>
+            {'  '}
+            <span style={{ color: '#8be9fd' }}>nocode-cv</span>
+            <span style={{ color: '#ff79c6' }}> $ </span>
+            <span style={{ color: '#555' }}>waiting for training to start</span>
+            <span style={{ display: 'inline-block', width: 7, height: '1.1em', background: '#6272a4', marginLeft: 3, verticalAlign: 'text-bottom', opacity: 0.8 }} />
+          </span>
+        ) : logs.map((l, i) => (
+          <div key={i} style={{ display: 'flex', gap: 0 }}>
+            <span style={{
+              color: '#2d2d2d', userSelect: 'none', flexShrink: 0, minWidth: 34,
+              fontVariantNumeric: 'tabular-nums', textAlign: 'right', paddingRight: 14,
+            }}>
+              {i + 1}
+            </span>
+            <span style={{ color: '#3d3d3d', flexShrink: 0, marginRight: 14 }}>│</span>
+            <span style={{ color: termColor(l), wordBreak: 'break-all' }}>{l}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
