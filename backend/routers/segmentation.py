@@ -6,6 +6,9 @@ from routers.infer import _download_from_url, VIDEO_OUT_DIR
 
 router = APIRouter(tags=["segmentation"])
 
+CUSTOM_MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "custom_seg_models")
+os.makedirs(CUSTOM_MODEL_DIR, exist_ok=True)
+
 _seg_jobs:  dict = {}
 _seg_cache: dict = {}   # model_name → YOLO instance
 
@@ -39,6 +42,19 @@ def _extract_segments(results):
             "mask": mask_pts,
         })
     return detections, iw, ih
+
+
+# ─── Upload custom model ──────────────────────────────────────────────────────
+@router.post("/segment/upload-custom-model")
+async def upload_custom_seg_model(file: UploadFile = File(...)):
+    """Save a user-supplied .pt weights file and return its server path."""
+    if not (file.filename or "").lower().endswith(".pt"):
+        raise HTTPException(400, "Only .pt files are accepted")
+    safe_name = f"{uuid.uuid4().hex}_{Path(file.filename).name}"
+    dest = os.path.join(CUSTOM_MODEL_DIR, safe_name)
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    return {"model_path": dest, "filename": Path(file.filename).name}
 
 
 # ─── Image inference ──────────────────────────────────────────────────────────

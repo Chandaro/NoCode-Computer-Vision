@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Download, Loader, Camera, CameraOff, Video, Image as ImageIcon, Layers } from 'lucide-react'
-import api, { type Project } from '../api'
+import { Upload, Download, Loader, Camera, CameraOff, Video, Image as ImageIcon, Layers, FolderOpen } from 'lucide-react'
+import api, { type Project, type TrainingRun } from '../api'
 import { PageHeader, Card, Field, Select, Slider, Btn, ProgressBar } from '../components/ui'
 
 // 20-color palette for class instances
@@ -52,10 +52,22 @@ export default function Segmentation() {
   const projectId = Number(id)
   const navigate  = useNavigate()
 
-  const [project,   setProject]   = useState<Project | null>(null)
-  const [mode,      setMode]      = useState<Mode>('image')
-  const [modelName, setModelName] = useState('yolo11n-seg.pt')
-  const [conf,      setConf]      = useState(0.25)
+  const [project,      setProject]      = useState<Project | null>(null)
+  const [mode,         setMode]         = useState<Mode>('image')
+  const [modelSource,  setModelSource]  = useState<'pretrained'|'custom'>('pretrained')
+  const [modelName,    setModelName]    = useState('yolo11n-seg.pt')
+  const [customRuns,   setCustomRuns]   = useState<TrainingRun[]>([])
+  const [selectedRunId,setSelectedRunId]= useState('')
+  const [uploadedPath, setUploadedPath] = useState('')
+  const [uploadedName, setUploadedName] = useState('')
+  const [uploading,    setUploading]    = useState(false)
+  const [conf,         setConf]         = useState(0.25)
+  const customPtRef = useRef<HTMLInputElement>(null)
+
+  // Resolve the actual model identifier to send to backend
+  const activeModel = modelSource === 'pretrained'
+    ? modelName
+    : uploadedPath || customRuns.find(r => String(r.id) === selectedRunId)?.model_path || ''
 
   // ── Image mode ───────────────────────────────────────────────────────────────
   const [imgInputMode, setImgInputMode] = useState<'file'|'url'>('file')
@@ -92,20 +104,48 @@ export default function Segmentation() {
 
   useEffect(() => {
     api.get(`/projects/${projectId}`).then(r => setProject(r.data))
+    // Load completed seg training runs for this project
+    api.get(`/projects/${projectId}/training/runs`).then(r => {
+      const segRuns = (r.data as TrainingRun[]).filter(
+        run => run.status === 'done' && run.model_base?.includes('seg') && run.model_path
+      )
+      setCustomRuns(segRuns)
+      if (segRuns.length > 0) setSelectedRunId(String(segRuns[segRuns.length - 1].id))
+    }).catch(() => {})
   }, [projectId])
   useEffect(() => () => {
     stopCam()
     if (videoPollerRef.current) clearInterval(videoPollerRef.current)
   }, [])
 
+  // ── Upload custom .pt model ──────────────────────────────────────────────────
+  const uploadCustomModel = async (file: File) => {
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await api.post('/segment/upload-custom-model', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      setUploadedPath(res.data.model_path)
+      setUploadedName(res.data.filename)
+      setSelectedRunId('')
+    } catch (e: any) {
+      alert('Upload failed: ' + (e?.response?.data?.detail ?? e.message))
+    } finally { setUploading(false) }
+  }
+
   // ── Image inference ──────────────────────────────────────────────────────────
   const runImageInfer = async (file: File) => {
+    if (modelSource === 'custom' && !activeModel) {
+      alert('Please select or upload a custom model first.'); return
+    }
     setImgSrc(URL.createObjectURL(file)); setImgDets([])
     setImgRunning(true)
     try {
       const fd = new FormData()
       fd.append('file', file)
-      fd.append('model_name', modelName)
+      fd.append('model_name', activeModel)
       fd.append('conf', String(conf))
       const res = await api.post('/segment/infer', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       setImgDets(res.data.detections ?? [])
@@ -116,12 +156,15 @@ export default function Segmentation() {
 
   const runImageInferUrl = async () => {
     if (!imgUrl.trim()) return
+    if (modelSource === 'custom' && !activeModel) {
+      alert('Please select or upload a custom model first.'); return
+    }
     setImgSrc(imgUrl.trim()); setImgDets([])
     setImgRunning(true)
     try {
       const fd = new FormData()
       fd.append('url', imgUrl.trim())
-      fd.append('model_name', modelName)
+      fd.append('model_name', activeModel)
       fd.append('conf', String(conf))
       const res = await api.post('/segment/infer-url', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       setImgDets(res.data.detections ?? [])
@@ -134,12 +177,15 @@ export default function Segmentation() {
   const startVideoInfer = async () => {
     if (videoInputMode === 'file' && !videoFile) return
     if (videoInputMode === 'url'  && !videoUrl.trim()) return
+    if (modelSource === 'custom' && !activeModel) {
+      alert('Please select or upload a custom model first.'); return
+    }
     if (videoPollerRef.current) clearInterval(videoPollerRef.current)
     setVideoStatus('uploading'); setVideoJobId('')
     setVideoProgress({ processed: 0, total: 0 })
     try {
       const fd = new FormData()
-      fd.append('model_name', modelName)
+      fd.append('model_name', activeModel)
       fd.append('conf', String(conf))
       let endpoint: string
       if (videoInputMode === 'url') {
@@ -197,7 +243,7 @@ export default function Segmentation() {
       try {
         const fd = new FormData()
         fd.append('frame', blob, 'frame.jpg')
-        fd.append('model_name', modelName)
+        fd.append('model_name', activeModel || modelName)
         fd.append('conf', String(conf))
         const res = await api.post('/segment/webcam-frame', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
         setCamDets(res.data.detections ?? [])
@@ -284,23 +330,97 @@ export default function Segmentation() {
               ))}
             </div>
 
-            <Field label="Model">
-              <Select value={modelName} onChange={setModelName}>
-                <optgroup label="YOLO11 Seg (recommended)">
-                  <option value="yolo11n-seg.pt">YOLO11 Nano  · fastest</option>
-                  <option value="yolo11s-seg.pt">YOLO11 Small</option>
-                  <option value="yolo11m-seg.pt">YOLO11 Medium</option>
-                  <option value="yolo11l-seg.pt">YOLO11 Large</option>
-                  <option value="yolo11x-seg.pt">YOLO11 XLarge · most accurate</option>
-                </optgroup>
-                <optgroup label="YOLOv8 Seg">
-                  <option value="yolov8n-seg.pt">YOLOv8 Nano</option>
-                  <option value="yolov8s-seg.pt">YOLOv8 Small</option>
-                  <option value="yolov8m-seg.pt">YOLOv8 Medium</option>
-                  <option value="yolov8l-seg.pt">YOLOv8 Large</option>
-                </optgroup>
-              </Select>
-            </Field>
+            {/* Model source toggle */}
+            <div>
+              <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>Model Source</p>
+              <div style={{ display: 'flex', gap: 4, background: 'var(--surface2)', padding: 3, borderRadius: 7 }}>
+                {(['pretrained','custom'] as const).map(s => (
+                  <button key={s} onClick={() => setModelSource(s)}
+                    style={{
+                      flex: 1, padding: '4px 6px', border: 'none', borderRadius: 5, cursor: 'pointer',
+                      fontSize: 10, fontWeight: 500, fontFamily: 'inherit',
+                      background: modelSource === s ? 'var(--surface)' : 'transparent',
+                      color: modelSource === s ? 'var(--text)' : 'var(--text3)',
+                      transition: 'all 0.15s',
+                    }}>
+                    {s === 'pretrained' ? 'Pre-trained' : 'My Models'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {modelSource === 'pretrained' ? (
+              <Field label="Model">
+                <Select value={modelName} onChange={setModelName}>
+                  <optgroup label="YOLO11 Seg (recommended)">
+                    <option value="yolo11n-seg.pt">YOLO11 Nano  · fastest</option>
+                    <option value="yolo11s-seg.pt">YOLO11 Small</option>
+                    <option value="yolo11m-seg.pt">YOLO11 Medium</option>
+                    <option value="yolo11l-seg.pt">YOLO11 Large</option>
+                    <option value="yolo11x-seg.pt">YOLO11 XLarge · most accurate</option>
+                  </optgroup>
+                  <optgroup label="YOLOv8 Seg">
+                    <option value="yolov8n-seg.pt">YOLOv8 Nano</option>
+                    <option value="yolov8s-seg.pt">YOLOv8 Small</option>
+                    <option value="yolov8m-seg.pt">YOLOv8 Medium</option>
+                    <option value="yolov8l-seg.pt">YOLOv8 Large</option>
+                  </optgroup>
+                </Select>
+              </Field>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Trained runs from this project */}
+                {customRuns.length > 0 && (
+                  <Field label="Trained Seg Run">
+                    <Select
+                      value={selectedRunId}
+                      onChange={v => { setSelectedRunId(v); setUploadedPath(''); setUploadedName('') }}>
+                      <option value="">— select a run —</option>
+                      {customRuns.map(r => (
+                        <option key={r.id} value={String(r.id)}>
+                          Run #{r.id} · {r.model_base}
+                          {r.results?.mAP50 ? ` · ${(r.results.mAP50 * 100).toFixed(1)}%` : ''}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
+
+                {/* Upload external .pt */}
+                <div>
+                  <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>
+                    {customRuns.length > 0 ? 'Or upload external .pt' : 'Upload custom .pt model'}
+                  </p>
+                  <Btn variant="ghost" size="sm" style={{ width: '100%', justifyContent: 'center' }}
+                    disabled={uploading} onClick={() => customPtRef.current?.click()}>
+                    {uploading
+                      ? <><Loader size={11} className="animate-spin" /> Uploading…</>
+                      : <><FolderOpen size={11} /> Choose .pt file</>}
+                  </Btn>
+                  <input ref={customPtRef} type="file" accept=".pt" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadCustomModel(f) }} />
+                  {uploadedName && (
+                    <p style={{ fontSize: 10, color: 'var(--success)', marginTop: 4, wordBreak: 'break-all' }}>
+                      ✓ {uploadedName}
+                    </p>
+                  )}
+                </div>
+
+                {customRuns.length === 0 && !uploadedPath && (
+                  <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5 }}>
+                    No seg runs found for this project. Train a -seg model first, or upload a .pt file directly.
+                  </p>
+                )}
+
+                {/* Active model indicator */}
+                {activeModel && (
+                  <div style={{ padding: '5px 8px', background: 'var(--surface2)',
+                    borderRadius: 5, fontSize: 10, color: 'var(--accent)', wordBreak: 'break-all' }}>
+                    ✓ {uploadedName || customRuns.find(r => String(r.id) === selectedRunId)?.model_base}
+                  </div>
+                )}
+              </div>
+            )}
 
             <Slider label="Confidence" value={conf} onChange={setConf}
               min={0.1} max={0.9} step={0.05} format={v => `${Math.round(v * 100)}%`} />
