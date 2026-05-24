@@ -2,46 +2,48 @@
 
 /* ── Design tokens ──────────────────────────────────────────────────────── */
 :root {
-  /* Backgrounds — warm zinc-based dark */
-  --bg:        #0f0f11;
-  --surface:   #18181b;
-  --surface2:  #1f1f23;
-  --surface3:  #27272c;
+  /* Two colours: near-black family + electric blue accent */
+
+  /* Backgrounds */
+  --bg:        #0c0c0c;
+  --surface:   #111111;
+  --surface2:  #171717;
+  --surface3:  #1e1e1e;
 
   /* Borders */
-  --border:    #2d2d34;
-  --border2:   #3c3c46;
+  --border:    #272727;
+  --border2:   #333333;
 
   /* Text */
-  --text:      #f4f4f5;
-  --text2:     #a1a1aa;
-  --text3:     #52525b;
+  --text:      #f0f0f0;
+  --text2:     #888888;
+  --text3:     #444444;
 
-  /* Accent — violet */
-  --accent:    #8b5cf6;
-  --accent-h:  #7c3aed;
-  --accent-s:  rgba(139, 92, 246, 0.1);
-  --accent-t:  rgba(139, 92, 246, 0.06);
+  /* Accent — electric blue (the only non-neutral colour) */
+  --accent:    #2563eb;
+  --accent-h:  #1d4ed8;
+  --accent-s:  rgba(37, 99, 235, 0.10);
+  --accent-t:  rgba(37, 99, 235, 0.05);
 
-  /* Semantic */
-  --success:   #22c55e;
-  --success-s: rgba(34, 197, 94, 0.08);
+  /* Semantic — kept muted so they don't compete with the two-colour rule */
+  --success:   #4ade80;
+  --success-s: rgba(74, 222, 128, 0.07);
   --danger:    #f87171;
-  --danger-s:  rgba(248, 113, 113, 0.08);
-  --warn:      #f59e0b;
-  --warn-s:    rgba(245, 158, 11, 0.08);
+  --danger-s:  rgba(248, 113, 113, 0.07);
+  --warn:      #fbbf24;
+  --warn-s:    rgba(251, 191, 36, 0.07);
 
-  /* Radius */
-  --radius:    8px;
-  --radius-sm: 5px;
-  --radius-lg: 12px;
-  --radius-xl: 18px;
+  /* Radius — kept deliberately small */
+  --radius:    3px;
+  --radius-sm: 2px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
 
-  /* Elevation shadows */
-  --shadow-xs: 0 1px 2px rgba(0,0,0,0.7);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.6), 0 1px 2px rgba(0,0,0,0.4);
-  --shadow:    0 4px 8px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
-  --shadow-lg: 0 12px 24px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+  /* Shadows — none */
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow:    none;
+  --shadow-lg: none;
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────── */
@@ -66,33 +68,24 @@ code, pre, .mono {
 }
 
 /* ── Scrollbar ──────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 0; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
 /* ── Selection ──────────────────────────────────────────────────────────── */
-::selection { background: rgba(139, 92, 246, 0.2); }
+::selection { background: rgba(37, 99, 235, 0.25); }
 
 /* ── Focus ring ─────────────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 1px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
-.btn-primary {
-  box-shadow: 0 1px 3px rgba(139,92,246,0.25);
-}
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-h) !important;
-  box-shadow: 0 4px 12px rgba(139,92,246,0.35) !important;
-  transform: translateY(-1px);
-}
-.btn-primary:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(139,92,246,0.2) !important;
 }
 .btn-secondary:hover:not(:disabled) {
   background: var(--surface3) !important;
@@ -108,10 +101,9 @@ code, pre, .mono {
   border-color: var(--danger) !important;
 }
 
-/* ── Button transitions ──────────────────────────────────────────────────── */
+/* ── Button transitions — minimal ────────────────────────────────────────── */
 button, a[class^="btn-"] {
-  transition: background 0.15s, color 0.15s, border-color 0.15s,
-              transform 0.12s, box-shadow 0.15s;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
 
 /* ── Range input ─────────────────────────────────────────────────────────── */
@@ -119,60 +111,51 @@ input[type=range] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 5px;
-  border-radius: 99px;
+  height: 3px;
+  border-radius: 0;
   cursor: pointer;
   outline: none;
+  background: var(--border2);
 }
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 0;
   background: var(--accent);
-  border: 2.5px solid var(--bg);
-  box-shadow: 0 0 0 1px var(--accent);
-  transition: transform 0.15s;
-}
-input[type=range]::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
+  border: none;
 }
 input[type=range]::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, var(--accent) var(--val, 0%), var(--surface3) var(--val, 0%));
-  border-radius: 99px;
-  height: 5px;
+  background: var(--border2);
+  height: 3px;
 }
 
 /* ── Select ──────────────────────────────────────────────────────────────── */
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23444444' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px !important;
 }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
-.card-hover { transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
-.card-hover:hover {
-  border-color: var(--border2) !important;
-  box-shadow: var(--shadow) !important;
-}
+.card-hover { transition: border-color 0.1s; }
+.card-hover:hover { border-color: var(--border2) !important; }
 
 /* ── Inputs ──────────────────────────────────────────────────────────────── */
 input:not([type=range]):not([type=checkbox]):not([type=file]),
 select,
 textarea {
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.1s;
 }
 input:not([type=range]):not([type=checkbox]):not([type=file]):focus,
 select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(139,92,246,0.12);
 }
 
 /* ── Recharts ────────────────────────────────────────────────────────────── */
@@ -181,6 +164,4 @@ textarea:focus {
   font-family: 'JetBrains Mono', monospace;
   fill: var(--text3);
 }
-.recharts-tooltip-wrapper {
-  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
-}
+.recharts-tooltip-wrapper { filter: none; }
