@@ -416,16 +416,17 @@ class Installer(tk.Tk):
 
         # Feature cards
         features = [
-            (ACCENT,  "🖼",  "Annotation Studio",       "Bounding box, polygon & point tools with undo / redo"),
-            (SUCCESS, "⚡",  "YOLO Training",            "Real-time training logs, augmentation preview, seg/det models"),
-            (WARN,    "🔬",  "Evaluation & Inference",   "mAP metrics, per-class breakdown, image & URL inference"),
-            (INFO,    "🏷",  "Classification",            "ResNet / MobileNet / EfficientNet transfer learning"),
-            (PURPLE,  "🧱",  "Custom CNN Builder",        "Design your own neural network architecture visually"),
-            (SUCCESS, "📦",  "Dataset Export",            "YOLO & COCO zip export in one click"),
-            (INFO,    "📹",  "Video Inference + Tracking","Run YOLO on video files or URLs (YouTube, TikTok, etc.)"),
-            (ACCENT,  "🎯",  "Pose Estimation",           "COCO 17-keypoint skeleton detection on image / video / webcam"),
-            (PURPLE,  "🧩",  "Instance Segmentation",     "Pixel-level masks on image / video / webcam — bring your own .pt model"),
-            (SUCCESS, "📷",  "Live Webcam Inference",     "Real-time detection overlay at ~7 FPS on any webcam"),
+            (ACCENT,  "🖼",  "Annotation Studio",        "Bounding box, polygon & point tools — auto-annotate with any .pt model"),
+            (SUCCESS, "⚡",  "Object Detection Training", "YOLO11/v10/v9/v8 · live logs · augmentation preview · resume training"),
+            (WARN,    "🔬",  "Evaluation & Inference",    "mAP, F1, PR curve, confusion matrix · image & URL batch testing"),
+            (INFO,    "🏷",  "Classification",            "ResNet / MobileNet / EfficientNet · top-5 predictions · export ONNX"),
+            (PURPLE,  "🧱",  "Custom CNN Builder",        "Design and train your own neural network architecture from scratch"),
+            (ACCENT,  "📊",  "Dataset Analytics",         "Class distribution, aspect ratio, RGB stats, annotation heatmaps"),
+            (SUCCESS, "📦",  "Dataset Import & Export",   "Upload images · import YOLO/COCO · export zip in one click"),
+            (INFO,    "📹",  "Video Inference + Tracking","File or URL (YouTube, TikTok, 1000+ sites) · object tracking · download"),
+            (ACCENT,  "🎯",  "Pose Estimation",           "17-keypoint skeleton on image / video / webcam · YOLO11-pose models"),
+            (PURPLE,  "🧩",  "Instance Segmentation",     "Pixel masks on image / video / webcam · pre-trained or custom .pt"),
+            (SUCCESS, "📷",  "Live Webcam Inference",     "Real-time detection + segmentation overlay · FPS counter · per-class stats"),
         ]
 
         for accent_col, icon, title, desc in features:
