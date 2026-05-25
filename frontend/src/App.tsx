@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
-import { Layers } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import Projects from './pages/Projects'
 import ProjectImages from './pages/ProjectImages'
 import Annotate from './pages/Annotate'
@@ -18,7 +18,7 @@ function Nav() {
       className="sticky top-0 z-40">
       <div className="flex items-center gap-6 px-6 h-12">
         <NavLink to="/" className="flex items-center gap-2 no-underline">
-          <Layers size={16} style={{ color: 'var(--accent)' }} strokeWidth={1.8} />
+          <Eye size={16} style={{ color: 'var(--accent)' }} strokeWidth={1.8} />
           <span style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14, letterSpacing: '-0.01em' }}>
             NoCode CV
           </span>
