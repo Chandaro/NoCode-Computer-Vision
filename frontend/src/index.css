@@ -2,44 +2,49 @@
 
 /* ── Design tokens ──────────────────────────────────────────────────────── */
 :root {
-  /* Two colours: near-black family + electric blue accent */
+  /*
+   * Corporate & Tech palette
+   *   Deep Navy  #00246B  — authority, trust, structure
+   *   Ice Blue   #CADCFC  — primary accent / CTA
+   *   Stark White          — text & clarity
+   */
 
-  /* Backgrounds */
-  --bg:        #0c0c0c;
-  --surface:   #111111;
-  --surface2:  #171717;
-  --surface3:  #1e1e1e;
+  /* Backgrounds — dark navy family */
+  --bg:        #04091a;
+  --surface:   #08112a;
+  --surface2:  #0d1c3d;
+  --surface3:  #122350;
 
-  /* Borders */
-  --border:    #272727;
-  --border2:   #333333;
+  /* Borders — navy tones */
+  --border:    #1a3368;
+  --border2:   #244494;
 
-  /* Text */
-  --text:      #f0f0f0;
-  --text2:     #888888;
-  --text3:     #444444;
+  /* Text — white → ice blue → muted navy */
+  --text:      #eef2ff;
+  --text2:     #8aaed8;
+  --text3:     #3d5888;
 
-  /* Accent — electric blue */
-  --accent:    #2563eb;
-  --accent-h:  #1d4ed8;
-  --accent-s:  rgba(37, 99, 235, 0.10);
-  --accent-t:  rgba(37, 99, 235, 0.05);
+  /* Accent — Ice Blue #CADCFC (primary CTA, interactive elements) */
+  --accent:    #cadcfc;
+  --accent-h:  #b4ccf8;
+  --accent-s:  rgba(202, 220, 252, 0.10);
+  --accent-t:  rgba(202, 220, 252, 0.05);
 
-  /* Secondary — violet */
-  --secondary:   #7c3aed;
-  --secondary-h: #6d28d9;
-  --secondary-s: rgba(124, 58, 237, 0.10);
-  --secondary-t: rgba(124, 58, 237, 0.05);
+  /* Secondary — mid navy (visible on dark bg for outlined buttons) */
+  --secondary:   #2860c8;
+  --secondary-h: #1e52b0;
+  --secondary-s: rgba(40, 96, 200, 0.12);
+  --secondary-t: rgba(40, 96, 200, 0.06);
 
-  /* Semantic — kept muted so they don't compete with the two-colour rule */
+  /* Semantic — muted so they don't compete */
   --success:   #4ade80;
-  --success-s: rgba(74, 222, 128, 0.07);
+  --success-s: rgba(74, 222, 128, 0.08);
   --danger:    #f87171;
-  --danger-s:  rgba(248, 113, 113, 0.07);
+  --danger-s:  rgba(248, 113, 113, 0.08);
   --warn:      #fbbf24;
-  --warn-s:    rgba(251, 191, 36, 0.07);
+  --warn-s:    rgba(251, 191, 36, 0.08);
 
-  /* Radius — kept deliberately small */
+  /* Radius — deliberately small */
   --radius:    3px;
   --radius-sm: 2px;
   --radius-lg: 4px;
@@ -80,7 +85,7 @@ code, pre, .mono {
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
 /* ── Selection ──────────────────────────────────────────────────────────── */
-::selection { background: rgba(37, 99, 235, 0.25); }
+::selection { background: rgba(202, 220, 252, 0.20); color: #eef2ff; }
 
 /* ── Focus ring ─────────────────────────────────────────────────────────── */
 :focus-visible {
@@ -141,7 +146,7 @@ input[type=range]::-webkit-slider-runnable-track {
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23444444' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%233d5888' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px !important;

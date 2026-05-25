@@ -76,8 +76,8 @@ export function Btn({
     lineHeight: 1.4,
   }
   const variants: Record<BtnVariant, CSSProperties> = {
-    primary:   { background: 'var(--accent)', color: '#fff', borderColor: 'transparent' },
-    secondary: { background: 'var(--secondary-t)', color: 'var(--secondary)', borderColor: 'rgba(124,58,237,0.3)' },
+    primary:   { background: 'var(--accent)', color: '#00246B', borderColor: 'transparent', fontWeight: 600 },
+    secondary: { background: 'var(--secondary-t)', color: 'var(--secondary)', borderColor: 'rgba(40,96,200,0.35)' },
     ghost:     { background: 'transparent', color: 'var(--text2)', borderColor: 'transparent' },
     danger:    { background: 'transparent', color: 'var(--danger)', borderColor: 'var(--danger)' },
   }
@@ -99,8 +99,8 @@ export function Badge({ children, color = 'gray' }: { children: ReactNode; color
     red:    { background: 'var(--danger-s)',     color: 'var(--danger)',  border: '1px solid rgba(248,113,113,0.15)' },
     yellow: { background: 'var(--warn-s)',       color: 'var(--warn)',    border: '1px solid rgba(251,191,36,0.15)' },
     gray:   { background: 'var(--surface2)',     color: 'var(--text2)',   border: '1px solid var(--border)' },
-    blue:   { background: 'var(--accent-s)',     color: '#93b4ff',        border: '1px solid rgba(37,99,235,0.2)' },
-    purple: { background: 'var(--secondary-s)',  color: '#c4b5fd',        border: '1px solid rgba(124,58,237,0.2)' },
+    blue:   { background: 'var(--accent-s)',     color: 'var(--accent)',  border: '1px solid rgba(202,220,252,0.2)' },
+    purple: { background: 'var(--secondary-s)', color: '#7aaaf5',        border: '1px solid rgba(40,96,200,0.25)' },
   }
   return (
     <span style={{
@@ -447,7 +447,7 @@ export function InfoBanner({ children }: { children: ReactNode }) {
     <div style={{
       padding: '10px 14px',
       background: 'var(--accent-t)',
-      border: '1px solid rgba(37,99,235,0.2)',
+      border: '1px solid rgba(202,220,252,0.15)',
       borderRadius: 'var(--radius)',
       marginBottom: 20,
       fontSize: 13, color: 'var(--text2)', lineHeight: 1.6,
