@@ -3,48 +3,50 @@
 /* ── Design tokens ──────────────────────────────────────────────────────── */
 :root {
   /*
-   * Corporate & Tech palette
-   *   Deep Navy  #00246B  — authority, trust, structure
-   *   Ice Blue   #CADCFC  — primary accent / CTA
-   *   Stark White          — text & clarity
+   * Palette sources (real production values, not generated):
+   *   Backgrounds  — GitHub Primer dark  (#0d1117 system)
+   *   Accent       — Linear brand indigo (#5e6ad2) — most designer-loved in 2024
+   *   Secondary    — Radix blueDark.9    (#0090ff)
+   *   Text         — GitHub fg scale     (#e2e8f0 / #8b949e / #484f58)
+   *   Semantic     — GitHub status scale (green / red / orange)
    */
 
-  /* Backgrounds — dark navy family */
-  --bg:        #04091a;
-  --surface:   #08112a;
-  --surface2:  #0d1c3d;
-  --surface3:  #122350;
+  /* Backgrounds */
+  --bg:        #0d1117;
+  --surface:   #161b22;
+  --surface2:  #1e2430;
+  --surface3:  #252f3e;
 
-  /* Borders — navy tones */
-  --border:    #1a3368;
-  --border2:   #244494;
+  /* Borders */
+  --border:    #21262d;
+  --border2:   #30363d;
 
-  /* Text — white → ice blue → muted navy */
-  --text:      #eef2ff;
-  --text2:     #8aaed8;
-  --text3:     #3d5888;
+  /* Text */
+  --text:      #e2e8f0;
+  --text2:     #8b949e;
+  --text3:     #484f58;
 
-  /* Accent — Ice Blue #CADCFC (primary CTA, interactive elements) */
-  --accent:    #cadcfc;
-  --accent-h:  #b4ccf8;
-  --accent-s:  rgba(202, 220, 252, 0.10);
-  --accent-t:  rgba(202, 220, 252, 0.05);
+  /* Accent — Linear indigo */
+  --accent:    #5e6ad2;
+  --accent-h:  #6e7ae0;
+  --accent-s:  rgba(94, 106, 210, 0.12);
+  --accent-t:  rgba(94, 106, 210, 0.06);
 
-  /* Secondary — mid navy (visible on dark bg for outlined buttons) */
-  --secondary:   #2860c8;
-  --secondary-h: #1e52b0;
-  --secondary-s: rgba(40, 96, 200, 0.12);
-  --secondary-t: rgba(40, 96, 200, 0.06);
+  /* Secondary — Radix blue */
+  --secondary:   #0090ff;
+  --secondary-h: #0084f0;
+  --secondary-s: rgba(0, 144, 255, 0.10);
+  --secondary-t: rgba(0, 144, 255, 0.05);
 
-  /* Semantic — muted so they don't compete */
-  --success:   #4ade80;
-  --success-s: rgba(74, 222, 128, 0.08);
-  --danger:    #f87171;
-  --danger-s:  rgba(248, 113, 113, 0.08);
-  --warn:      #fbbf24;
-  --warn-s:    rgba(251, 191, 36, 0.08);
+  /* Semantic — GitHub status scale */
+  --success:   #3fb950;
+  --success-s: rgba(63, 185, 80, 0.10);
+  --danger:    #f85149;
+  --danger-s:  rgba(248, 81, 73, 0.10);
+  --warn:      #d29922;
+  --warn-s:    rgba(210, 153, 34, 0.10);
 
-  /* Radius — deliberately small */
+  /* Radius */
   --radius:    3px;
   --radius-sm: 2px;
   --radius-lg: 4px;
@@ -85,7 +87,7 @@ code, pre, .mono {
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
 /* ── Selection ──────────────────────────────────────────────────────────── */
-::selection { background: rgba(202, 220, 252, 0.20); color: #eef2ff; }
+::selection { background: rgba(94, 106, 210, 0.30); }
 
 /* ── Focus ring ─────────────────────────────────────────────────────────── */
 :focus-visible {
@@ -100,7 +102,7 @@ code, pre, .mono {
 }
 .btn-secondary:hover:not(:disabled) {
   background: var(--secondary-s) !important;
-  border-color: var(--secondary) !important;
+  border-color: var(--secondary-h) !important;
   color: var(--secondary) !important;
 }
 .btn-ghost:hover:not(:disabled) {
@@ -146,7 +148,7 @@ input[type=range]::-webkit-slider-runnable-track {
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%233d5888' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23484f58' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px !important;
