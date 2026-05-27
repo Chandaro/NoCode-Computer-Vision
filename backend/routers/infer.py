@@ -27,25 +27,30 @@ def _get_model(model_path: str):
     return _model_cache[model_path]
 
 
+def _find_weights(model_path: str, run_dir: str) -> str | None:
+    """Search for weights in stored path then run_dir. Returns path or None."""
+    if model_path and os.path.exists(model_path):
+        return model_path
+    if run_dir:
+        for fname in ("best.pt", "last.pt"):
+            candidate = os.path.join(run_dir, "weights", fname)
+            if os.path.exists(candidate):
+                return candidate
+    return None
+
+
 def _resolve_weights(run: TrainingRun) -> tuple[str, bool]:
-    """Return (model_path, is_fallback).
+    """Return (model_path, is_fallback) for a detection TrainingRun.
 
     Priority:
-      1. run.model_path         — the saved best.pt from training
-      2. run.run_dir/weights/best.pt  — same weights, different path
-      3. run.run_dir/weights/last.pt  — last checkpoint
-      4. run.model_base          — base YOLO model (ultralytics downloads it)
+      1. run.model_path              — saved best.pt from training
+      2. run.run_dir/weights/best.pt — alternate location
+      3. run.run_dir/weights/last.pt — last checkpoint
+      4. run.model_base              — base YOLO model (ultralytics downloads)
     """
-    if run.model_path and os.path.exists(run.model_path):
-        return run.model_path, False
-
-    if run.run_dir:
-        for fname in ("best.pt", "last.pt"):
-            candidate = os.path.join(run.run_dir, "weights", fname)
-            if os.path.exists(candidate):
-                return candidate, False
-
-    # Fall back to the base model (yolo11n.pt / yolov8n.pt …)
+    found = _find_weights(run.model_path, run.run_dir)
+    if found:
+        return found, False
     base = run.model_base or "yolo11n.pt"
     return base, True
 
@@ -65,8 +70,7 @@ async def detection_infer(
         raise HTTPException(404, "Run not found")
     if run.status != "done":
         raise HTTPException(400, "Run has not completed")
-    if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, "Model weights not found")
+    model_path, _ = _resolve_weights(run)
 
     project = session.get(Project, project_id)
     class_names = project.classes if project else []
@@ -80,7 +84,7 @@ async def detection_infer(
         import torch
         from ultralytics import YOLO
         device = "0" if torch.cuda.is_available() else "cpu"
-        model = YOLO(run.model_path)
+        model = YOLO(model_path)
         try:
             results = model.predict(tmp_path, conf=conf, iou=iou, verbose=False, device=device)
         except RuntimeError:
@@ -126,8 +130,8 @@ async def detection_infer_url(
         raise HTTPException(404, "Run not found")
     if run.status != "done":
         raise HTTPException(400, "Run has not completed")
-    if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, "Model weights not found")
+
+    model_path, _ = _resolve_weights(run)
 
     project = session.get(Project, project_id)
     class_names = project.classes if project else []
@@ -147,7 +151,7 @@ async def detection_infer_url(
 
     from ultralytics import YOLO
     device = "0" if torch.cuda.is_available() else "cpu"
-    model  = YOLO(run.model_path)
+    model  = YOLO(model_path)
     try:
         results = model.predict(arr, conf=conf, iou=iou, verbose=False, device=device)
     except RuntimeError:
@@ -192,8 +196,8 @@ async def detection_test_batch(
         raise HTTPException(404, "Run not found")
     if run.status != "done":
         raise HTTPException(400, "Run has not completed")
-    if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, "Model weights not found")
+
+    model_path, _ = _resolve_weights(run)
 
     project     = session.get(Project, project_id)
     class_names = project.classes if project else []
@@ -201,7 +205,7 @@ async def detection_test_batch(
     import torch
     from ultralytics import YOLO
     device = "0" if torch.cuda.is_available() else "cpu"
-    model  = YOLO(run.model_path)
+    model  = YOLO(model_path)
 
     images_out: list = []
     for upload in files:
@@ -277,8 +281,10 @@ async def classification_infer(
         raise HTTPException(404, "Run not found")
     if run.status != "done":
         raise HTTPException(400, "Run has not completed")
-    if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, "Model weights not found")
+
+    model_path = _find_weights(run.model_path, run.run_dir)
+    if not model_path:
+        raise HTTPException(404, "Model weights not found — re-train this run to restore them.")
 
     project = session.get(Project, project_id)
     if not project:
@@ -356,8 +362,10 @@ async def custom_cnn_infer(
         raise HTTPException(404, "Run not found")
     if run.status != "done":
         raise HTTPException(400, "Run has not completed")
-    if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, "Model weights not found")
+
+    model_path = _find_weights(run.model_path, run.run_dir)
+    if not model_path:
+        raise HTTPException(404, "Model weights not found — re-train this run to restore them.")
 
     project = session.get(Project, project_id)
     cfg     = session.get(CustomModelConfig, run.config_id)
