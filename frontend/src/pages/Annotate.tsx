@@ -883,7 +883,7 @@ export default function Annotate() {
                   </div>
                   <input type="range" min={0.05} max={0.95} step={0.05} value={autoConf}
                     onChange={e => setAutoConf(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }} />
+                    style={{ width: '100%', cursor: 'pointer' }} />
                 </div>
                 <button onClick={autoAnnotate} disabled={autoLoading || !autoRunId || (trainingRuns.length === 0 && externalModels.length === 0)}
                   style={{ padding: '6px 0', background: 'var(--accent)',

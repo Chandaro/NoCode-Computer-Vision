@@ -1350,7 +1350,7 @@ function ParamEditor({
           type="range" min={0} max={1} step={0.05}
           value={p.p ?? 0.5}
           onChange={e => onChange({ ...p, p: Number(e.target.value) })}
-          style={{ flex: 1, accentColor: 'var(--accent)' }}
+          style={{ flex: 1 }}
         />
         <span style={{ fontSize: 11, color: 'var(--text)', fontFamily: 'monospace', width: 32 }}>
           {(p.p ?? 0.5).toFixed(2)}

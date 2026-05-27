@@ -139,22 +139,43 @@ export function Slider({ label, value, onChange, min, max, step = 0.05, format }
   min: number; max: number; step?: number; format?: (v: number) => string
 }) {
   const display = format ? format(value) : value
+  const pct = ((value - min) / (max - min)) * 100
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
         <span style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>{label}</span>
-        <span style={{
-          fontSize: 12, color: 'var(--accent)', fontWeight: 600,
-          fontFamily: 'JetBrains Mono, monospace',
-        }}>
+        <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' }}>
           {display}
         </span>
       </div>
-      <input
-        type="range" min={min} max={max} step={step} value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--accent)' } as CSSProperties}
-      />
+      <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'center' }}>
+        {/* Track */}
+        <div style={{ position: 'absolute', left: 0, right: 0, height: 3, background: 'var(--border2)' }} />
+        {/* Fill */}
+        <div style={{ position: 'absolute', left: 0, width: `${pct}%`, height: 3, background: 'var(--accent)', opacity: 0.45 }} />
+        {/* Native input — invisible, handles all interaction */}
+        <input
+          type="range" min={min} max={max} step={step} value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          style={{ position: 'absolute', width: '100%', opacity: 0, cursor: 'grab', height: '100%', margin: 0, padding: 0, zIndex: 2 } as CSSProperties}
+        />
+        {/* Sword thumb — real DOM element, always renders */}
+        <div style={{
+          position: 'absolute',
+          left: `calc(${pct}% - 9px)`,
+          width: 18, height: 18,
+          pointerEvents: 'none',
+          userSelect: 'none',
+          zIndex: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 15,
+          lineHeight: 1,
+          filter: 'drop-shadow(0 0 4px rgba(94,106,210,0.7))',
+          transition: 'left 0s',
+        }}>
+          ⚔️
+        </div>
+      </div>
     </div>
   )
 }

@@ -188,6 +188,7 @@ export default function Train() {
   const [videoJobId,     setVideoJobId]     = useState('')
   const [videoStatus,    setVideoStatus]    = useState<'idle'|'uploading'|'running'|'done'|'failed'>('idle')
   const [videoError,     setVideoError]     = useState('')
+  const [videoFallback,  setVideoFallback]  = useState('')   // non-empty = used base model
   const [videoProgress,  setVideoProgress]  = useState({ processed: 0, total: 0 })
   const videoPollerRef                      = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -318,7 +319,7 @@ export default function Train() {
     if (videoInputMode === 'file' && !videoFile) return
     if (videoInputMode === 'url' && !videoUrl.trim()) return
     if (videoPollerRef.current) clearInterval(videoPollerRef.current)
-    setVideoStatus('uploading'); setVideoJobId(''); setVideoError('')
+    setVideoStatus('uploading'); setVideoJobId(''); setVideoError(''); setVideoFallback('')
     setVideoProgress({ processed: 0, total: 0 })
     try {
       const fd = new FormData()
@@ -335,6 +336,7 @@ export default function Train() {
       }
       const res = await api.post(endpoint, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       const jobId: string = res.data.job_id
+      if (res.data.fallback_model) setVideoFallback(res.data.fallback_model)
       setVideoJobId(jobId)
       setVideoStatus('running')
       videoPollerRef.current = setInterval(async () => {
@@ -993,7 +995,7 @@ export default function Train() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <select
                   value={videoRunId}
-                  onChange={e => { setVideoRunId(e.target.value); setVideoStatus('idle'); setVideoJobId(''); setVideoError('') }}
+                  onChange={e => { setVideoRunId(e.target.value); setVideoStatus('idle'); setVideoJobId(''); setVideoError(''); setVideoFallback('') }}
                   style={{
                     padding: '7px 10px', background: 'var(--surface2)',
                     border: '1px solid var(--border)', borderRadius: 6,
@@ -1139,6 +1141,18 @@ export default function Train() {
                   <p style={{ fontSize: 11, color: 'var(--success)' }}>
                     Processing complete — {videoProgress.processed} frames annotated.
                   </p>
+                )}
+                {videoFallback && videoStatus !== 'idle' && (
+                  <div style={{
+                    padding: '8px 12px', fontSize: 11,
+                    background: 'var(--warn-s)',
+                    border: '1px solid rgba(210,153,34,0.25)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--warn)',
+                  }}>
+                    ⚠ Custom weights not found — running with base model <strong>{videoFallback}</strong> instead.
+                    Results may differ from your trained run.
+                  </div>
                 )}
                 {videoStatus === 'failed' && videoError && (
                   <div style={{

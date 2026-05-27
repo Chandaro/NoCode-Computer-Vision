@@ -119,30 +119,20 @@ button, a[class^="btn-"] {
   transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
 
-/* ── Range input ─────────────────────────────────────────────────────────── */
+/* ── Range input — thumb is rendered as a real DOM element in the Slider  ── */
+/* component; these rules only style the invisible native input underneath.  */
 input[type=range] {
   -webkit-appearance: none;
   appearance: none;
-  width: 100%;
-  height: 3px;
-  border-radius: 0;
-  cursor: pointer;
+  background: transparent;
+  cursor: grab;
   outline: none;
-  background: var(--border2);
 }
-input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 0;
-  background: var(--accent);
-  border: none;
-}
-input[type=range]::-webkit-slider-runnable-track {
-  background: var(--border2);
-  height: 3px;
-}
+input[type=range]:active { cursor: grabbing; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 0; height: 0; }
+input[type=range]::-moz-range-thumb    { width: 0; height: 0; border: none; background: transparent; }
+input[type=range]::-webkit-slider-runnable-track { background: transparent; height: 3px; }
+input[type=range]::-moz-range-track    { background: transparent; height: 3px; }
 
 /* ── Select ──────────────────────────────────────────────────────────────── */
 select {

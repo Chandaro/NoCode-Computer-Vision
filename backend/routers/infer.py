@@ -27,6 +27,29 @@ def _get_model(model_path: str):
     return _model_cache[model_path]
 
 
+def _resolve_weights(run: TrainingRun) -> tuple[str, bool]:
+    """Return (model_path, is_fallback).
+
+    Priority:
+      1. run.model_path         — the saved best.pt from training
+      2. run.run_dir/weights/best.pt  — same weights, different path
+      3. run.run_dir/weights/last.pt  — last checkpoint
+      4. run.model_base          — base YOLO model (ultralytics downloads it)
+    """
+    if run.model_path and os.path.exists(run.model_path):
+        return run.model_path, False
+
+    if run.run_dir:
+        for fname in ("best.pt", "last.pt"):
+            candidate = os.path.join(run.run_dir, "weights", fname)
+            if os.path.exists(candidate):
+                return candidate, False
+
+    # Fall back to the base model (yolo11n.pt / yolov8n.pt …)
+    base = run.model_base or "yolo11n.pt"
+    return base, True
+
+
 # ─── Detection inference ──────────────────────────────────────────────────────
 @router.post("/projects/{project_id}/training/runs/{run_id}/infer")
 async def detection_infer(
@@ -640,8 +663,8 @@ async def start_video_infer(
         raise HTTPException(404, "Run not found")
     if run.status != "done":
         raise HTTPException(400, "Run has not completed")
-    if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, f"Model weights not found — the trained .pt file is missing from disk. Re-train the run to regenerate it.")
+
+    model_path, is_fallback = _resolve_weights(run)
 
     try:
         import cv2  # noqa: F401
@@ -658,15 +681,16 @@ async def start_video_infer(
 
     job_id = uuid.uuid4().hex
     _video_jobs[job_id] = {"status": "running", "stage": "processing", "processed": 0,
-                            "total_frames": 0, "out_path": None, "error": None}
+                            "total_frames": 0, "out_path": None, "error": None,
+                            "fallback_model": model_path if is_fallback else None}
 
     threading.Thread(
         target=_process_video,
-        args=(job_id, tmp_path, run.model_path, class_names, conf, iou, tracker),
+        args=(job_id, tmp_path, model_path, class_names, conf, iou, tracker),
         daemon=True,
     ).start()
 
-    return {"job_id": job_id}
+    return {"job_id": job_id, "fallback_model": model_path if is_fallback else None}
 
 
 @router.post("/projects/{project_id}/training/runs/{run_id}/video-infer-url")
@@ -684,8 +708,8 @@ async def start_video_infer_url(
         raise HTTPException(404, "Run not found")
     if run.status != "done":
         raise HTTPException(400, "Run has not completed")
-    if not run.model_path or not os.path.exists(run.model_path):
-        raise HTTPException(404, f"Model weights not found — the trained .pt file is missing from disk. Re-train the run to regenerate it.")
+
+    model_path, is_fallback = _resolve_weights(run)
 
     try:
         import cv2  # noqa: F401
@@ -697,15 +721,16 @@ async def start_video_infer_url(
 
     job_id = uuid.uuid4().hex
     _video_jobs[job_id] = {"status": "running", "stage": "downloading", "processed": 0,
-                            "total_frames": 0, "out_path": None, "error": None}
+                            "total_frames": 0, "out_path": None, "error": None,
+                            "fallback_model": model_path if is_fallback else None}
 
     threading.Thread(
         target=_run_video_from_url,
-        args=(job_id, url, run.model_path, class_names, conf, iou, tracker),
+        args=(job_id, url, model_path, class_names, conf, iou, tracker),
         daemon=True,
     ).start()
 
-    return {"job_id": job_id}
+    return {"job_id": job_id, "fallback_model": model_path if is_fallback else None}
 
 
 @router.get("/projects/{project_id}/training/runs/{run_id}/video-infer/{job_id}/status")
