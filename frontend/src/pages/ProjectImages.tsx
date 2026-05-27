@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image } from 'lucide-react'
+import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Badge, Empty } from '../components/ui'
-import { Image as ImageIcon } from 'lucide-react'
 
 interface ImportResult {
   imported: number
