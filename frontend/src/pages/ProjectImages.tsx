@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers } from 'lucide-react'
+import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Badge, Empty } from '../components/ui'
 import { Image as ImageIcon } from 'lucide-react'
@@ -27,6 +27,7 @@ export default function ProjectImages() {
   const [editingClasses, setEditingClasses] = useState(false)
   const [classInput, setClassInput] = useState('')
   const [savingClasses, setSavingClasses] = useState(false)
+  const [showImportGuide, setShowImportGuide] = useState(false)
   const fileRef        = useRef<HTMLInputElement>(null)
   const importRef      = useRef<HTMLInputElement>(null)
   const importFolderRef = useRef<HTMLInputElement>(null)
@@ -373,7 +374,7 @@ export default function ProjectImages() {
       )}
 
       {/* Upload + select bar */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         {!selectMode ? (
           <>
             <Btn variant="primary" onClick={() => fileRef.current?.click()} disabled={loading}>
@@ -390,6 +391,22 @@ export default function ProjectImages() {
                 <CheckSquare size={13} /> Select
               </Btn>
             )}
+            {/* Format guide toggle */}
+            <button
+              onClick={() => setShowImportGuide(v => !v)}
+              title="Show import format guide"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', background: showImportGuide ? 'var(--accent-s)' : 'transparent',
+                color: showImportGuide ? 'var(--accent)' : 'var(--text3)',
+                fontSize: 12, cursor: 'pointer', transition: 'all 0.1s',
+              }}
+            >
+              <Info size={12} />
+              Format guide
+              {showImportGuide ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+            </button>
           </>
         ) : (
           <>
@@ -430,6 +447,137 @@ export default function ProjectImages() {
         {/* @ts-ignore */}
         <input ref={importFolderRef} type="file" multiple webkitdirectory="" style={{ display: 'none' }} onChange={handleImportYolo} />
       </div>
+
+      {/* ── Import format guide ─────────────────────────────────────────── */}
+      {showImportGuide && (
+        <div style={{
+          marginBottom: 20,
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--surface)',
+          overflow: 'hidden',
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: '10px 14px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface2)',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <Info size={13} style={{ color: 'var(--accent)' }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Dataset Import Formats</span>
+            <span style={{ fontSize: 11, color: 'var(--text3)', marginLeft: 4 }}>— supported formats explained</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 0 }}>
+
+            {/* ── Card 1: YOLO Folder ── */}
+            <div style={{ padding: '14px 16px', borderRight: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 'var(--radius)', background: 'var(--secondary-s)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Folder size={13} style={{ color: 'var(--secondary)' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Import YOLO Folder</p>
+                  <p style={{ fontSize: 11, color: 'var(--text3)' }}>Select an entire dataset folder</p>
+                </div>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.6 }}>
+                Your folder must contain two sub-folders: <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>images/</code> and <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>labels/</code> with matching filenames.
+              </p>
+              {/* Folder tree */}
+              <div style={{
+                background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 1.9,
+                color: 'var(--text2)',
+              }}>
+                <div style={{ color: 'var(--secondary)' }}>📁 my-dataset/</div>
+                <div style={{ paddingLeft: 16 }}>📁 <span style={{ color: 'var(--text)' }}>images/</span></div>
+                <div style={{ paddingLeft: 32, color: 'var(--text3)' }}>🖼 dog_001.jpg</div>
+                <div style={{ paddingLeft: 32, color: 'var(--text3)' }}>🖼 dog_002.jpg</div>
+                <div style={{ paddingLeft: 16 }}>📁 <span style={{ color: 'var(--text)' }}>labels/</span></div>
+                <div style={{ paddingLeft: 32, color: 'var(--success)' }}>📄 dog_001.txt</div>
+                <div style={{ paddingLeft: 32, color: 'var(--success)' }}>📄 dog_002.txt</div>
+                <div style={{ paddingLeft: 16, color: 'var(--text3)', fontSize: 10, marginTop: 2 }}>obj.names or classes.txt (optional)</div>
+              </div>
+              <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--success-s)', borderRadius: 'var(--radius)', fontSize: 11, color: 'var(--success)' }}>
+                ✓ Annotations are imported automatically
+              </div>
+            </div>
+
+            {/* ── Card 2: YOLO Files ── */}
+            <div style={{ padding: '14px 16px', borderRight: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 'var(--radius)', background: 'var(--accent-s)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText size={13} style={{ color: 'var(--accent)' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Import YOLO Files</p>
+                  <p style={{ fontSize: 11, color: 'var(--text3)' }}>Select image + label files together</p>
+                </div>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.6 }}>
+                Select both your <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>.jpg/.png</code> images and their matching <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>.txt</code> label files in one file-picker selection.
+              </p>
+              <div style={{
+                background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 1.9,
+                color: 'var(--text2)',
+              }}>
+                <div style={{ color: 'var(--text3)', fontSize: 10, marginBottom: 4 }}>// Select all of these at once:</div>
+                <div>🖼 <span style={{ color: 'var(--text)' }}>cat_001.jpg</span></div>
+                <div>📄 <span style={{ color: 'var(--success)' }}>cat_001.txt</span></div>
+                <div>🖼 <span style={{ color: 'var(--text)' }}>cat_002.png</span></div>
+                <div>📄 <span style={{ color: 'var(--success)' }}>cat_002.txt</span></div>
+              </div>
+              <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--warn-s)', borderRadius: 'var(--radius)', fontSize: 11, color: 'var(--warn)' }}>
+                ⚠ Image and .txt must share the same filename
+              </div>
+            </div>
+
+            {/* ── Card 3: YOLO label format ── */}
+            <div style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 'var(--radius)', background: 'rgba(63,185,80,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText size={13} style={{ color: 'var(--success)' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>YOLO Label Format</p>
+                  <p style={{ fontSize: 11, color: 'var(--text3)' }}>What's inside each .txt file</p>
+                </div>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.6 }}>
+                One object per line. All values are <strong>0–1 normalised</strong> relative to image width/height.
+              </p>
+              <div style={{
+                background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 2,
+              }}>
+                <div style={{ color: 'var(--text3)', fontSize: 10 }}>// class_id  cx  cy  width  height</div>
+                <div>
+                  <span style={{ color: 'var(--danger)' }}>0 </span>
+                  <span style={{ color: 'var(--secondary)' }}>0.512 0.480 </span>
+                  <span style={{ color: 'var(--success)' }}>0.300 0.420</span>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--danger)' }}>1 </span>
+                  <span style={{ color: 'var(--secondary)' }}>0.210 0.340 </span>
+                  <span style={{ color: 'var(--success)' }}>0.150 0.200</span>
+                </div>
+                <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 6, fontSize: 10, color: 'var(--text3)', lineHeight: 1.8 }}>
+                  <span style={{ color: 'var(--danger)' }}>class_id</span> = index from classes list<br />
+                  <span style={{ color: 'var(--secondary)' }}>cx cy</span> = box center (0–1)<br />
+                  <span style={{ color: 'var(--success)' }}>w h</span> = box size (0–1)
+                </div>
+              </div>
+              <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--secondary-s)', borderRadius: 'var(--radius)', fontSize: 11, color: 'var(--secondary)' }}>
+                ✓ Works with Roboflow, CVAT, LabelImg exports
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {images.length === 0 ? (
         <div style={{ border: '1px dashed var(--border2)', borderRadius: 10 }}>
