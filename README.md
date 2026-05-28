@@ -67,16 +67,55 @@ It is designed for:
 
 ## Screenshots
 
-| | |
-|---|---|
-| ![Projects](docs/screenshots/projects.png) | ![Annotate](docs/screenshots/annotate.png) |
-| **Projects Dashboard** — manage all your CV projects | **Annotation Studio** — bbox, polygon, point tools |
-| ![Train](docs/screenshots/train.png) | ![Analytics](docs/screenshots/analytics.png) |
-| **Detection Training** — live log, augmentation preview | **Dataset Analytics** — class distribution, heatmaps |
-| ![Segmentation](docs/screenshots/segmentation.png) | ![Pose](docs/screenshots/pose.png) |
-| **Instance Segmentation** — pixel-level masks | **Pose Estimation** — 17-keypoint skeleton |
-| ![Video](docs/screenshots/video_inference.png) | ![Webcam](docs/screenshots/webcam.png) |
-| **Video Inference** — YouTube / file + tracking | **Live Webcam** — real-time detection overlay |
+### Static Views
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/projects.png" alt="Projects Dashboard" />
+      <br /><sub><b>Projects Dashboard</b> — manage all your CV projects</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/annotate.png" alt="Annotation Studio" />
+      <br /><sub><b>Annotation Studio</b> — bbox, polygon &amp; point tools</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/train.png" alt="Detection Training" />
+      <br /><sub><b>Detection Training</b> — live log, augmentation preview</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/analytics.png" alt="Dataset Analytics" />
+      <br /><sub><b>Dataset Analytics</b> — class distribution, heatmaps</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/segmentation.png" alt="Instance Segmentation" />
+      <br /><sub><b>Instance Segmentation</b> — pixel-level masks</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/pose.png" alt="Pose Estimation" />
+      <br /><sub><b>Pose Estimation</b> — 17-keypoint skeleton overlay</sub>
+    </td>
+  </tr>
+</table>
+
+### Live Demos
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/video_inference.gif" alt="Video Inference" />
+      <br /><sub><b>Video Inference + Tracking</b> — YouTube / file URL, object tracking, download result</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/webcam.gif" alt="Live Webcam" />
+      <br /><sub><b>Live Webcam</b> — real-time detection overlay, FPS counter, per-class stats</sub>
+    </td>
+  </tr>
+</table>
 
 > 📁 Screenshots live in `docs/screenshots/`. Add your own after running the app.
 
