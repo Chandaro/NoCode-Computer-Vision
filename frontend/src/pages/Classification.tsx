@@ -226,8 +226,8 @@ export default function Classification() {
       <div style={{ padding: '10px 14px', background: 'rgba(88,101,242,0.08)',
         border: '1px solid rgba(88,101,242,0.22)', borderRadius: 8, marginBottom: 20,
         fontSize: 12, color: '#a5b4fc', lineHeight: 1.6 }}>
-        ℹ️ Classification uses each image's <strong>first annotation class</strong> as its label.
-        Each class needs at least 2 annotated images.
+        ℹ️ Works directly with your annotated detection data — each <strong>bounding box crop</strong> becomes
+        one training sample for its class. Annotate objects in the Annotate page, then train here. Each class needs at least 2 annotated objects.
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 12, alignItems: 'start' }}>

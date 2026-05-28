@@ -2001,6 +2001,15 @@ export default function CustomModel() {
         }
       />
 
+      <div style={{ padding: '8px 0 10px', flexShrink: 0 }}>
+        <div style={{ padding: '9px 14px', background: 'rgba(88,101,242,0.08)',
+          border: '1px solid rgba(88,101,242,0.22)', borderRadius: 8,
+          fontSize: 12, color: '#a5b4fc', lineHeight: 1.6 }}>
+          ℹ️ Trains on your annotated detection data — each <strong>bounding box crop</strong> becomes
+          one sample for its class. Annotate objects in the Annotate page, then build and train your CNN here.
+        </div>
+      </div>
+
       <div style={{ flex: 1, display: 'flex', gap: 8, overflow: 'hidden', minHeight: 0 }}>
 
         {/* ── Left panel: Layer Editor ───────────────────────────────────── */}

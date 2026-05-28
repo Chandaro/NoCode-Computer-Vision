@@ -126,7 +126,9 @@ def _build_model(base_model: str, n_classes: int, dropout_head: float = 0.0):
 # ─── Dataset builder ─────────────────────────────────────────────────────────
 def _build_cls_dataset(project_id: int, run_id: int, classes: list,
                        val_split: float, session: Session) -> tuple:
-    """Build ImageFolder layout: run_dir/train/<class_name>/img.jpg."""
+    """Build ImageFolder by cropping each bounding-box annotation as a sample."""
+    from PIL import Image as PILImage
+
     dataset_dir = os.path.join(RUNS_DIR, f"cls_dataset_{project_id}_{run_id}")
     if os.path.exists(dataset_dir):
         shutil.rmtree(dataset_dir)
@@ -138,23 +140,48 @@ def _build_cls_dataset(project_id: int, run_id: int, classes: list,
         for cls in classes:
             os.makedirs(os.path.join(dataset_dir, split, cls), exist_ok=True)
 
-    n_val    = max(1, int(len(images) * val_split))
-    val_ids  = {img.id for img in images[:n_val]}
-    skipped  = 0
+    n_val   = max(1, int(len(images) * val_split))
+    val_ids = {img.id for img in images[:n_val]}
+    skipped = 0
+    placed  = 0
 
     for img in images:
         anns = session.exec(select(Annotation).where(Annotation.image_id == img.id)).all()
-        if not anns:
-            skipped += 1; continue
-        cls_id = anns[0].class_id
-        if cls_id >= len(classes):
-            skipped += 1; continue
-        cls_name = classes[cls_id]
-        split    = "val" if img.id in val_ids else "train"
-        src      = os.path.join(UPLOAD_DIR, img.filename)
+        bbox_anns = [a for a in anns if a.shape_type in ("bbox", "polygon")]
+        if not bbox_anns:
+            skipped += 1
+            continue
+
+        src = os.path.join(UPLOAD_DIR, img.filename)
         if not os.path.exists(src):
-            skipped += 1; continue
-        shutil.copy2(src, os.path.join(dataset_dir, split, cls_name, img.filename))
+            skipped += 1
+            continue
+
+        try:
+            pil = PILImage.open(src).convert("RGB")
+            iw, ih = pil.size
+        except Exception:
+            skipped += 1
+            continue
+
+        split = "val" if img.id in val_ids else "train"
+
+        for ann in bbox_anns:
+            if ann.class_id >= len(classes):
+                continue
+            cls_name = classes[ann.class_id]
+            x1 = int((ann.x_center - ann.width  / 2) * iw)
+            y1 = int((ann.y_center - ann.height / 2) * ih)
+            x2 = int((ann.x_center + ann.width  / 2) * iw)
+            y2 = int((ann.y_center + ann.height / 2) * ih)
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(iw, x2), min(ih, y2)
+            if x2 - x1 < 8 or y2 - y1 < 8:
+                continue
+            crop = pil.crop((x1, y1, x2, y2))
+            crop.save(os.path.join(dataset_dir, split, cls_name,
+                                   f"{img.id}_{ann.id}.jpg"))
+            placed += 1
 
     return dataset_dir, skipped
 
@@ -183,10 +210,10 @@ def _run_classification(run_id: int, project_id: int, config: ClsConfig):
             run.status = "running"
             session.add(run); session.commit()
 
-            push("Building classification dataset…")
+            push("Building classification dataset (cropping bounding boxes)…")
             dataset_dir, skipped = _build_cls_dataset(
                 project_id, run_id, classes, config.val_split, session)
-            push(f"Dataset ready — {skipped} images skipped (no annotation)")
+            push(f"Dataset ready — {skipped} images skipped (no bbox annotations)")
 
         use_cuda = torch.cuda.is_available()
         if use_cuda:
@@ -472,11 +499,9 @@ def start_classification(project_id: int, config: ClsConfig,
     if len(project.classes) < 2:
         raise HTTPException(400, "Need at least 2 classes for classification")
 
-    images    = session.exec(select(Image).where(Image.project_id == project_id)).all()
-    annotated = [img for img in images
-                 if session.exec(select(Annotation).where(Annotation.image_id == img.id)).first()]
-    if len(annotated) < 4:
-        raise HTTPException(400, "Need at least 4 annotated images (2 per class minimum)")
+    images = session.exec(select(Image).where(Image.project_id == project_id)).all()
+    if len(images) == 0:
+        raise HTTPException(400, "No images in project — upload images and annotate bounding boxes first")
 
     run = ClassificationRun(
         project_id=project_id, status="pending",

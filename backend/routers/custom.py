@@ -179,8 +179,8 @@ def get_run(project_id: int, run_id: int, session: Session = Depends(get_session
 def _build_custom_dataset(project_id: int, run_id: int, classes: list,
                            input_h: int, input_w: int,
                            val_split: float, session: Session) -> tuple[str, int, dict]:
-    """Build ImageFolder layout resized to input_h×input_w.
-    Returns (dataset_dir, total_skipped, skip_reason_counts).
+    """Build ImageFolder by cropping each bounding-box annotation, resized to input_h×input_w.
+    Returns (dataset_dir, total_skipped, skip_reason_counts, placed).
     """
     from PIL import Image as PILImage
 
@@ -196,37 +196,50 @@ def _build_custom_dataset(project_id: int, run_id: int, classes: list,
             safe = cls.replace("/", "_").replace("\\", "_")
             os.makedirs(os.path.join(dataset_dir, split, safe), exist_ok=True)
 
-    n_val = max(1, int(len(images) * val_split))
+    n_val   = max(1, int(len(images) * val_split))
     val_ids = {img.id for img in images[:n_val]}
 
-    reasons = {"no_annotation": 0, "class_id_out_of_range": 0, "file_not_found": 0, "corrupt": 0}
+    reasons = {"no_bbox_annotation": 0, "file_not_found": 0, "corrupt": 0}
     placed  = 0
 
     for img in images:
         anns = session.exec(select(Annotation).where(Annotation.image_id == img.id)).all()
-        if not anns:
-            reasons["no_annotation"] += 1
+        bbox_anns = [a for a in anns if a.shape_type in ("bbox", "polygon")]
+        if not bbox_anns:
+            reasons["no_bbox_annotation"] += 1
             continue
-        cls_id = anns[0].class_id
-        if cls_id >= len(classes):
-            reasons["class_id_out_of_range"] += 1
-            continue
-        cls_name = classes[cls_id].replace("/", "_").replace("\\", "_")
-        split    = "val" if img.id in val_ids else "train"
-        src      = os.path.join(UPLOAD_DIR, img.filename)
+
+        src = os.path.join(UPLOAD_DIR, img.filename)
         if not os.path.exists(src):
             reasons["file_not_found"] += 1
             continue
 
         try:
             pil = PILImage.open(src).convert("RGB")
-            pil = pil.resize((input_w, input_h), PILImage.BILINEAR)
-            dst = os.path.join(dataset_dir, split, cls_name, img.filename + ".jpg")
-            pil.save(dst, "JPEG")
-            placed += 1
+            iw, ih = pil.size
         except Exception:
             reasons["corrupt"] += 1
             continue
+
+        split = "val" if img.id in val_ids else "train"
+
+        for ann in bbox_anns:
+            if ann.class_id >= len(classes):
+                continue
+            cls_name = classes[ann.class_id].replace("/", "_").replace("\\", "_")
+            x1 = int((ann.x_center - ann.width  / 2) * iw)
+            y1 = int((ann.y_center - ann.height / 2) * ih)
+            x2 = int((ann.x_center + ann.width  / 2) * iw)
+            y2 = int((ann.y_center + ann.height / 2) * ih)
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(iw, x2), min(ih, y2)
+            if x2 - x1 < 8 or y2 - y1 < 8:
+                continue
+            crop = pil.crop((x1, y1, x2, y2))
+            crop = crop.resize((input_w, input_h), PILImage.BILINEAR)
+            crop.save(os.path.join(dataset_dir, split, cls_name,
+                                   f"{img.id}_{ann.id}.jpg"), "JPEG")
+            placed += 1
 
     total_skipped = sum(reasons.values())
     return dataset_dir, total_skipped, reasons, placed
@@ -356,17 +369,15 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
             run.status = "running"
             session.add(run); session.commit()
 
-            push("Building dataset…")
+            push("Building dataset (cropping bounding boxes)…")
             dataset_dir, skipped, reasons, placed = _build_custom_dataset(
                 project_id, run_id, classes, input_h, input_w, body.val_split, session
             )
-            push(f"Dataset ready — {placed} images placed, {skipped} skipped")
-            if reasons["no_annotation"] > 0:
-                push(f"  ⚠ {reasons['no_annotation']} images have no annotation (open Annotate and label them)")
+            push(f"Dataset ready — {placed} crops placed, {skipped} images skipped")
+            if reasons["no_bbox_annotation"] > 0:
+                push(f"  ⚠ {reasons['no_bbox_annotation']} images have no bounding box annotations")
             if reasons["file_not_found"] > 0:
                 push(f"  ⚠ {reasons['file_not_found']} image files missing from uploads folder")
-            if reasons["class_id_out_of_range"] > 0:
-                push(f"  ⚠ {reasons['class_id_out_of_range']} annotations have a class_id that doesn't match project classes")
             if reasons["corrupt"] > 0:
                 push(f"  ⚠ {reasons['corrupt']} images could not be opened (corrupt files)")
             if placed == 0:
