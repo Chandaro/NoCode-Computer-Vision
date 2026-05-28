@@ -515,6 +515,116 @@ def cls_dataset_clear(project_id: int, class_name: str,
     return {"ok": True}
 
 
+def _save_cls_file(content: bytes, class_name: str, project_id: int, ext: str):
+    """Save one image file into cls_uploads and return True on success."""
+    cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), class_name)
+    os.makedirs(cls_dir, exist_ok=True)
+    fname = f"{uuid.uuid4().hex}{ext}"
+    with open(os.path.join(cls_dir, fname), "wb") as f:
+        f.write(content)
+
+
+def _ensure_class(project, class_name: str, session: Session):
+    """Add class_name to the project's class list if not already present."""
+    classes = project.classes
+    if class_name not in classes:
+        classes.append(class_name)
+        project.classes = classes
+        session.add(project)
+        session.commit()
+
+
+@router.post("/dataset/import-folder")
+async def cls_import_folder(project_id: int,
+                             files: list[UploadFile] = File(...),
+                             session: Session = Depends(get_session)):
+    """Accept files uploaded with webkitRelativePath as the filename.
+    Expected path format: <anything>/<class_name>/<image_file>
+    """
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    saved: dict[str, int] = {}
+    skipped = 0
+
+    for file in files:
+        parts = (file.filename or "").replace("\\", "/").split("/")
+        if len(parts) < 2:
+            skipped += 1
+            continue
+        class_name = parts[-2]  # folder right above the file
+        ext = os.path.splitext(parts[-1])[1].lower()
+        if ext not in IMG_EXTS or not class_name:
+            skipped += 1
+            continue
+        content = await file.read()
+        _ensure_class(project, class_name, session)
+        _save_cls_file(content, class_name, project_id, ext)
+        saved[class_name] = saved.get(class_name, 0) + 1
+
+    # Refresh stats
+    stats: dict[str, int] = {}
+    for cls in project.classes:
+        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
+        stats[cls] = len([f for f in os.listdir(cls_dir)
+                          if os.path.splitext(f)[1].lower() in IMG_EXTS]) if os.path.exists(cls_dir) else 0
+
+    return {"saved": saved, "skipped": skipped, "stats": stats}
+
+
+@router.post("/dataset/import-zip")
+async def cls_import_zip(project_id: int,
+                          file: UploadFile = File(...),
+                          session: Session = Depends(get_session)):
+    """Accept a ZIP file whose top-level folders are class names."""
+    import zipfile, tempfile
+
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    content = await file.read()
+    saved: dict[str, int] = {}
+    skipped = 0
+
+    with tempfile.TemporaryDirectory() as tmp:
+        zip_path = os.path.join(tmp, "upload.zip")
+        with open(zip_path, "wb") as f:
+            f.write(content)
+
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                for member in zf.infolist():
+                    if member.is_dir():
+                        continue
+                    parts = member.filename.replace("\\", "/").split("/")
+                    # find the class folder: last folder component before the filename
+                    # handles both flat (class/img.jpg) and nested (root/class/img.jpg)
+                    if len(parts) < 2:
+                        skipped += 1
+                        continue
+                    class_name = parts[-2]
+                    ext = os.path.splitext(parts[-1])[1].lower()
+                    if ext not in IMG_EXTS or not class_name or class_name.startswith("__"):
+                        skipped += 1
+                        continue
+                    img_bytes = zf.read(member.filename)
+                    _ensure_class(project, class_name, session)
+                    _save_cls_file(img_bytes, class_name, project_id, ext)
+                    saved[class_name] = saved.get(class_name, 0) + 1
+        except zipfile.BadZipFile:
+            raise HTTPException(400, "Invalid ZIP file")
+
+    stats: dict[str, int] = {}
+    for cls in project.classes:
+        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
+        stats[cls] = len([f for f in os.listdir(cls_dir)
+                          if os.path.splitext(f)[1].lower() in IMG_EXTS]) if os.path.exists(cls_dir) else 0
+
+    return {"saved": saved, "skipped": skipped, "stats": stats}
+
+
 # ─── Training routes ───────────────────────────────────────────────────────────
 @router.post("/start", response_model=ClsRunOut)
 def start_classification(project_id: int, config: ClsConfig,
