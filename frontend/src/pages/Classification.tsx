@@ -109,12 +109,6 @@ export default function Classification() {
     loadDatasetStats()
   }, [projectId])
 
-  // webkitdirectory must be set via DOM — React JSX doesn't forward unknown attributes
-  useEffect(() => {
-    if (folderImportRef.current) {
-      folderImportRef.current.setAttribute('webkitdirectory', '')
-    }
-  }, [])
 
   const loadDatasetStats = () =>
     api.get(`/projects/${projectId}/classification/dataset/stats`)
@@ -151,12 +145,18 @@ export default function Classification() {
   }
 
   const importFolder = async (files: FileList) => {
+    const fileArr = Array.from(files) as (File & { webkitRelativePath?: string })[]
+    // If no file has a path, webkitdirectory wasn't applied — abort with hint
+    const hasPaths = fileArr.some(f => f.webkitRelativePath && f.webkitRelativePath.includes('/'))
+    if (!hasPaths) {
+      alert('Folder picker did not capture file paths.\n\nPlease select the PARENT folder that contains your class subfolders (e.g. select "dataset/" which has "cat/" and "dog/" inside), not individual files.')
+      if (folderImportRef.current) folderImportRef.current.value = ''
+      return
+    }
     setImporting(true)
     try {
       const fd = new FormData()
-      Array.from(files).forEach(f =>
-        fd.append('files', f, (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name)
-      )
+      fileArr.forEach(f => fd.append('files', f, f.webkitRelativePath || f.name))
       const res = await api.post(`/projects/${projectId}/classification/dataset/import-folder`, fd,
         { headers: { 'Content-Type': 'multipart/form-data' } })
       await _refreshAfterImport(res.data.stats)
@@ -314,8 +314,9 @@ export default function Classification() {
           <span style={{ flex: 1 }} />
 
           {/* hidden inputs */}
-          <input ref={folderImportRef} type="file" style={{ display: 'none' }}
-            multiple
+          <input
+            ref={el => { folderImportRef.current = el; if (el) el.setAttribute('webkitdirectory', '') }}
+            type="file" style={{ display: 'none' }} multiple
             onChange={e => { if (e.target.files?.length) importFolder(e.target.files) }} />
           <input ref={zipImportRef} type="file" accept=".zip" style={{ display: 'none' }}
             onChange={e => { const f = e.target.files?.[0]; if (f) importZip(f) }} />
@@ -375,7 +376,7 @@ export default function Classification() {
                   ['One level deep', 'Images sit directly inside the class folder. Deeper nesting is fine — the parent folder of each image is used as the class.'],
                   ['Supported formats', 'JPG, JPEG, PNG, BMP, WEBP'],
                   ['Minimum', 'At least 2 classes, at least 2 images per class. Aim for 10+ per class for meaningful accuracy.'],
-                  ['ZIP or folder', 'Zip the class folders and upload as a .zip, or use "Import folder" to select the parent folder directly.'],
+                  ['ZIP or folder', 'For "Import folder": select the PARENT folder that contains the class subfolders (e.g. select "dataset/" which has "cat/" and "dog/" inside). For ZIP: zip those class folders together and upload.'],
                 ].map(([title, desc]) => (
                   <div key={title}>
                     <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: 12 }}>{title}</p>
