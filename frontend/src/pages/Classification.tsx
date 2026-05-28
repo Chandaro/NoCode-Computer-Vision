@@ -109,6 +109,13 @@ export default function Classification() {
     loadDatasetStats()
   }, [projectId])
 
+  // webkitdirectory must be set via DOM — React JSX doesn't forward unknown attributes
+  useEffect(() => {
+    if (folderImportRef.current) {
+      folderImportRef.current.setAttribute('webkitdirectory', '')
+    }
+  }, [])
+
   const loadDatasetStats = () =>
     api.get(`/projects/${projectId}/classification/dataset/stats`)
       .then(r => setDatasetStats(r.data))
@@ -137,6 +144,12 @@ export default function Classification() {
     }
   }
 
+  const _refreshAfterImport = async (stats: Record<string, number>) => {
+    setDatasetStats(stats)
+    const proj = await api.get(`/projects/${projectId}`)
+    setProject(proj.data)
+  }
+
   const importFolder = async (files: FileList) => {
     setImporting(true)
     try {
@@ -146,8 +159,7 @@ export default function Classification() {
       )
       const res = await api.post(`/projects/${projectId}/classification/dataset/import-folder`, fd,
         { headers: { 'Content-Type': 'multipart/form-data' } })
-      setDatasetStats(res.data.stats)
-      await api.get(`/projects/${projectId}`).then(r => setProject(r.data))
+      await _refreshAfterImport(res.data.stats)
     } finally {
       setImporting(false)
       if (folderImportRef.current) folderImportRef.current.value = ''
@@ -161,8 +173,7 @@ export default function Classification() {
       fd.append('file', file)
       const res = await api.post(`/projects/${projectId}/classification/dataset/import-zip`, fd,
         { headers: { 'Content-Type': 'multipart/form-data' } })
-      setDatasetStats(res.data.stats)
-      await api.get(`/projects/${projectId}`).then(r => setProject(r.data))
+      await _refreshAfterImport(res.data.stats)
     } finally {
       setImporting(false)
       if (zipImportRef.current) zipImportRef.current.value = ''
@@ -304,8 +315,7 @@ export default function Classification() {
 
           {/* hidden inputs */}
           <input ref={folderImportRef} type="file" style={{ display: 'none' }}
-            // @ts-ignore — webkitdirectory is non-standard
-            webkitdirectory="" multiple
+            multiple
             onChange={e => { if (e.target.files?.length) importFolder(e.target.files) }} />
           <input ref={zipImportRef} type="file" accept=".zip" style={{ display: 'none' }}
             onChange={e => { const f = e.target.files?.[0]; if (f) importZip(f) }} />

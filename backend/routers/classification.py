@@ -468,15 +468,7 @@ def cls_dataset_stats(project_id: int, session: Session = Depends(get_session)):
     project = session.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
-    stats: dict[str, int] = {}
-    for cls in project.classes:
-        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
-        if os.path.exists(cls_dir):
-            stats[cls] = len([f for f in os.listdir(cls_dir)
-                               if os.path.splitext(f)[1].lower() in IMG_EXTS])
-        else:
-            stats[cls] = 0
-    return stats
+    return _dataset_stats(project_id, project.classes)
 
 
 @router.post("/dataset/upload/{class_name}")
@@ -516,7 +508,7 @@ def cls_dataset_clear(project_id: int, class_name: str,
 
 
 def _save_cls_file(content: bytes, class_name: str, project_id: int, ext: str):
-    """Save one image file into cls_uploads and return True on success."""
+    """Save one image file into cls_uploads."""
     cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), class_name)
     os.makedirs(cls_dir, exist_ok=True)
     fname = f"{uuid.uuid4().hex}{ext}"
@@ -524,14 +516,28 @@ def _save_cls_file(content: bytes, class_name: str, project_id: int, ext: str):
         f.write(content)
 
 
-def _ensure_class(project, class_name: str, session: Session):
-    """Add class_name to the project's class list if not already present."""
-    classes = project.classes
-    if class_name not in classes:
-        classes.append(class_name)
-        project.classes = classes
+def _add_classes_to_project(project, new_classes: list[str], session: Session):
+    """Merge new_classes into project.classes in a single commit."""
+    existing = project.classes
+    changed = False
+    for cls in new_classes:
+        if cls not in existing:
+            existing.append(cls)
+            changed = True
+    if changed:
+        project.classes = existing
         session.add(project)
         session.commit()
+        session.refresh(project)
+
+
+def _dataset_stats(project_id: int, classes: list[str]) -> dict[str, int]:
+    stats: dict[str, int] = {}
+    for cls in classes:
+        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
+        stats[cls] = len([f for f in os.listdir(cls_dir)
+                          if os.path.splitext(f)[1].lower() in IMG_EXTS]) if os.path.exists(cls_dir) else 0
+    return stats
 
 
 @router.post("/dataset/import-folder")
@@ -545,32 +551,33 @@ async def cls_import_folder(project_id: int,
     if not project:
         raise HTTPException(404, "Project not found")
 
-    saved: dict[str, int] = {}
+    # Parse files first, collecting (class_name, ext, content) tuples
+    items: list[tuple[str, str, bytes]] = []
     skipped = 0
-
     for file in files:
         parts = (file.filename or "").replace("\\", "/").split("/")
         if len(parts) < 2:
             skipped += 1
             continue
-        class_name = parts[-2]  # folder right above the file
+        class_name = parts[-2]
         ext = os.path.splitext(parts[-1])[1].lower()
-        if ext not in IMG_EXTS or not class_name:
+        if ext not in IMG_EXTS or not class_name or class_name.startswith("."):
             skipped += 1
             continue
         content = await file.read()
-        _ensure_class(project, class_name, session)
+        items.append((class_name, ext, content))
+
+    # Add all new classes in one commit
+    new_classes = list(dict.fromkeys(cls for cls, _, _ in items))
+    _add_classes_to_project(project, new_classes, session)
+
+    # Save files
+    saved: dict[str, int] = {}
+    for class_name, ext, content in items:
         _save_cls_file(content, class_name, project_id, ext)
         saved[class_name] = saved.get(class_name, 0) + 1
 
-    # Refresh stats
-    stats: dict[str, int] = {}
-    for cls in project.classes:
-        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
-        stats[cls] = len([f for f in os.listdir(cls_dir)
-                          if os.path.splitext(f)[1].lower() in IMG_EXTS]) if os.path.exists(cls_dir) else 0
-
-    return {"saved": saved, "skipped": skipped, "stats": stats}
+    return {"saved": saved, "skipped": skipped, "stats": _dataset_stats(project_id, project.classes)}
 
 
 @router.post("/dataset/import-zip")
@@ -585,44 +592,40 @@ async def cls_import_zip(project_id: int,
         raise HTTPException(404, "Project not found")
 
     content = await file.read()
-    saved: dict[str, int] = {}
+    items: list[tuple[str, str, bytes]] = []
     skipped = 0
 
     with tempfile.TemporaryDirectory() as tmp:
         zip_path = os.path.join(tmp, "upload.zip")
         with open(zip_path, "wb") as f:
             f.write(content)
-
         try:
             with zipfile.ZipFile(zip_path, "r") as zf:
                 for member in zf.infolist():
                     if member.is_dir():
                         continue
                     parts = member.filename.replace("\\", "/").split("/")
-                    # find the class folder: last folder component before the filename
-                    # handles both flat (class/img.jpg) and nested (root/class/img.jpg)
                     if len(parts) < 2:
                         skipped += 1
                         continue
                     class_name = parts[-2]
                     ext = os.path.splitext(parts[-1])[1].lower()
-                    if ext not in IMG_EXTS or not class_name or class_name.startswith("__"):
+                    if ext not in IMG_EXTS or not class_name or class_name.startswith(("__", ".")):
                         skipped += 1
                         continue
-                    img_bytes = zf.read(member.filename)
-                    _ensure_class(project, class_name, session)
-                    _save_cls_file(img_bytes, class_name, project_id, ext)
-                    saved[class_name] = saved.get(class_name, 0) + 1
+                    items.append((class_name, ext, zf.read(member.filename)))
         except zipfile.BadZipFile:
             raise HTTPException(400, "Invalid ZIP file")
 
-    stats: dict[str, int] = {}
-    for cls in project.classes:
-        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
-        stats[cls] = len([f for f in os.listdir(cls_dir)
-                          if os.path.splitext(f)[1].lower() in IMG_EXTS]) if os.path.exists(cls_dir) else 0
+    new_classes = list(dict.fromkeys(cls for cls, _, _ in items))
+    _add_classes_to_project(project, new_classes, session)
 
-    return {"saved": saved, "skipped": skipped, "stats": stats}
+    saved: dict[str, int] = {}
+    for class_name, ext, img_bytes in items:
+        _save_cls_file(img_bytes, class_name, project_id, ext)
+        saved[class_name] = saved.get(class_name, 0) + 1
+
+    return {"saved": saved, "skipped": skipped, "stats": _dataset_stats(project_id, project.classes)}
 
 
 # ─── Training routes ───────────────────────────────────────────────────────────
