@@ -1,11 +1,10 @@
 <div align="center">
 
-<img src="frontend/public/favicon.svg" width="64" height="64" alt="NoCode CV Logo" />
+<img src="frontend/public/favicon.svg" width="56" height="56" alt="NoCode CV" />
 
-# NoCode CV
+<h1>NoCode CV</h1>
 
-**Train computer vision models without writing a single line of code.**  
-Annotation · Detection · Classification · Segmentation · Pose · Webcam — all running 100% locally.
+<p><em>Train computer vision models without writing a single line of code.</em></p>
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -14,132 +13,13 @@ Annotation · Detection · Classification · Segmentation · Pose · Webcam — 
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-8b5cf6?style=flat-square)]()
 
-<br />
-
-> A self-hosted desktop web app. One `.bat` / `.sh` installer — no Docker, no cloud account, no data ever leaving your machine.
-
-<br />
-
-![Demo](docs/screenshots/demo.gif)
-
 </div>
 
----
+<br />
 
-## Table of Contents
+NoCode CV is a self-hosted computer vision workstation that runs entirely on your own machine. Annotate images, train YOLO models, run inference on video and webcam — all through a browser UI, all offline, no cloud account required.
 
-- [Overview](#overview)
-- [Screenshots](#screenshots)
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Feature Reference](#feature-reference)
-  - [Projects](#projects)
-  - [Image Upload & Validation](#image-upload--validation)
-  - [Annotation Studio](#annotation-studio)
-  - [Dataset Analytics](#dataset-analytics)
-  - [Object Detection Training](#object-detection-training)
-  - [Image Classification](#image-classification)
-  - [Custom CNN Builder](#custom-cnn-builder)
-  - [Evaluation & Inference](#evaluation--inference)
-  - [Video Inference + Tracking](#video-inference--tracking)
-  - [Instance Segmentation](#instance-segmentation)
-  - [Pose Estimation](#pose-estimation)
-  - [Live Webcam](#live-webcam)
-- [Dataset Import Formats](#dataset-import-formats)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
-## Overview
-
-NoCode CV is a browser-based machine learning workstation that runs entirely on your own hardware. You open a URL in your browser — just like any web app — but everything: the model training, the inference, the database, the file storage, runs on a local Python server. No GPU cloud required. No API keys. No subscriptions.
-
-It is designed for:
-- **Researchers** who want to prototype CV pipelines quickly without boilerplate
-- **Learners** who want to understand detection, segmentation, and classification hands-on
-- **Small teams** who need a shared annotation + training tool without a SaaS budget
-
----
-
-## Screenshots
-
-### Static Views
-
-<table>
-  <tr>
-    <td width="50%">
-      <img src="docs/screenshots/projects.png" alt="Projects Dashboard" />
-      <br /><sub><b>Projects Dashboard</b> — manage all your CV projects</sub>
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/annotate.png" alt="Annotation Studio" />
-      <br /><sub><b>Annotation Studio</b> — bbox, polygon &amp; point tools</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="docs/screenshots/train.png" alt="Detection Training" />
-      <br /><sub><b>Detection Training</b> — live log, augmentation preview</sub>
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/analytics.png" alt="Dataset Analytics" />
-      <br /><sub><b>Dataset Analytics</b> — class distribution, heatmaps</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="docs/screenshots/segmentation.png" alt="Instance Segmentation" />
-      <br /><sub><b>Instance Segmentation</b> — pixel-level masks</sub>
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/pose.png" alt="Pose Estimation" />
-      <br /><sub><b>Pose Estimation</b> — 17-keypoint skeleton overlay</sub>
-    </td>
-  </tr>
-</table>
-
-### Live Demos
-
-<table>
-  <tr>
-    <td width="50%">
-      <img src="docs/screenshots/video_inference.gif" alt="Video Inference" />
-      <br /><sub><b>Video Inference + Tracking</b> — YouTube / file URL, object tracking, download result</sub>
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/webcam.gif" alt="Live Webcam" />
-      <br /><sub><b>Live Webcam</b> — real-time detection overlay, FPS counter, per-class stats</sub>
-    </td>
-  </tr>
-</table>
-
-> 📁 Screenshots live in `docs/screenshots/`. Add your own after running the app.
-
----
-
-## Features
-
-| Feature | Description |
-|---|---|
-| 🖼 **Annotation Studio** | Bounding box, polygon & point tools. Auto-annotate with any trained `.pt` model |
-| ⚡ **Object Detection** | YOLO11 / v10 / v9 / v8 · live training logs · augmentation preview · resume training |
-| 🏷 **Classification** | ResNet / MobileNet / EfficientNet · top-5 predictions · per-class accuracy |
-| 🧱 **Custom CNN Builder** | Design your own neural network architecture layer-by-layer and train it |
-| 📊 **Dataset Analytics** | Class distribution, aspect ratio, RGB stats, annotation heatmaps |
-| 📦 **Dataset Import / Export** | Upload images · import YOLO / COCO · export zip in one click |
-| 🔬 **Evaluation** | mAP50, F1, PR curve, confusion matrix · image & URL batch testing |
-| 📹 **Video Inference** | File upload or YouTube / TikTok URL · object tracking · download result |
-| 🎯 **Pose Estimation** | 17-keypoint skeleton on image / video / webcam · YOLO11-pose |
-| 🧩 **Instance Segmentation** | Pixel masks on image / video / webcam · pre-trained or custom `.pt` |
-| 📷 **Live Webcam** | Real-time detection + segmentation overlay · FPS counter · per-class stats |
-
----
-
-## Quick Start
+One installer script sets everything up. One launcher starts it. Everything stays on your hardware.
 
 ```bash
 # Windows
@@ -149,23 +29,104 @@ Install NoCode CV.bat
 chmod +x "Install NoCode CV.sh" && ./"Install NoCode CV.sh"
 ```
 
-That's it. The installer:
-1. Creates a Python virtual environment
-2. Installs all backend dependencies (`ultralytics`, `fastapi`, `torch`, etc.)
-3. Installs all frontend dependencies and builds the React app
-4. Creates a launcher shortcut on your desktop
+Then open **http://localhost:8000**.
 
-**After installation, launch the app:**
+<br />
 
-```bash
-# Windows
-NoCode CV.bat
+![Demo](docs/screenshots/demo.gif)
 
-# macOS / Linux
-./NoCode\ CV.sh
-```
+<br />
 
-Then open **http://localhost:8000** in your browser.
+---
+
+## Table of Contents
+
+- [What it does](#what-it-does)
+- [Screenshots](#screenshots)
+- [Installation](#installation)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Features](#features)
+- [Dataset Import Formats](#dataset-import-formats)
+- [Contributing](#contributing)
+
+---
+
+## What it does
+
+Most CV tooling expects you to write training scripts, manage file paths, and understand YAML configs before you see a single prediction. NoCode CV skips all of that.
+
+You create a project, upload images, draw annotations, pick a model size, and hit train. The live log streams directly in the browser. When training finishes, you can immediately run inference on images, video URLs, or your webcam — in the same UI, no terminal needed.
+
+It's built for people who want to go from raw images to a working detector in an afternoon, not a week.
+
+---
+
+## Screenshots
+
+### Projects
+
+![Projects Dashboard](docs/screenshots/projects.png)
+
+Each project is a self-contained workspace — its own images, annotations, class list, training runs, and exported models. You can have as many as you want running in parallel.
+
+---
+
+### Annotation Studio
+
+![Annotation Studio](docs/screenshots/annotate.png)
+
+![Annotation Tools](docs/screenshots/annotate_tools.png)
+
+Bounding box, polygon, and point tools on a pannable, zoomable canvas. Per-class color coding, undo/redo, and an auto-annotate button that runs any trained `.pt` model across all unannotated images in one click. Export to YOLO `.txt` or COCO JSON when you're done.
+
+---
+
+### Detection Training
+
+![Detection Training](docs/screenshots/train.png)
+
+Pick from YOLO11, v10, v9, or v8 in any size variant. Configure epochs, batch, image size, optimizer, learning rate, and 14 augmentation controls. Training output streams live in a color-coded log, and you can stop or resume any run at any time.
+
+---
+
+### Dataset Analytics
+
+![Dataset Analytics](docs/screenshots/analytics.png)
+
+Before you train, it helps to know what's in your dataset. The analytics page shows class distribution, annotation heatmaps, image size scatter plots, aspect ratio buckets, and RGB channel stats — enough to catch a class imbalance or data quality issue before it wastes training time.
+
+---
+
+### Instance Segmentation
+
+![Instance Segmentation](docs/screenshots/segmentation.png)
+
+Pixel-level masks using YOLO11-seg. Works on images, video files, URLs, and live webcam. Supports pre-trained models or any custom `.pt` you've trained yourself.
+
+---
+
+### Pose Estimation
+
+![Pose Estimation](docs/screenshots/pose.png)
+
+17-keypoint skeleton detection on images, video, or webcam using YOLO11-pose. Adjustable confidence threshold.
+
+---
+
+### Video Inference
+
+![Video Inference](docs/screenshots/video_inference.gif)
+
+Paste a YouTube, TikTok, Vimeo, or direct video URL — or upload a file. Optional ByteTrack object tracking assigns persistent IDs across frames. Download the annotated result when it's done.
+
+---
+
+### Live Webcam
+
+![Live Webcam](docs/screenshots/webcam.gif)
+
+Real-time detection or segmentation overlay from your camera. FPS counter, per-class instance counts, and a confidence threshold slider that updates live.
 
 ---
 
@@ -173,49 +134,46 @@ Then open **http://localhost:8000** in your browser.
 
 ### Requirements
 
-| Requirement | Minimum | Recommended |
+| | Minimum | Recommended |
 |---|---|---|
 | Python | 3.9 | 3.11 |
 | RAM | 8 GB | 16 GB |
-| GPU | — (CPU works) | NVIDIA CUDA |
-| Disk | 5 GB free | 20 GB free |
+| GPU | CPU works | NVIDIA CUDA |
+| Disk | 5 GB | 20 GB |
 | OS | Windows 10 / macOS 12 | Windows 11 / macOS 14 |
 
-### Manual Installation
+### One-line install
 
 ```bash
-# 1. Clone the repository
+# Windows
+Install NoCode CV.bat
+
+# macOS / Linux
+chmod +x "Install NoCode CV.sh" && ./"Install NoCode CV.sh"
+```
+
+The installer creates a Python virtual environment, installs all dependencies, builds the frontend, and drops a launcher on your desktop.
+
+### Manual install
+
+```bash
 git clone https://github.com/Chandaro/NoCode-Computer-Vision.git
 cd NoCode-Computer-Vision
 
-# 2. Create and activate virtual environment
 python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # macOS / Linux
 
-# Windows
-venv\Scripts\activate
-
-# macOS / Linux
-source venv/bin/activate
-
-# 3. Install backend dependencies
 pip install -r backend/requirements.txt
 
-# 4. Install and build frontend
-cd frontend
-npm install
-npm run build
-cd ..
+cd frontend && npm install && npm run build && cd ..
 
-# 5. Start the server
-cd backend
-uvicorn main:app --host 0.0.0.0 --port 8000
+cd backend && uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Then open **http://localhost:8000**.
+### GPU (NVIDIA CUDA)
 
-### GPU Support (NVIDIA)
-
-The app auto-detects CUDA. If you have an NVIDIA GPU, install the CUDA-enabled torch build first:
+The app detects CUDA automatically. For best performance, install the CUDA-enabled PyTorch build before the requirements:
 
 ```bash
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
@@ -227,12 +185,12 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | React 18 · TypeScript · Vite · Tailwind CSS |
-| **Backend** | Python · FastAPI · SQLModel · SQLite |
-| **CV / ML** | Ultralytics YOLO · PyTorch · torchvision · OpenCV |
-| **Video** | yt-dlp (1000+ sites) · OpenCV VideoWriter |
-| **Icons** | Lucide React |
-| **Charts** | Recharts |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
+| Backend | Python, FastAPI, SQLModel, SQLite |
+| CV / ML | Ultralytics YOLO, PyTorch, torchvision, OpenCV |
+| Video | yt-dlp, OpenCV VideoWriter |
+| Charts | Recharts |
+| Icons | Lucide React |
 
 ---
 
@@ -241,195 +199,66 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
 NoCode-Computer-Vision/
 ├── backend/
-│   ├── main.py              # FastAPI app entry point
-│   ├── models.py            # SQLModel database schemas
-│   ├── database.py          # DB session setup
+│   ├── main.py              — FastAPI entry point
+│   ├── models.py            — SQLModel schemas
+│   ├── database.py          — DB session
 │   └── routers/
-│       ├── projects.py      # Project & image CRUD
-│       ├── annotate.py      # Annotation endpoints
-│       ├── train.py         # Training orchestration
-│       ├── infer.py         # Inference (image, video, URL)
-│       ├── classify.py      # Classification training
-│       ├── segment.py       # Segmentation inference
-│       ├── pose.py          # Pose estimation
-│       └── webcam.py        # Webcam streaming
+│       ├── projects.py      — project & image CRUD
+│       ├── annotate.py      — annotation endpoints
+│       ├── train.py         — training orchestration
+│       ├── infer.py         — image / video / URL inference
+│       ├── classify.py      — classification training
+│       ├── segment.py       — segmentation inference
+│       ├── pose.py          — pose estimation
+│       └── webcam.py        — webcam streaming
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/           # One file per page/feature
+│   │   ├── pages/           — one file per feature
 │   │   ├── components/
-│   │   │   └── ui.tsx       # Shared design system components
-│   │   ├── api.ts           # Axios API client
-│   │   ├── App.tsx          # Router
-│   │   └── index.css        # Design tokens + global styles
+│   │   │   └── ui.tsx       — shared design system
+│   │   ├── api.ts           — Axios client
+│   │   ├── App.tsx          — router
+│   │   └── index.css        — design tokens
 │   └── public/
 │       └── favicon.svg
-├── installer.py             # Cross-platform installer script
-├── launcher.py              # App launcher
-├── Install NoCode CV.bat    # Windows installer
-├── Install NoCode CV.sh     # macOS/Linux installer
-└── docs/
-    └── screenshots/         # Add your screenshots here
+├── installer.py
+├── launcher.py
+├── Install NoCode CV.bat
+├── Install NoCode CV.sh
+└── docs/screenshots/
 ```
 
 ---
 
-## Feature Reference
+## Features
 
-### Projects
+**Annotation** — bounding box, polygon, and point tools with auto-annotate. Exports to YOLO and COCO.
 
-Every project is an isolated workspace containing images, annotations, class labels, training runs, and exported models. Create one project per detection task.
+**Object Detection** — fine-tune YOLO11 / v10 / v9 / v8 with live training logs, augmentation controls, and stop/resume.
 
-- Create, rename, and delete projects
-- Define class labels at any time without losing existing annotations
-- All data is stored locally in `nocode_cv.db` (SQLite)
+**Image Classification** — transfer learning on ResNet, MobileNet, EfficientNet. Top-5 accuracy, confusion matrix, per-class breakdown.
 
----
+**Custom CNN Builder** — stack Conv2D, pooling, batch norm, dropout, and linear layers visually. Train on your own images.
 
-### Image Upload & Validation
+**Dataset Analytics** — class distribution, heatmaps, aspect ratios, RGB stats. Everything you need before you hit train.
 
-- Upload JPEG, PNG, BMP — single file or hundreds at once
-- Auto-validates each image: dimensions, color space (RGB / grayscale), MD5 hash (deduplication), corruption check
-- Batch progress bar for large uploads
+**Video Inference + Tracking** — file upload or URL, ByteTrack object tracking, downloadable output.
 
----
+**Instance Segmentation** — pixel masks on images, video, and webcam using YOLO11-seg.
 
-### Annotation Studio
+**Pose Estimation** — 17-keypoint skeleton on images, video, and webcam using YOLO11-pose.
 
-![Annotation tools](docs/screenshots/annotate_tools.png)
+**Live Webcam** — real-time detection or segmentation overlay with FPS counter and per-class stats.
 
-| Tool | Use case |
-|---|---|
-| **Bounding box** | Object detection — draw a rectangle around each object |
-| **Polygon** | Precise outlines — click points around irregular shapes |
-| **Point** | Keypoints, landmarks, or event locations |
-
-- Pan and zoom canvas
-- Per-class color coding
-- Undo / redo
-- Auto-annotate: run any trained `.pt` model on all unannotated images in one click
-- Export annotations as YOLO `.txt` or COCO JSON
-
----
-
-### Dataset Analytics
-
-Visualize your dataset before training to catch imbalances early:
-
-- Class distribution bar chart
-- Annotations-per-image histogram
-- Image size scatter plot (width × height)
-- Aspect ratio buckets
-- RGB channel mean / std
-- Annotation heatmap overlay
-
----
-
-### Object Detection Training
-
-Trains YOLO models (YOLO11, v10, v9, v8) via fine-tuning on your annotated images.
-
-**Available base models:**
-
-| Family | Sizes |
-|---|---|
-| YOLO11 | n · s · m · l · x |
-| YOLOv10 | n · s · m · l · x |
-| YOLOv9 | t · s · m · c · e |
-| YOLOv8 | n · s · m · l · x |
-
-**Key training controls:**
-
-- Epochs, image size, batch size, validation split
-- Optimizer (auto / SGD / Adam / AdamW / RMSProp)
-- Learning rate (lr0, lrf), momentum, weight decay
-- 14 augmentation knobs (flip, rotation, mosaic, mixup, copy-paste, etc.)
-- Early stopping patience
-- Live streaming log with color-coded output
-- Stop / resume any run
-
----
-
-### Image Classification
-
-Transfer learning on ResNet-18, ResNet-50, MobileNetV3-Small, or EfficientNet-B0.
-
-- Top-1 / Top-5 accuracy
-- Per-class accuracy breakdown
-- Confusion matrix
-- Freeze backbone toggle (faster training on small datasets)
-- Inline inference — upload an image, get top-5 predictions with confidence scores
-
----
-
-### Custom CNN Builder
-
-Design a neural network architecture from scratch by stacking layers visually:
-
-- Conv2D, MaxPool, BatchNorm, Dropout, Linear, ReLU, Flatten
-- Set kernel size, stride, padding, channels per layer
-- Live architecture preview
-- Train on your project's classified images
-
----
-
-### Evaluation & Inference
-
-After any detection training run:
-
-- **mAP50 / mAP50-95** — standard COCO detection metrics
-- **Precision / Recall / F1** curves
-- **Confusion matrix**
-- **Test Set Evaluation** — upload a batch of images, get per-image detections + aggregate stats
-- Single image inference via file upload or any image URL
-
----
-
-### Video Inference + Tracking
-
-- Upload a video file (MP4, AVI, MOV, MKV) or paste a URL
-- YouTube, TikTok, Twitter, Vimeo and 1000+ sites supported via yt-dlp
-- Optional object tracking — assigns persistent IDs across frames (ByteTrack)
-- Download the annotated output video
-- Confidence threshold slider
-
----
-
-### Instance Segmentation
-
-Run pixel-level segmentation masks on:
-- Images (upload or URL)
-- Video files / URLs
-- Live webcam feed
-
-Uses YOLO11-seg models. Works with custom-trained `.pt` files.
-
----
-
-### Pose Estimation
-
-Detects 17 human body keypoints and draws a skeleton overlay.
-
-- Image, video, or webcam input
-- YOLO11-pose models
-- Adjustable confidence threshold
-
----
-
-### Live Webcam
-
-Real-time inference from your camera with:
-- Detection or segmentation overlay
-- FPS counter
-- Per-class instance count
-- Confidence threshold control
+**Evaluation** — mAP50, F1, precision/recall curves, confusion matrix, and batch test set evaluation.
 
 ---
 
 ## Dataset Import Formats
 
-### YOLO Folder
+NoCode CV imports YOLO-format datasets. Two modes:
 
-Select a folder that contains `images/` and `labels/` sub-directories with matching filenames:
+**Folder import** — select a folder with `images/` and `labels/` subdirectories. Filenames must match (`.jpg` ↔ `.txt`).
 
 ```
 my-dataset/
@@ -437,54 +266,41 @@ my-dataset/
 │   ├── photo_001.jpg
 │   └── photo_002.jpg
 └── labels/
-    ├── photo_001.txt   ← same filename, .txt extension
+    ├── photo_001.txt
     └── photo_002.txt
 ```
 
-### YOLO Files (flat)
+**Flat file import** — select image files and their matching label files together in one picker. Same base name requirement.
 
-Select image files and their matching `.txt` label files together in one file picker. Every `.jpg` must have a `.txt` with the same base name.
-
-### YOLO Label Format
-
-Each `.txt` file has one line per object:
+**Label format** — one line per object, all values 0–1 normalised:
 
 ```
 class_id  cx  cy  width  height
 ```
-
-- All values are **0–1 normalised** relative to image dimensions
-- `class_id` is the zero-based index into your project's class list
-- `cx cy` is the bounding box center
-- `width height` is the bounding box size
 
 ```
 0 0.512 0.480 0.300 0.420
 1 0.210 0.340 0.150 0.200
 ```
 
-Compatible with exports from **Roboflow**, **CVAT**, **LabelImg**, and **Label Studio**.
+Compatible with exports from Roboflow, CVAT, LabelImg, and Label Studio.
 
 ---
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/your-feature`
-3. Commit your changes: `git commit -m "feat: add your feature"`
-4. Push: `git push origin feat/your-feature`
-5. Open a pull request
+```bash
+git checkout -b feat/your-feature
+# make changes
+git commit -m "feat: describe what you did"
+git push origin feat/your-feature
+# open a pull request
+```
 
-Please follow the existing code style (TypeScript strict, Python type hints where practical).
-
----
-
-## License
-
-MIT © [Tekashimo](https://github.com/Chandaro)
+TypeScript strict mode on the frontend, type hints where practical on the backend.
 
 ---
 
 <div align="center">
-  <sub>Built with FastAPI · React · Ultralytics YOLO · PyTorch</sub>
+  <sub>MIT © <a href="https://github.com/Chandaro">Tekashimo</a> · FastAPI · React · Ultralytics YOLO · PyTorch</sub>
 </div>
