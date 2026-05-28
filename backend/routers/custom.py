@@ -10,9 +10,13 @@ from models import CustomModelConfig, CustomTrainingRun, Project, Image, Annotat
 
 router = APIRouter(prefix="/projects/{project_id}/custom", tags=["custom"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
-RUNS_DIR   = os.path.join(os.path.dirname(__file__), "..", "runs")
+UPLOAD_DIR   = os.path.join(os.path.dirname(__file__), "..", "uploads")
+RUNS_DIR     = os.path.join(os.path.dirname(__file__), "..", "runs")
+CLS_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "cls_uploads")
 os.makedirs(RUNS_DIR, exist_ok=True)
+os.makedirs(CLS_DATA_DIR, exist_ok=True)
+
+IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
 
 _custom_state: dict = {}
 
@@ -179,7 +183,7 @@ def get_run(project_id: int, run_id: int, session: Session = Depends(get_session
 def _build_custom_dataset(project_id: int, run_id: int, classes: list,
                            input_h: int, input_w: int,
                            val_split: float, session: Session) -> tuple[str, int, dict]:
-    """Build ImageFolder by cropping each bounding-box annotation, resized to input_h×input_w.
+    """Build ImageFolder from the project's classification-specific uploads, resized to input_h×input_w.
     Returns (dataset_dir, total_skipped, skip_reason_counts, placed).
     """
     from PIL import Image as PILImage
@@ -188,58 +192,36 @@ def _build_custom_dataset(project_id: int, run_id: int, classes: list,
     if os.path.exists(dataset_dir):
         shutil.rmtree(dataset_dir)
 
-    images = list(session.exec(select(Image).where(Image.project_id == project_id)).all())
-    random.shuffle(images)
-
     for split in ["train", "val"]:
         for cls in classes:
             safe = cls.replace("/", "_").replace("\\", "_")
             os.makedirs(os.path.join(dataset_dir, split, safe), exist_ok=True)
 
-    n_val   = max(1, int(len(images) * val_split))
-    val_ids = {img.id for img in images[:n_val]}
-
-    reasons = {"no_bbox_annotation": 0, "file_not_found": 0, "corrupt": 0}
+    reasons = {"file_not_found": 0, "corrupt": 0}
     placed  = 0
 
-    for img in images:
-        anns = session.exec(select(Annotation).where(Annotation.image_id == img.id)).all()
-        bbox_anns = [a for a in anns if a.shape_type in ("bbox", "polygon")]
-        if not bbox_anns:
-            reasons["no_bbox_annotation"] += 1
+    for cls in classes:
+        safe    = cls.replace("/", "_").replace("\\", "_")
+        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
+        if not os.path.exists(cls_dir):
             continue
-
-        src = os.path.join(UPLOAD_DIR, img.filename)
-        if not os.path.exists(src):
-            reasons["file_not_found"] += 1
-            continue
-
-        try:
-            pil = PILImage.open(src).convert("RGB")
-            iw, ih = pil.size
-        except Exception:
-            reasons["corrupt"] += 1
-            continue
-
-        split = "val" if img.id in val_ids else "train"
-
-        for ann in bbox_anns:
-            if ann.class_id >= len(classes):
+        imgs = [f for f in os.listdir(cls_dir)
+                if os.path.splitext(f)[1].lower() in IMG_EXTS]
+        random.shuffle(imgs)
+        n_val = max(1, int(len(imgs) * val_split))
+        for i, fname in enumerate(imgs):
+            split = "val" if i < n_val else "train"
+            src   = os.path.join(cls_dir, fname)
+            if not os.path.exists(src):
+                reasons["file_not_found"] += 1
                 continue
-            cls_name = classes[ann.class_id].replace("/", "_").replace("\\", "_")
-            x1 = int((ann.x_center - ann.width  / 2) * iw)
-            y1 = int((ann.y_center - ann.height / 2) * ih)
-            x2 = int((ann.x_center + ann.width  / 2) * iw)
-            y2 = int((ann.y_center + ann.height / 2) * ih)
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(iw, x2), min(ih, y2)
-            if x2 - x1 < 8 or y2 - y1 < 8:
-                continue
-            crop = pil.crop((x1, y1, x2, y2))
-            crop = crop.resize((input_w, input_h), PILImage.BILINEAR)
-            crop.save(os.path.join(dataset_dir, split, cls_name,
-                                   f"{img.id}_{ann.id}.jpg"), "JPEG")
-            placed += 1
+            try:
+                pil = PILImage.open(src).convert("RGB")
+                pil = pil.resize((input_w, input_h), PILImage.BILINEAR)
+                pil.save(os.path.join(dataset_dir, split, safe, fname + ".jpg"), "JPEG")
+                placed += 1
+            except Exception:
+                reasons["corrupt"] += 1
 
     total_skipped = sum(reasons.values())
     return dataset_dir, total_skipped, reasons, placed
@@ -369,13 +351,11 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
             run.status = "running"
             session.add(run); session.commit()
 
-            push("Building dataset (cropping bounding boxes)…")
+            push("Building dataset…")
             dataset_dir, skipped, reasons, placed = _build_custom_dataset(
                 project_id, run_id, classes, input_h, input_w, body.val_split, session
             )
-            push(f"Dataset ready — {placed} crops placed, {skipped} images skipped")
-            if reasons["no_bbox_annotation"] > 0:
-                push(f"  ⚠ {reasons['no_bbox_annotation']} images have no bounding box annotations")
+            push(f"Dataset ready — {placed} images placed, {skipped} skipped")
             if reasons["file_not_found"] > 0:
                 push(f"  ⚠ {reasons['file_not_found']} image files missing from uploads folder")
             if reasons["corrupt"] > 0:
@@ -659,6 +639,15 @@ def start_run(project_id: int, body: RunBody,
         raise HTTPException(404, "Config not found")
     if len(project.classes) < 2:
         raise HTTPException(400, "Need at least 2 classes")
+
+    classes_with_data = sum(
+        1 for cls in project.classes
+        if os.path.exists(os.path.join(CLS_DATA_DIR, str(project_id), cls)) and
+           any(os.path.splitext(f)[1].lower() in IMG_EXTS
+               for f in os.listdir(os.path.join(CLS_DATA_DIR, str(project_id), cls)))
+    )
+    if classes_with_data < 2:
+        raise HTTPException(400, "Upload images for at least 2 classes in the Classification Dataset section before training")
 
     run = CustomTrainingRun(
         config_id=body.config_id,

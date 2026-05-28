@@ -2005,8 +2005,7 @@ export default function CustomModel() {
         <div style={{ padding: '9px 14px', background: 'rgba(88,101,242,0.08)',
           border: '1px solid rgba(88,101,242,0.22)', borderRadius: 8,
           fontSize: 12, color: '#a5b4fc', lineHeight: 1.6 }}>
-          ℹ️ Trains on your annotated detection data — each <strong>bounding box crop</strong> becomes
-          one sample for its class. Annotate objects in the Annotate page, then build and train your CNN here.
+          ℹ️ Uses the same classification dataset as the <strong>Image Classification</strong> page — upload images per class there first, then come back to build and train your custom CNN.
         </div>
       </div>
 

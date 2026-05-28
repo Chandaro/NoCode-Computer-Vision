@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Zap, Download, Loader, RefreshCw, CheckCircle, XCircle, Upload, Square, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Zap, Download, Loader, RefreshCw, CheckCircle, XCircle, Upload, Square, Trash2, ChevronDown, ChevronUp, FolderOpen, ImagePlus } from 'lucide-react'
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import api, { type Project, type ClassificationRun, type ClsInferResult } from '../api'
 import {
@@ -77,6 +77,12 @@ export default function Classification() {
   const [progress,  setProgress]   = useState<Progress | null>(null)
   const [chartData, setChartData]  = useState<ChartPoint[]>([])
 
+  // ── Classification dataset ────────────────────────────────────────────────
+  const [datasetStats,    setDatasetStats]    = useState<Record<string, number>>({})
+  const [uploadingClass,  setUploadingClass]  = useState<string | null>(null)
+  const [clearingClass,   setClearingClass]   = useState<string | null>(null)
+  const clsFileRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
   // ── Inference ──────────────────────────────────────────────────────────────
   const [inferRunId,    setInferRunId]    = useState('')
   const [inferFile,     setInferFile]     = useState<File | null>(null)
@@ -96,7 +102,36 @@ export default function Classification() {
   useEffect(() => {
     api.get(`/projects/${projectId}`).then(r => setProject(r.data))
     loadRuns()
+    loadDatasetStats()
   }, [projectId])
+
+  const loadDatasetStats = () =>
+    api.get(`/projects/${projectId}/classification/dataset/stats`)
+      .then(r => setDatasetStats(r.data))
+      .catch(() => {})
+
+  const uploadClassImages = async (cls: string, files: FileList) => {
+    setUploadingClass(cls)
+    try {
+      const fd = new FormData()
+      Array.from(files).forEach(f => fd.append('files', f))
+      await api.post(`/projects/${projectId}/classification/dataset/upload/${encodeURIComponent(cls)}`, fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } })
+      await loadDatasetStats()
+    } finally {
+      setUploadingClass(null)
+    }
+  }
+
+  const clearClassImages = async (cls: string) => {
+    setClearingClass(cls)
+    try {
+      await api.delete(`/projects/${projectId}/classification/dataset/${encodeURIComponent(cls)}`)
+      await loadDatasetStats()
+    } finally {
+      setClearingClass(null)
+    }
+  }
 
   const loadRuns = () =>
     api.get(`/projects/${projectId}/classification/runs`).then(r => {
@@ -222,13 +257,77 @@ export default function Classification() {
         subtitle={`${project?.name ?? '…'} · Transfer Learning`}
       />
 
-      {/* Info banner */}
-      <div style={{ padding: '10px 14px', background: 'rgba(88,101,242,0.08)',
-        border: '1px solid rgba(88,101,242,0.22)', borderRadius: 8, marginBottom: 20,
-        fontSize: 12, color: '#a5b4fc', lineHeight: 1.6 }}>
-        ℹ️ Works directly with your annotated detection data — each <strong>bounding box crop</strong> becomes
-        one training sample for its class. Annotate objects in the Annotate page, then train here. Each class needs at least 2 annotated objects.
-      </div>
+      {/* ── Classification Dataset ── */}
+      <Card style={{ padding: 16, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <FolderOpen size={14} color="var(--accent)" />
+          <Label>Classification Dataset</Label>
+          <span style={{ fontSize: 11, color: 'var(--text3)', marginLeft: 4 }}>
+            Upload images per class — separate from your detection annotations
+          </span>
+        </div>
+
+        {!project?.classes?.length ? (
+          <p style={{ fontSize: 12, color: 'var(--text3)' }}>
+            Add classes to your project first, then upload images here.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {project.classes.map(cls => {
+              const count = datasetStats[cls] ?? 0
+              return (
+                <div key={cls} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 12px',
+                  background: 'var(--surface2)',
+                  border: `1px solid ${count > 0 ? 'rgba(94,106,210,0.3)' : 'var(--border)'}`,
+                  borderRadius: 6,
+                }}>
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                    background: count >= 2 ? 'var(--success)' : count > 0 ? 'var(--warn)' : 'var(--border2)',
+                  }} />
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{cls}</span>
+                  <span style={{
+                    fontSize: 11, fontFamily: 'JetBrains Mono, monospace',
+                    color: count >= 10 ? 'var(--success)' : count >= 2 ? 'var(--accent)' : 'var(--text3)',
+                    minWidth: 60, textAlign: 'right',
+                  }}>
+                    {count} image{count !== 1 ? 's' : ''}
+                  </span>
+
+                  {/* hidden file input */}
+                  <input
+                    type="file" accept="image/*" multiple style={{ display: 'none' }}
+                    ref={el => { clsFileRefs.current[cls] = el }}
+                    onChange={e => { if (e.target.files?.length) uploadClassImages(cls, e.target.files) }}
+                  />
+                  <Btn variant="secondary" size="sm"
+                    disabled={uploadingClass === cls}
+                    onClick={() => clsFileRefs.current[cls]?.click()}>
+                    {uploadingClass === cls
+                      ? <><Loader size={11} className="animate-spin" /> Uploading…</>
+                      : <><ImagePlus size={11} /> Add images</>}
+                  </Btn>
+                  {count > 0 && (
+                    <Btn variant="ghost" size="sm"
+                      disabled={clearingClass === cls}
+                      onClick={() => clearClassImages(cls)}
+                      style={{ color: 'var(--danger)' }}>
+                      {clearingClass === cls
+                        ? <Loader size={11} className="animate-spin" />
+                        : <Trash2 size={11} />}
+                    </Btn>
+                  )}
+                </div>
+              )
+            })}
+            <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+              Aim for at least 10 images per class. Green dot = ready, yellow = needs more images.
+            </p>
+          </div>
+        )}
+      </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 12, alignItems: 'start' }}>
 

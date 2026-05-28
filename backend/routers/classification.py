@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import Optional
-import os, json, shutil, threading, time, random
+import os, json, shutil, threading, time, random, uuid
 from datetime import datetime
 
 from database import get_session, DATABASE_URL
@@ -11,9 +11,13 @@ from models import ClassificationRun, Project, Image, Annotation
 
 router = APIRouter(prefix="/projects/{project_id}/classification", tags=["classification"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
-RUNS_DIR   = os.path.join(os.path.dirname(__file__), "..", "runs")
+UPLOAD_DIR   = os.path.join(os.path.dirname(__file__), "..", "uploads")
+RUNS_DIR     = os.path.join(os.path.dirname(__file__), "..", "runs")
+CLS_DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "cls_uploads")
 os.makedirs(RUNS_DIR, exist_ok=True)
+os.makedirs(CLS_DATA_DIR, exist_ok=True)
+
+IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
 
 _cls_state: dict = {}
 
@@ -125,63 +129,33 @@ def _build_model(base_model: str, n_classes: int, dropout_head: float = 0.0):
 
 # ─── Dataset builder ─────────────────────────────────────────────────────────
 def _build_cls_dataset(project_id: int, run_id: int, classes: list,
-                       val_split: float, session: Session) -> tuple:
-    """Build ImageFolder by cropping each bounding-box annotation as a sample."""
-    from PIL import Image as PILImage
-
+                       val_split: float) -> tuple:
+    """Build ImageFolder from the project's classification-specific uploads."""
     dataset_dir = os.path.join(RUNS_DIR, f"cls_dataset_{project_id}_{run_id}")
     if os.path.exists(dataset_dir):
         shutil.rmtree(dataset_dir)
-
-    images = list(session.exec(select(Image).where(Image.project_id == project_id)).all())
-    random.shuffle(images)
 
     for split in ["train", "val"]:
         for cls in classes:
             os.makedirs(os.path.join(dataset_dir, split, cls), exist_ok=True)
 
-    n_val   = max(1, int(len(images) * val_split))
-    val_ids = {img.id for img in images[:n_val]}
     skipped = 0
-    placed  = 0
 
-    for img in images:
-        anns = session.exec(select(Annotation).where(Annotation.image_id == img.id)).all()
-        bbox_anns = [a for a in anns if a.shape_type in ("bbox", "polygon")]
-        if not bbox_anns:
-            skipped += 1
+    for cls in classes:
+        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
+        if not os.path.exists(cls_dir):
             continue
-
-        src = os.path.join(UPLOAD_DIR, img.filename)
-        if not os.path.exists(src):
-            skipped += 1
-            continue
-
-        try:
-            pil = PILImage.open(src).convert("RGB")
-            iw, ih = pil.size
-        except Exception:
-            skipped += 1
-            continue
-
-        split = "val" if img.id in val_ids else "train"
-
-        for ann in bbox_anns:
-            if ann.class_id >= len(classes):
-                continue
-            cls_name = classes[ann.class_id]
-            x1 = int((ann.x_center - ann.width  / 2) * iw)
-            y1 = int((ann.y_center - ann.height / 2) * ih)
-            x2 = int((ann.x_center + ann.width  / 2) * iw)
-            y2 = int((ann.y_center + ann.height / 2) * ih)
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(iw, x2), min(ih, y2)
-            if x2 - x1 < 8 or y2 - y1 < 8:
-                continue
-            crop = pil.crop((x1, y1, x2, y2))
-            crop.save(os.path.join(dataset_dir, split, cls_name,
-                                   f"{img.id}_{ann.id}.jpg"))
-            placed += 1
+        imgs = [f for f in os.listdir(cls_dir)
+                if os.path.splitext(f)[1].lower() in IMG_EXTS]
+        random.shuffle(imgs)
+        n_val = max(1, int(len(imgs) * val_split))
+        for i, fname in enumerate(imgs):
+            split = "val" if i < n_val else "train"
+            src   = os.path.join(cls_dir, fname)
+            try:
+                shutil.copy2(src, os.path.join(dataset_dir, split, cls, fname))
+            except Exception:
+                skipped += 1
 
     return dataset_dir, skipped
 
@@ -210,10 +184,10 @@ def _run_classification(run_id: int, project_id: int, config: ClsConfig):
             run.status = "running"
             session.add(run); session.commit()
 
-            push("Building classification dataset (cropping bounding boxes)…")
+            push("Building classification dataset…")
             dataset_dir, skipped = _build_cls_dataset(
-                project_id, run_id, classes, config.val_split, session)
-            push(f"Dataset ready — {skipped} images skipped (no bbox annotations)")
+                project_id, run_id, classes, config.val_split)
+            push(f"Dataset ready — {skipped} files skipped")
 
         use_cuda = torch.cuda.is_available()
         if use_cuda:
@@ -487,7 +461,61 @@ def _run_classification(run_id: int, project_id: int, config: ClsConfig):
         _cls_state[run_id]["done"] = True
 
 
-# ─── Routes ───────────────────────────────────────────────────────────────────
+# ─── Classification dataset routes ────────────────────────────────────────────
+
+@router.get("/dataset/stats")
+def cls_dataset_stats(project_id: int, session: Session = Depends(get_session)):
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    stats: dict[str, int] = {}
+    for cls in project.classes:
+        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
+        if os.path.exists(cls_dir):
+            stats[cls] = len([f for f in os.listdir(cls_dir)
+                               if os.path.splitext(f)[1].lower() in IMG_EXTS])
+        else:
+            stats[cls] = 0
+    return stats
+
+
+@router.post("/dataset/upload/{class_name}")
+async def cls_dataset_upload(project_id: int, class_name: str,
+                              files: list[UploadFile] = File(...),
+                              session: Session = Depends(get_session)):
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    if class_name not in project.classes:
+        raise HTTPException(400, f"Class '{class_name}' not in project")
+    cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), class_name)
+    os.makedirs(cls_dir, exist_ok=True)
+    saved = 0
+    for file in files:
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        if ext not in IMG_EXTS:
+            continue
+        fname = f"{uuid.uuid4().hex}{ext}"
+        content = await file.read()
+        with open(os.path.join(cls_dir, fname), "wb") as f:
+            f.write(content)
+        saved += 1
+    return {"saved": saved}
+
+
+@router.delete("/dataset/{class_name}")
+def cls_dataset_clear(project_id: int, class_name: str,
+                       session: Session = Depends(get_session)):
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), class_name)
+    if os.path.exists(cls_dir):
+        shutil.rmtree(cls_dir)
+    return {"ok": True}
+
+
+# ─── Training routes ───────────────────────────────────────────────────────────
 @router.post("/start", response_model=ClsRunOut)
 def start_classification(project_id: int, config: ClsConfig,
                          session: Session = Depends(get_session)):
@@ -499,9 +527,21 @@ def start_classification(project_id: int, config: ClsConfig,
     if len(project.classes) < 2:
         raise HTTPException(400, "Need at least 2 classes for classification")
 
-    images = session.exec(select(Image).where(Image.project_id == project_id)).all()
-    if len(images) == 0:
-        raise HTTPException(400, "No images in project — upload images and annotate bounding boxes first")
+    # Verify classification dataset has enough data
+    classes_with_data = 0
+    total_imgs = 0
+    for cls in project.classes:
+        cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), cls)
+        if os.path.exists(cls_dir):
+            n = len([f for f in os.listdir(cls_dir)
+                     if os.path.splitext(f)[1].lower() in IMG_EXTS])
+            if n > 0:
+                classes_with_data += 1
+                total_imgs += n
+    if classes_with_data < 2:
+        raise HTTPException(400, "Upload images for at least 2 classes in the Dataset section before training")
+    if total_imgs < 4:
+        raise HTTPException(400, "Need at least 4 classification images total (2 per class minimum)")
 
     run = ClassificationRun(
         project_id=project_id, status="pending",
