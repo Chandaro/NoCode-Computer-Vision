@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon } from 'lucide-react'
+import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon, FileArchive, ImagePlus, ScanLine, Crosshair } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Badge, Empty } from '../components/ui'
 
@@ -27,9 +27,20 @@ export default function ProjectImages() {
   const [classInput, setClassInput] = useState('')
   const [savingClasses, setSavingClasses] = useState(false)
   const [showImportGuide, setShowImportGuide] = useState(false)
+  // ── Dataset mode ──
+  const [datasetMode, setDatasetMode] = useState<'detection' | 'classification'>('detection')
+  // ── Classification dataset state ──
+  const [datasetStats,   setDatasetStats]   = useState<Record<string, number>>({})
+  const [uploadingCls,   setUploadingCls]   = useState<string | null>(null)
+  const [clearingCls,    setClearingCls]    = useState<string | null>(null)
+  const [clsImporting,   setClsImporting]   = useState(false)
+  const [showClsGuide,   setShowClsGuide]   = useState(false)
+  const [newClassName,   setNewClassName]   = useState('')
   const fileRef        = useRef<HTMLInputElement>(null)
   const importRef      = useRef<HTMLInputElement>(null)
   const importFolderRef = useRef<HTMLInputElement>(null)
+  const newClassFileRef = useRef<HTMLInputElement>(null)
+  const zipImportRef    = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
   const load = async () => {
@@ -197,6 +208,61 @@ export default function ProjectImages() {
 
   const exitSelectMode = () => { setSelectMode(false); setSelected(new Set()) }
 
+  // ── Classification dataset helpers ──
+  const loadDatasetStats = async () => {
+    try {
+      const res = await api.get(`/projects/${projectId}/classification/dataset/stats`)
+      setDatasetStats(res.data)
+    } catch { setDatasetStats({}) }
+  }
+
+  useEffect(() => {
+    if (datasetMode === 'classification') loadDatasetStats()
+  }, [datasetMode, projectId])
+
+  const _refreshAfterImport = async () => {
+    await Promise.all([load(), loadDatasetStats()])
+  }
+
+  const uploadToClass = async (cls: string, files: FileList) => {
+    setUploadingCls(cls)
+    try {
+      const fd = new FormData()
+      Array.from(files).forEach(f => fd.append('files', f))
+      await api.post(`/projects/${projectId}/classification/dataset/upload/${encodeURIComponent(cls)}`, fd)
+      await _refreshAfterImport()
+    } finally { setUploadingCls(null) }
+  }
+
+  const uploadNewClass = async (files: FileList) => {
+    const cls = newClassName.trim()
+    if (!cls || !files.length) return
+    setNewClassName('')
+    await uploadToClass(cls, files)
+  }
+
+  const clearClass = async (cls: string) => {
+    if (!window.confirm(`Delete all images for class "${cls}"?`)) return
+    setClearingCls(cls)
+    try {
+      await api.delete(`/projects/${projectId}/classification/dataset/${encodeURIComponent(cls)}`)
+      await _refreshAfterImport()
+    } finally { setClearingCls(null) }
+  }
+
+  const importClsZip = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    e.target.value = ''
+    setClsImporting(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', f)
+      await api.post(`/projects/${projectId}/classification/dataset/import-zip`, fd)
+      await _refreshAfterImport()
+    } finally { setClsImporting(false) }
+  }
+
   const [filter, setFilter] = useState<'all'|'annotated'|'unannotated'|'corrupt'>('all')
 
   const annotated = images.filter(i => i.annotated).length
@@ -326,6 +392,172 @@ export default function ProjectImages() {
           </div>
         )}
       </div>
+
+      {/* ── Dataset Mode Toggle ── */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 8, overflow: 'hidden',
+        border: '1px solid var(--border)', width: 'fit-content' }}>
+        {([
+          { key: 'detection',      icon: <Crosshair size={13} />,  label: 'Object Detection' },
+          { key: 'classification', icon: <ScanLine  size={13} />,  label: 'Image Classification' },
+        ] as const).map(({ key, icon, label }) => (
+          <button key={key} onClick={() => setDatasetMode(key)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '8px 18px', border: 'none', cursor: 'pointer',
+              fontSize: 12, fontWeight: datasetMode === key ? 600 : 400,
+              background: datasetMode === key ? 'var(--accent)' : 'var(--surface)',
+              color: datasetMode === key ? '#fff' : 'var(--text2)',
+              transition: 'all 0.15s',
+            }}>
+            {icon} {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════
+          CLASSIFICATION DATASET PANEL
+          ═══════════════════════════════════════════════════════════ */}
+      {datasetMode === 'classification' && (
+        <div style={{ marginBottom: 24 }}>
+
+          {/* Toolbar */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+            <Btn variant="primary" onClick={() => zipImportRef.current?.click()} disabled={clsImporting}>
+              <FileArchive size={13} /> {clsImporting ? 'Importing…' : 'Import ZIP'}
+            </Btn>
+            <button onClick={() => setShowClsGuide(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', background: showClsGuide ? 'var(--accent-s)' : 'transparent',
+                color: showClsGuide ? 'var(--accent)' : 'var(--text3)',
+                fontSize: 12, cursor: 'pointer', transition: 'all 0.1s' }}>
+              <Info size={12} /> Format guide {showClsGuide ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+            </button>
+            <input ref={zipImportRef} type="file" accept=".zip" style={{ display: 'none' }} onChange={importClsZip} />
+            <input ref={newClassFileRef} type="file" multiple accept="image/*" style={{ display: 'none' }}
+              onChange={e => { if (e.target.files) uploadNewClass(e.target.files); e.target.value = '' }} />
+          </div>
+
+          {/* Format guide */}
+          {showClsGuide && (
+            <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 8,
+              background: 'var(--surface)', overflow: 'hidden' }}>
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)',
+                background: 'var(--surface2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Info size={13} style={{ color: 'var(--accent)' }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Classification Dataset Format</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+                <div style={{ padding: '14px 16px', borderRight: '1px solid var(--border)' }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>📁 Folder / ZIP structure</p>
+                  <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6,
+                    padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 2 }}>
+                    <div style={{ color: 'var(--secondary)' }}>📁 dataset/</div>
+                    <div style={{ paddingLeft: 16, color: 'var(--accent)' }}>📁 cats/</div>
+                    <div style={{ paddingLeft: 32, color: 'var(--text3)' }}>🖼 cat1.jpg</div>
+                    <div style={{ paddingLeft: 32, color: 'var(--text3)' }}>🖼 cat2.jpg</div>
+                    <div style={{ paddingLeft: 16, color: 'var(--accent)' }}>📁 dogs/</div>
+                    <div style={{ paddingLeft: 32, color: 'var(--text3)' }}>🖼 dog1.jpg</div>
+                    <div style={{ paddingLeft: 32, color: 'var(--text3)' }}>🖼 dog2.jpg</div>
+                  </div>
+                </div>
+                <div style={{ padding: '14px 16px' }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>📌 Rules</p>
+                  <ul style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 2.1, paddingLeft: 16, margin: 0 }}>
+                    <li>One folder per class — folder name = class label</li>
+                    <li>Supported images: <code>.jpg .jpeg .png .bmp .webp</code></li>
+                    <li>Minimum 2 classes required for training</li>
+                    <li>Recommended ≥ 20 images per class</li>
+                    <li>ZIP must contain the class folders at the root or one level deep</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Per-class rows */}
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto',
+              padding: '8px 14px', background: 'var(--surface2)',
+              borderBottom: '1px solid var(--border)',
+              fontSize: 11, fontWeight: 600, color: 'var(--text3)',
+              textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <span>Class</span><span>Images</span><span>Actions</span>
+            </div>
+
+            {(project?.classes ?? []).length === 0 ? (
+              <div style={{ padding: '28px 20px', textAlign: 'center', color: 'var(--text3)', fontSize: 12 }}>
+                No classes yet — add class labels above or import a ZIP dataset
+              </div>
+            ) : (
+              (project?.classes ?? []).map(cls => {
+                const count = datasetStats[cls] ?? 0
+                const dot   = count >= 10 ? '#3fb950' : count >= 2 ? '#f0a500' : '#666'
+                return (
+                  <div key={cls} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto',
+                    alignItems: 'center', gap: 12,
+                    padding: '10px 14px', borderBottom: '1px solid var(--border)',
+                    background: 'var(--surface)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%',
+                        background: dot, display: 'inline-block', flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: 'var(--text)', fontFamily: 'monospace' }}>{cls}</span>
+                    </div>
+                    <span style={{ fontSize: 12, color: 'var(--text3)', minWidth: 60, textAlign: 'right' }}>
+                      {count} image{count !== 1 ? 's' : ''}
+                    </span>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 5,
+                        padding: '4px 10px', borderRadius: 6, fontSize: 12,
+                        background: 'var(--surface2)', border: '1px solid var(--border)',
+                        color: uploadingCls === cls ? 'var(--text3)' : 'var(--text2)',
+                        cursor: uploadingCls === cls ? 'wait' : 'pointer' }}>
+                        <input type="file" multiple accept="image/*" style={{ display: 'none' }}
+                          disabled={uploadingCls === cls}
+                          onChange={e => { if (e.target.files) uploadToClass(cls, e.target.files); e.target.value = '' }} />
+                        <ImagePlus size={12} />
+                        {uploadingCls === cls ? 'Uploading…' : 'Add'}
+                      </label>
+                      <button onClick={() => clearClass(cls)}
+                        disabled={clearingCls === cls || count === 0}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '4px 10px', borderRadius: 6, fontSize: 12,
+                          background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)',
+                          color: 'var(--danger)', cursor: clearingCls === cls || count === 0 ? 'not-allowed' : 'pointer',
+                          opacity: count === 0 ? 0.4 : 1 }}>
+                        <Trash2 size={12} />
+                        {clearingCls === cls ? 'Clearing…' : 'Clear'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+
+            {/* New class row */}
+            <div style={{ padding: '10px 14px', background: 'var(--surface)',
+              borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input value={newClassName} onChange={e => setNewClassName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && newClassFileRef.current?.click()}
+                placeholder="New class name…"
+                style={{ flex: 1, fontSize: 12, padding: '5px 10px', borderRadius: 6,
+                  background: 'var(--surface2)', border: '1px solid var(--border)',
+                  color: 'var(--text)', outline: 'none' }} />
+              <Btn variant="secondary" size="sm"
+                disabled={!newClassName.trim() || uploadingCls !== null}
+                onClick={() => newClassFileRef.current?.click()}>
+                <ImagePlus size={12} /> Choose images
+              </Btn>
+              <span style={{ fontSize: 11, color: 'var(--text3)' }}>Enter class name then pick images</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════
+          OBJECT DETECTION PANEL (filter bar + upload + image grid)
+          ═══════════════════════════════════════════════════════════ */}
+      {datasetMode === 'detection' && <>
 
       {/* Filter + export bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -647,6 +879,9 @@ export default function ProjectImages() {
           })}
         </div>
       )}
+
+      </> /* end detection panel */}
+
     </div>
   )
 }
