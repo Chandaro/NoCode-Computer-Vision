@@ -240,8 +240,11 @@ def _run_classification(run_id: int, project_id: int, config: ClsConfig):
         train_dl = DataLoader(train_ds, batch_size=config.batch, shuffle=True,  num_workers=0)
         val_dl   = DataLoader(val_ds,   batch_size=config.batch, shuffle=False, num_workers=0)
 
+        # ImageFolder sorts class folders alphabetically — use that order as the
+        # authoritative class list so training indices match inference indices.
+        classes   = train_ds.classes
         n_classes = len(classes)
-        push(f"Train: {len(train_ds)} images  |  Val: {len(val_ds)} images  |  Classes: {n_classes}")
+        push(f"Train: {len(train_ds)} images  |  Val: {len(val_ds)} images  |  Classes: {n_classes} {classes}")
 
         # ── Build model ────────────────────────────────────────────────────
         model = _build_model(config.base_model, n_classes, config.dropout_head)
@@ -431,6 +434,7 @@ def _run_classification(run_id: int, project_id: int, config: ClsConfig):
         metrics = {
             "top1_acc":         round(best_acc, 4),
             "top5_acc":         round(top5_correct / max(top5_total, 1), 4),
+            "class_names":      classes,   # alphabetical order used by ImageFolder
             "per_class":        per_class_metrics,
             "confusion_matrix": cm,
         }

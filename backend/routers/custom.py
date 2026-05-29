@@ -420,6 +420,11 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
         train_ds = D.ImageFolder(os.path.join(dataset_dir, "train"), transform=train_tf)
         val_ds   = D.ImageFolder(os.path.join(dataset_dir, "val"),   transform=val_tf)
 
+        # ImageFolder sorts class folders alphabetically — use that as the
+        # authoritative class list so training and inference indices match.
+        classes   = train_ds.classes
+        n_classes = len(classes)
+
         if len(train_ds) == 0:
             raise ValueError("No training images found — annotate more images")
         if len(val_ds) == 0:
@@ -594,6 +599,7 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
         metrics = {
             "top1_acc":         round(best_acc, 4),
             "top5_acc":         round(top5_correct / max(top5_total, 1), 4),
+            "class_names":      classes,   # alphabetical order used by ImageFolder
             "per_class":        per_class_metrics,
             "confusion_matrix": cm,
         }
@@ -770,7 +776,9 @@ def export_run_onnx(project_id: int, run_id: int,
     if not cfg:
         raise HTTPException(404, "Config not found")
 
-    n_classes = len(project.classes)
+    saved_results = json.loads(run.results_json) if run.results_json else {}
+    saved_classes = saved_results.get("class_names") or sorted(project.classes)
+    n_classes = len(saved_classes)
     layers    = json.loads(cfg.layers_json)
     onnx_path = run.model_path.replace(".pth", ".onnx")
 

@@ -289,7 +289,11 @@ async def classification_infer(
     project = session.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
-    classes = project.classes
+
+    # Use the class order saved at training time (ImageFolder alphabetical order).
+    # Falling back to sorted(project.classes) keeps old runs working correctly.
+    saved_results = json.loads(run.results_json) if run.results_json else {}
+    classes = saved_results.get("class_names") or sorted(project.classes)
 
     suffix = Path(file.filename or "img.jpg").suffix or ".jpg"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -372,7 +376,8 @@ async def custom_cnn_infer(
     if not project or not cfg:
         raise HTTPException(404, "Project or config not found")
 
-    classes = project.classes
+    saved_results = json.loads(run.results_json) if run.results_json else {}
+    classes = saved_results.get("class_names") or sorted(project.classes)
     layers  = json.loads(cfg.layers_json) if hasattr(cfg, "layers_json") else []
 
     suffix = Path(file.filename or "img.jpg").suffix or ".jpg"
