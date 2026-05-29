@@ -478,8 +478,8 @@ async def cls_dataset_upload(project_id: int, class_name: str,
     project = session.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
-    if class_name not in project.classes:
-        raise HTTPException(400, f"Class '{class_name}' not in project")
+    # Auto-create the class if it doesn't exist yet
+    _add_classes_to_project(project, [class_name], session)
     cls_dir = os.path.join(CLS_DATA_DIR, str(project_id), class_name)
     os.makedirs(cls_dir, exist_ok=True)
     saved = 0

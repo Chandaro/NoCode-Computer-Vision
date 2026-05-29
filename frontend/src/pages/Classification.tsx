@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Zap, Download, Loader, RefreshCw, CheckCircle, XCircle, Upload, Square, Trash2, ChevronDown, ChevronUp, FolderOpen, ImagePlus, FileArchive, Info } from 'lucide-react'
+
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import api, { type Project, type ClassificationRun, type ClsInferResult } from '../api'
 import {
@@ -83,8 +84,9 @@ export default function Classification() {
   const [clearingClass,   setClearingClass]   = useState<string | null>(null)
   const [importing,       setImporting]       = useState(false)
   const [showGuide,       setShowGuide]       = useState(false)
+  const [newClassName,    setNewClassName]    = useState('')
   const clsFileRefs  = useRef<Record<string, HTMLInputElement | null>>({})
-  const folderImportRef = useRef<HTMLInputElement>(null)
+  const newClassFileRef = useRef<HTMLInputElement>(null)
   const zipImportRef    = useRef<HTMLInputElement>(null)
 
   // ── Inference ──────────────────────────────────────────────────────────────
@@ -144,25 +146,27 @@ export default function Classification() {
     setProject(proj.data)
   }
 
-  const importFolder = async (files: FileList) => {
-    const fileArr = Array.from(files) as (File & { webkitRelativePath?: string })[]
-    // If no file has a path, webkitdirectory wasn't applied — abort with hint
-    const hasPaths = fileArr.some(f => f.webkitRelativePath && f.webkitRelativePath.includes('/'))
-    if (!hasPaths) {
-      alert('Folder picker did not capture file paths.\n\nPlease select the PARENT folder that contains your class subfolders (e.g. select "dataset/" which has "cat/" and "dog/" inside), not individual files.')
-      if (folderImportRef.current) folderImportRef.current.value = ''
-      return
-    }
-    setImporting(true)
+  const uploadNewClass = async (className: string, files: FileList) => {
+    if (!className.trim() || !files.length) return
+    setUploadingClass(className)
     try {
       const fd = new FormData()
-      fileArr.forEach(f => fd.append('files', f, f.webkitRelativePath || f.name))
-      const res = await api.post(`/projects/${projectId}/classification/dataset/import-folder`, fd,
-        { headers: { 'Content-Type': 'multipart/form-data' } })
-      await _refreshAfterImport(res.data.stats)
+      Array.from(files).forEach(f => fd.append('files', f))
+      await api.post(
+        `/projects/${projectId}/classification/dataset/upload/${encodeURIComponent(className.trim())}`,
+        fd, { headers: { 'Content-Type': 'multipart/form-data' } }
+      )
+      // reload project (in case class was new) + stats
+      const [proj, stats] = await Promise.all([
+        api.get(`/projects/${projectId}`),
+        api.get(`/projects/${projectId}/classification/dataset/stats`),
+      ])
+      setProject(proj.data)
+      setDatasetStats(stats.data)
+      setNewClassName('')
+      if (newClassFileRef.current) newClassFileRef.current.value = ''
     } finally {
-      setImporting(false)
-      if (folderImportRef.current) folderImportRef.current.value = ''
+      setUploadingClass(null)
     }
   }
 
@@ -313,18 +317,10 @@ export default function Classification() {
           <Label>Classification Dataset</Label>
           <span style={{ flex: 1 }} />
 
-          {/* hidden inputs */}
-          <input
-            ref={el => { folderImportRef.current = el; if (el) el.setAttribute('webkitdirectory', '') }}
-            type="file" style={{ display: 'none' }} multiple
-            onChange={e => { if (e.target.files?.length) importFolder(e.target.files) }} />
+          {/* hidden zip input */}
           <input ref={zipImportRef} type="file" accept=".zip" style={{ display: 'none' }}
             onChange={e => { const f = e.target.files?.[0]; if (f) importZip(f) }} />
 
-          <Btn variant="secondary" size="sm" disabled={importing}
-            onClick={() => folderImportRef.current?.click()}>
-            {importing ? <><Loader size={11} className="animate-spin" /> Importing…</> : <><FolderOpen size={11} /> Import folder</>}
-          </Btn>
           <Btn variant="secondary" size="sm" disabled={importing}
             onClick={() => zipImportRef.current?.click()}>
             {importing ? <><Loader size={11} className="animate-spin" /> Importing…</> : <><FileArchive size={11} /> Import ZIP</>}
@@ -436,8 +432,40 @@ export default function Classification() {
                 </div>
               )
             })}
-            <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-              Green = 10+ images (good). Yellow = 2–9 images (low). Grey = empty.
+            {/* ── Add new class row ── */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginTop: 4,
+              padding: '8px 12px',
+              background: 'var(--surface)',
+              border: '1px dashed var(--border2)',
+              borderRadius: 6,
+            }}>
+              <ImagePlus size={13} color="var(--text3)" />
+              <input
+                value={newClassName}
+                onChange={e => setNewClassName(e.target.value)}
+                placeholder="New class name…"
+                onKeyDown={e => { if (e.key === 'Enter') newClassFileRef.current?.click() }}
+                style={{
+                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                  color: 'var(--text)', fontSize: 13,
+                }}
+              />
+              <input ref={newClassFileRef} type="file" accept="image/*" multiple
+                style={{ display: 'none' }}
+                onChange={e => { if (e.target.files?.length) uploadNewClass(newClassName, e.target.files) }}
+              />
+              <Btn variant="secondary" size="sm"
+                disabled={!newClassName.trim() || uploadingClass === newClassName}
+                onClick={() => newClassFileRef.current?.click()}>
+                {uploadingClass === newClassName
+                  ? <><Loader size={11} className="animate-spin" /> Uploading…</>
+                  : <><Upload size={11} /> Choose images</>}
+              </Btn>
+            </div>
+
+            <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+              Green = 10+ images · Yellow = 2–9 · Grey = empty · Or <strong>Import ZIP</strong> to load all classes at once.
             </p>
           </div>
         )}
