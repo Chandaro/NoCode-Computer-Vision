@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 from typing import List
 from pydantic import BaseModel
-import shutil, uuid, os, hashlib, json
+import shutil, uuid, os, hashlib, json, math
 from PIL import Image as PILImage
 
 from database import get_session
@@ -234,21 +234,45 @@ async def import_yolo_dataset(
             ann_count = 0
             for line in label_content.splitlines():
                 parts = line.strip().split()
-                if len(parts) < 5:
+                if len(parts) < 3:
                     continue
                 try:
-                    ann = Annotation(
-                        image_id=img_record.id,
-                        class_id=int(parts[0]),
-                        shape_type="bbox",
-                        x_center=float(parts[1]),
-                        y_center=float(parts[2]),
-                        width=float(parts[3]),
-                        height=float(parts[4]),
-                    )
+                    cls_id = int(parts[0])
+                    coords = [float(v) for v in parts[1:]]
+
+                    if len(coords) == 4:
+                        # Standard bbox: cx cy w h
+                        ann = Annotation(
+                            image_id=img_record.id,
+                            class_id=cls_id,
+                            shape_type="bbox",
+                            x_center=coords[0],
+                            y_center=coords[1],
+                            width=coords[2],
+                            height=coords[3],
+                        )
+                    elif len(coords) >= 6 and len(coords) % 2 == 0:
+                        # Polygon/segmentation: x1 y1 x2 y2 ...
+                        pts = [[coords[i], coords[i + 1]] for i in range(0, len(coords), 2)]
+                        # Compute bbox from polygon for x_center/y_center/width/height
+                        xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+                        x1, x2, y1, y2 = min(xs), max(xs), min(ys), max(ys)
+                        ann = Annotation(
+                            image_id=img_record.id,
+                            class_id=cls_id,
+                            shape_type="polygon",
+                            x_center=(x1 + x2) / 2,
+                            y_center=(y1 + y2) / 2,
+                            width=x2 - x1,
+                            height=y2 - y1,
+                            points_json=json.dumps(pts),
+                        )
+                    else:
+                        continue
+
                     session.add(ann)
                     ann_count += 1
-                except ValueError:
+                except (ValueError, ZeroDivisionError):
                     continue
             if ann_count:
                 annotated_count += 1

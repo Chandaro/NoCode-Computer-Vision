@@ -84,7 +84,7 @@ async def detection_infer(
         import torch
         from ultralytics import YOLO
         device = "0" if torch.cuda.is_available() else "cpu"
-        model = YOLO(model_path)
+        model = _get_model(model_path)   # use cached model — avoids disk reload on every request
         try:
             results = model.predict(tmp_path, conf=conf, iou=iou, verbose=False, device=device)
         except RuntimeError:
@@ -151,7 +151,7 @@ async def detection_infer_url(
 
     from ultralytics import YOLO
     device = "0" if torch.cuda.is_available() else "cpu"
-    model  = YOLO(model_path)
+    model  = _get_model(model_path)   # use cached model
     try:
         results = model.predict(arr, conf=conf, iou=iou, verbose=False, device=device)
     except RuntimeError:

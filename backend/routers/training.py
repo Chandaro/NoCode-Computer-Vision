@@ -79,11 +79,17 @@ def _build_dataset(project_id: int, val_split: float, session: Session,
 
     all_images = session.exec(select(Image).where(Image.project_id == project_id)).all()
     images = [img for img in all_images
-              if session.exec(select(Annotation).where(Annotation.image_id == img.id)).first()]
+              if not img.is_corrupt   # skip corrupt images — they cause YOLO decode errors
+              and session.exec(select(Annotation).where(Annotation.image_id == img.id)).first()]
+
+    if len(images) < 2:
+        raise ValueError(f"Need at least 2 annotated non-corrupt images (found {len(images)})")
 
     shuffled = list(images)
     random.shuffle(shuffled)
     n_val   = max(1, int(len(shuffled) * val_split))
+    # Ensure train set is never empty
+    n_val   = min(n_val, len(shuffled) - 1)
     val_ids = {img.id for img in shuffled[:n_val]}
 
     for img in images:
@@ -145,11 +151,14 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
     def push(msg: str):
         _state[run_id]["logs"].append(msg)
 
+    yaml_path = None
+    dataset_dir = None
     try:
         task = "segment" if "seg" in config.model_base else "detect"
         with S(engine) as session:
             push("Building dataset…")
             yaml_path = _build_dataset(project_id, config.val_split, session, task=task)
+            dataset_dir = os.path.dirname(yaml_path)
             push(f"Dataset ready — {yaml_path}")
             run = session.get(TrainingRun, run_id)
             run.status = "running"
@@ -295,6 +304,12 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
             pass
     finally:
         _state[run_id]["done"] = True
+        # Clean up the temporary dataset directory (images were only needed for training)
+        if dataset_dir and os.path.isdir(dataset_dir):
+            try:
+                shutil.rmtree(dataset_dir, ignore_errors=True)
+            except Exception:
+                pass
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
@@ -506,10 +521,14 @@ def augmentation_preview(
 
 
 def _run_to_out(r: TrainingRun) -> TrainingRunOut:
+    try:
+        results = json.loads(r.results_json or "{}")
+    except Exception:
+        results = {}
     return TrainingRunOut(
         id=r.id, project_id=r.project_id, status=r.status,
         epochs=r.epochs, imgsz=r.imgsz, batch=r.batch,
         model_base=r.model_base, model_path=r.model_path,
-        results=json.loads(r.results_json), created_at=r.created_at,
+        results=results, created_at=r.created_at,
         run_dir=r.run_dir or "", onnx_path=r.onnx_path or "",
     )

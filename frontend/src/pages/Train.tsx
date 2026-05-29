@@ -32,9 +32,10 @@ interface BatchSummary {
 
 function TestImageCard({ file, src, result }: { file?: File; src?: string; result: BatchImageResult }) {
   const [url, setUrl] = useState('')
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [renderedSize, setRenderedSize] = useState({ w: 1, h: 1 })
   const hasMasks = result.detections.some(d => d.mask && d.mask.length > 0)
+  // imgBounds = actual pixel area of image content within the container element
+  // (objectFit: contain may add letterbox/pillarbox bars — we must account for that)
+  const [imgBounds, setImgBounds] = useState({ x: 0, y: 0, w: 1, h: 1 })
 
   useEffect(() => {
     if (file) {
@@ -46,64 +47,76 @@ function TestImageCard({ file, src, result }: { file?: File; src?: string; resul
     }
   }, [file, src])
 
+  const computeBounds = (el: HTMLImageElement) => {
+    const elW = el.clientWidth, elH = el.clientHeight
+    const natW = el.naturalWidth  || result.image_w || elW
+    const natH = el.naturalHeight || result.image_h || elH
+    const elAspect  = elW / elH
+    const natAspect = natW / natH
+    let imgW: number, imgH: number, imgX: number, imgY: number
+    if (natAspect > elAspect) {
+      // Image wider than container → constrained by width, bars on top/bottom
+      imgW = elW;  imgH = elW / natAspect
+      imgX = 0;   imgY = (elH - imgH) / 2
+    } else {
+      // Image taller than container → constrained by height, bars on left/right
+      imgH = elH;  imgW = elH * natAspect
+      imgX = (elW - imgW) / 2; imgY = 0
+    }
+    setImgBounds({ x: imgX, y: imgY, w: imgW, h: imgH })
+  }
+
   return (
     <div style={{
       background: 'var(--surface2)', border: '1px solid var(--border)',
       borderRadius: 8, overflow: 'hidden',
     }}>
-      <div ref={containerRef} style={{ position: 'relative', lineHeight: 0 }}>
+      <div style={{ position: 'relative', lineHeight: 0 }}>
         {url && (
           <img
             src={url}
-            onLoad={e => {
-              const el = e.currentTarget
-              setRenderedSize({ w: el.clientWidth, h: el.clientHeight })
-            }}
+            onLoad={e => computeBounds(e.currentTarget)}
             style={{ width: '100%', display: 'block', maxHeight: 220, objectFit: 'contain', background: '#000' }}
             alt={result.filename}
           />
         )}
-        {/* SVG mask polygons (seg models) */}
-        {url && hasMasks && (
-          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
-            viewBox={`0 0 ${renderedSize.w} ${renderedSize.h}`}
-            preserveAspectRatio="none">
-            {result.detections.map((d, i) => {
-              if (!d.mask || d.mask.length === 0) return null
-              const color = getClsColor(d.class_id)
-              const pts = d.mask.map(([x, y]) => `${x * renderedSize.w},${y * renderedSize.h}`).join(' ')
-              return (
-                <g key={i}>
-                  <polygon points={pts} fill={color} fillOpacity={0.25} stroke={color} strokeWidth={1.5} />
-                </g>
-              )
-            })}
+        {/* All overlays rendered in one SVG for correct coordinate mapping */}
+        {url && imgBounds.w > 1 && (
+          <svg
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}
+            viewBox={`0 0 ${imgBounds.w} ${imgBounds.h}`}
+          >
+            <g transform={`translate(${imgBounds.x}, ${imgBounds.y})`}>
+              {result.detections.map((d, i) => {
+                const color = getClsColor(d.class_id)
+                const bx = d.x * imgBounds.w, by = d.y * imgBounds.h
+                const bw = d.w * imgBounds.w, bh = d.h * imgBounds.h
+                return (
+                  <g key={i}>
+                    {/* Segmentation mask */}
+                    {d.mask && d.mask.length > 0 && (
+                      <polygon
+                        points={d.mask.map(([mx, my]) => `${mx * imgBounds.w},${my * imgBounds.h}`).join(' ')}
+                        fill={color} fillOpacity={0.25} stroke={color} strokeWidth={1.5}
+                      />
+                    )}
+                    {/* Bounding box */}
+                    <rect x={bx} y={by} width={bw} height={bh}
+                      fill="none" stroke={color} strokeWidth={2} />
+                    {/* Label */}
+                    <rect x={bx - 1} y={by - 16} width={bw > 10 ? 'auto' : 60} height={16}
+                      fill={color} rx={3} />
+                    <text x={bx + 3} y={by - 4}
+                      fill="#fff" fontSize={9} fontWeight={600}
+                      fontFamily="JetBrains Mono, monospace">
+                      {d.class_name} {Math.round(d.conf * 100)}%
+                    </text>
+                  </g>
+                )
+              })}
+            </g>
           </svg>
         )}
-        {/* Bounding box overlays */}
-        {url && result.detections.map((d, i) => {
-          const color = getClsColor(d.class_id)
-          return (
-            <div key={i} style={{
-              position: 'absolute',
-              left: `${d.x * 100}%`, top: `${d.y * 100}%`,
-              width: `${d.w * 100}%`, height: `${d.h * 100}%`,
-              border: `2px solid ${color}`,
-              boxSizing: 'border-box', pointerEvents: 'none',
-            }}>
-              <span style={{
-                position: 'absolute', top: -18, left: -1,
-                background: color, color: '#fff',
-                fontSize: 9, fontWeight: 600,
-                padding: '2px 5px', borderRadius: 3,
-                whiteSpace: 'nowrap', lineHeight: 1.4,
-                fontFamily: 'JetBrains Mono, monospace',
-              }}>
-                {d.class_name} {Math.round(d.conf * 100)}%
-              </span>
-            </div>
-          )
-        })}
       </div>
       <div style={{ padding: '7px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 11, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
@@ -224,15 +237,22 @@ export default function Train() {
   const startTraining = async () => {
     esRef.current?.close()
     setLogs([]); setChartData([]); setProgress(null)
-    const res = await api.post(`/projects/${projectId}/training/start`, {
-      epochs, imgsz, batch, model_base: modelBase, val_split: valSplit,
-      optimizer, lr0, lrf, momentum, weight_decay: weightDecay,
-      warmup_epochs: warmupEpochs, patience,
-      fliplr, flipud, degrees, translate, scale, shear, perspective,
-      hsv_h: hsvH, hsv_s: hsvS, hsv_v: hsvV,
-      mosaic, mixup, copy_paste: copyPaste, erasing,
-      resume_run_id: resumeRunId ? Number(resumeRunId) : null,
-    })
+    let res
+    try {
+      res = await api.post(`/projects/${projectId}/training/start`, {
+        epochs, imgsz, batch, model_base: modelBase, val_split: valSplit,
+        optimizer, lr0, lrf, momentum, weight_decay: weightDecay,
+        warmup_epochs: warmupEpochs, patience,
+        fliplr, flipud, degrees, translate, scale, shear, perspective,
+        hsv_h: hsvH, hsv_s: hsvS, hsv_v: hsvV,
+        mosaic, mixup, copy_paste: copyPaste, erasing,
+        resume_run_id: resumeRunId ? Number(resumeRunId) : null,
+      })
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail ?? e?.message ?? 'Failed to start training'
+      setLogs([`[ERROR] ${msg}`])
+      return
+    }
     const run: TrainingRun = res.data
     setStreaming(true)
     const es = new EventSource(`/api/projects/${projectId}/training/runs/${run.id}/logs`)
