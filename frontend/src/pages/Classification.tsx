@@ -96,6 +96,7 @@ export default function Classification() {
   const [inferPreview,  setInferPreview]  = useState<string | null>(null)
   const [inferRunning,  setInferRunning]  = useState(false)
   const [inferResult,   setInferResult]   = useState<ClsInferResult | null>(null)
+  const [inferError,    setInferError]    = useState<string | null>(null)
   const [onnxExporting, setOnnxExporting] = useState<number | null>(null)
   const inferFileRef = useRef<HTMLInputElement>(null)
 
@@ -263,7 +264,7 @@ export default function Classification() {
 
   const runInference = async () => {
     if (!inferFile || !inferRunId) return
-    setInferRunning(true); setInferResult(null)
+    setInferRunning(true); setInferResult(null); setInferError(null)
     try {
       const fd = new FormData()
       fd.append('file', inferFile)
@@ -272,6 +273,8 @@ export default function Classification() {
         { headers: { 'Content-Type': 'multipart/form-data' } }
       )
       setInferResult(res.data)
+    } catch (e: any) {
+      setInferError(e?.response?.data?.detail || e?.message || 'Inference failed')
     } finally {
       setInferRunning(false)
     }
@@ -770,6 +773,15 @@ export default function Classification() {
                       style={{ width: '100%', maxHeight: 120, objectFit: 'cover',
                         borderRadius: 6, border: '1px solid var(--border)' }} />
                   )}
+                  {inferError && (
+                    <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+                      borderRadius: 6, padding: '8px 12px', marginTop: 8 }}>
+                      <p style={{ fontSize: 12, color: '#ef4444', margin: 0 }}>
+                        <XCircle size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+                        {inferError}
+                      </p>
+                    </div>
+                  )}
                   {inferResult ? (
                     <>
                       {inferResult.top1 && (
@@ -798,9 +810,11 @@ export default function Classification() {
                       ))}
                     </>
                   ) : (
-                    <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8 }}>
-                      Results will appear here
-                    </p>
+                    !inferError && (
+                      <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 8 }}>
+                        Results will appear here
+                      </p>
+                    )
                   )}
                 </div>
               </div>

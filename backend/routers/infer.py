@@ -318,15 +318,42 @@ async def classification_infer(
             "efficientnet_b1":    M.efficientnet_b1,
             "convnext_tiny":      M.convnext_tiny,
         }
+
+        if not classes:
+            raise HTTPException(400, "No classes found for this project — add dataset images first.")
+
+        # Load state dict first so we can inspect keys and match the head architecture
+        try:
+            state = torch.load(model_path, map_location=device, weights_only=False)
+        except Exception as e:
+            raise HTTPException(500, f"Could not read weights file: {e}")
+
         model = model_fn_map.get(run.base_model, M.resnet18)(weights=None)
         n_classes = len(classes)
+
+        # Detect whether the head was saved as Sequential(Dropout, Linear) or plain Linear
+        # Sequential produces keys like "fc.1.weight"; plain Linear produces "fc.weight"
+        has_seq_fc  = any(k.startswith("fc.1.") for k in state)
+        has_seq_cls = any(".classifier." in k and ".1.weight" in k for k in state)
+
         if hasattr(model, "fc"):
-            model.fc = nn.Linear(model.fc.in_features, n_classes)
+            in_f = model.fc.in_features
+            model.fc = (
+                nn.Sequential(nn.Dropout(0.0), nn.Linear(in_f, n_classes))
+                if has_seq_fc else nn.Linear(in_f, n_classes)
+            )
         elif hasattr(model, "classifier"):
             in_feat = model.classifier[-1].in_features
-            model.classifier[-1] = nn.Linear(in_feat, n_classes)
+            model.classifier[-1] = (
+                nn.Sequential(nn.Dropout(0.0), nn.Linear(in_feat, n_classes))
+                if has_seq_cls else nn.Linear(in_feat, n_classes)
+            )
 
-        model.load_state_dict(torch.load(run.model_path, map_location=device, weights_only=False))
+        try:
+            model.load_state_dict(state)
+        except RuntimeError as e:
+            raise HTTPException(500, f"Model load error (re-train may fix this): {e}")
+
         model = model.to(device).eval()
 
         tf = T.Compose([
@@ -349,8 +376,15 @@ async def classification_infer(
             key=lambda x: x["probability"], reverse=True,
         )
         return {"predictions": preds, "top1": preds[0] if preds else None, "top5": preds[:5]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Inference error: {type(e).__name__}: {e}")
     finally:
-        os.unlink(tmp_path)
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
 
 
 # ─── Custom CNN inference ─────────────────────────────────────────────────────
@@ -395,7 +429,7 @@ async def custom_cnn_infer(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         model = _build_torch_model(layers, cfg.input_h, cfg.input_w, len(classes))
-        model.load_state_dict(torch.load(run.model_path, map_location=device, weights_only=False))
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=False))
         model = model.to(device).eval()
 
         tf = T.Compose([
