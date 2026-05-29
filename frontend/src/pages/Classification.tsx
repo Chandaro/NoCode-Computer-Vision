@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Zap, Download, Loader, RefreshCw, CheckCircle, XCircle, Upload, Square, Trash2, ChevronDown, ChevronUp, FolderOpen, ImagePlus, FileArchive, Info } from 'lucide-react'
+import { Zap, Download, Loader, RefreshCw, CheckCircle, XCircle, Upload, Square, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 
 import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import api, { type Project, type ClassificationRun, type ClsInferResult } from '../api'
@@ -78,17 +78,6 @@ export default function Classification() {
   const [progress,  setProgress]   = useState<Progress | null>(null)
   const [chartData, setChartData]  = useState<ChartPoint[]>([])
 
-  // ── Classification dataset ────────────────────────────────────────────────
-  const [datasetStats,    setDatasetStats]    = useState<Record<string, number>>({})
-  const [uploadingClass,  setUploadingClass]  = useState<string | null>(null)
-  const [clearingClass,   setClearingClass]   = useState<string | null>(null)
-  const [importing,       setImporting]       = useState(false)
-  const [showGuide,       setShowGuide]       = useState(false)
-  const [newClassName,    setNewClassName]    = useState('')
-  const clsFileRefs  = useRef<Record<string, HTMLInputElement | null>>({})
-  const newClassFileRef = useRef<HTMLInputElement>(null)
-  const zipImportRef    = useRef<HTMLInputElement>(null)
-
   // ── Inference ──────────────────────────────────────────────────────────────
   const [inferRunId,    setInferRunId]    = useState('')
   const [inferFile,     setInferFile]     = useState<File | null>(null)
@@ -109,81 +98,7 @@ export default function Classification() {
   useEffect(() => {
     api.get(`/projects/${projectId}`).then(r => setProject(r.data))
     loadRuns()
-    loadDatasetStats()
   }, [projectId])
-
-
-  const loadDatasetStats = () =>
-    api.get(`/projects/${projectId}/classification/dataset/stats`)
-      .then(r => setDatasetStats(r.data))
-      .catch(() => {})
-
-  const uploadClassImages = async (cls: string, files: FileList) => {
-    setUploadingClass(cls)
-    try {
-      const fd = new FormData()
-      Array.from(files).forEach(f => fd.append('files', f))
-      await api.post(`/projects/${projectId}/classification/dataset/upload/${encodeURIComponent(cls)}`, fd,
-        { headers: { 'Content-Type': 'multipart/form-data' } })
-      await loadDatasetStats()
-    } finally {
-      setUploadingClass(null)
-    }
-  }
-
-  const clearClassImages = async (cls: string) => {
-    setClearingClass(cls)
-    try {
-      await api.delete(`/projects/${projectId}/classification/dataset/${encodeURIComponent(cls)}`)
-      await loadDatasetStats()
-    } finally {
-      setClearingClass(null)
-    }
-  }
-
-  const _refreshAfterImport = async (stats: Record<string, number>) => {
-    setDatasetStats(stats)
-    const proj = await api.get(`/projects/${projectId}`)
-    setProject(proj.data)
-  }
-
-  const uploadNewClass = async (className: string, files: FileList) => {
-    if (!className.trim() || !files.length) return
-    setUploadingClass(className)
-    try {
-      const fd = new FormData()
-      Array.from(files).forEach(f => fd.append('files', f))
-      await api.post(
-        `/projects/${projectId}/classification/dataset/upload/${encodeURIComponent(className.trim())}`,
-        fd, { headers: { 'Content-Type': 'multipart/form-data' } }
-      )
-      // reload project (in case class was new) + stats
-      const [proj, stats] = await Promise.all([
-        api.get(`/projects/${projectId}`),
-        api.get(`/projects/${projectId}/classification/dataset/stats`),
-      ])
-      setProject(proj.data)
-      setDatasetStats(stats.data)
-      setNewClassName('')
-      if (newClassFileRef.current) newClassFileRef.current.value = ''
-    } finally {
-      setUploadingClass(null)
-    }
-  }
-
-  const importZip = async (file: File) => {
-    setImporting(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await api.post(`/projects/${projectId}/classification/dataset/import-zip`, fd,
-        { headers: { 'Content-Type': 'multipart/form-data' } })
-      await _refreshAfterImport(res.data.stats)
-    } finally {
-      setImporting(false)
-      if (zipImportRef.current) zipImportRef.current.value = ''
-    }
-  }
 
   const loadRuns = () =>
     api.get(`/projects/${projectId}/classification/runs`).then(r => {
@@ -311,168 +226,6 @@ export default function Classification() {
         subtitle={`${project?.name ?? '…'} · Transfer Learning`}
       />
 
-      {/* ── Classification Dataset ── */}
-      <Card style={{ padding: 16, marginBottom: 16 }}>
-
-        {/* Header row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-          <FolderOpen size={14} color="var(--accent)" />
-          <Label>Classification Dataset</Label>
-          <span style={{ flex: 1 }} />
-
-          {/* hidden zip input */}
-          <input ref={zipImportRef} type="file" accept=".zip" style={{ display: 'none' }}
-            onChange={e => { const f = e.target.files?.[0]; if (f) importZip(f) }} />
-
-          <Btn variant="secondary" size="sm" disabled={importing}
-            onClick={() => zipImportRef.current?.click()}>
-            {importing ? <><Loader size={11} className="animate-spin" /> Importing…</> : <><FileArchive size={11} /> Import ZIP</>}
-          </Btn>
-          <Btn variant="ghost" size="sm" onClick={() => setShowGuide(v => !v)}
-            style={{ color: showGuide ? 'var(--accent)' : 'var(--text3)' }}>
-            <Info size={11} /> {showGuide ? 'Hide guide' : 'Format guide'}
-          </Btn>
-        </div>
-
-        {/* Format guide */}
-        {showGuide && (
-          <div style={{
-            marginBottom: 14, padding: 14,
-            background: 'var(--surface3)', border: '1px solid var(--border)',
-            borderRadius: 6, fontSize: 12,
-          }}>
-            <p style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
-              Standard ImageFolder format
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-
-              {/* Folder structure */}
-              <div>
-                <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Folder / ZIP structure</p>
-                <pre style={{
-                  background: 'var(--surface2)', border: '1px solid var(--border)',
-                  borderRadius: 4, padding: '10px 12px',
-                  fontSize: 11, fontFamily: 'JetBrains Mono, monospace',
-                  color: 'var(--text2)', lineHeight: 1.8, margin: 0,
-                }}>
-{`dataset/
-├── cat/
-│   ├── img001.jpg
-│   └── img002.jpg
-├── dog/
-│   ├── img003.jpg
-│   └── img004.jpg
-└── bird/
-    └── img005.jpg`}
-                </pre>
-              </div>
-
-              {/* Rules */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <p style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rules</p>
-                {[
-                  ['Folder name = class label', 'Each subfolder becomes one class. The name you give the folder is the class name.'],
-                  ['One level deep', 'Images sit directly inside the class folder. Deeper nesting is fine — the parent folder of each image is used as the class.'],
-                  ['Supported formats', 'JPG, JPEG, PNG, BMP, WEBP'],
-                  ['Minimum', 'At least 2 classes, at least 2 images per class. Aim for 10+ per class for meaningful accuracy.'],
-                  ['ZIP or folder', 'For "Import folder": select the PARENT folder that contains the class subfolders (e.g. select "dataset/" which has "cat/" and "dog/" inside). For ZIP: zip those class folders together and upload.'],
-                ].map(([title, desc]) => (
-                  <div key={title}>
-                    <p style={{ fontWeight: 600, color: 'var(--text)', fontSize: 12 }}>{title}</p>
-                    <p style={{ color: 'var(--text3)', fontSize: 11, lineHeight: 1.5 }}>{desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Per-class rows */}
-        {!project?.classes?.length ? (
-          <p style={{ fontSize: 12, color: 'var(--text3)' }}>
-            No classes yet. Add classes to your project, or import a dataset — classes will be created automatically.
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {project.classes.map(cls => {
-              const count = datasetStats[cls] ?? 0
-              return (
-                <div key={cls} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 12px',
-                  background: 'var(--surface2)',
-                  border: `1px solid ${count > 0 ? 'rgba(94,106,210,0.3)' : 'var(--border)'}`,
-                  borderRadius: 6,
-                }}>
-                  <div style={{
-                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                    background: count >= 10 ? 'var(--success)' : count >= 2 ? 'var(--warn)' : 'var(--border2)',
-                  }} />
-                  <span style={{ flex: 1, fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{cls}</span>
-                  <span style={{
-                    fontSize: 11, fontFamily: 'JetBrains Mono, monospace',
-                    color: count >= 10 ? 'var(--success)' : count >= 2 ? 'var(--accent)' : 'var(--text3)',
-                    minWidth: 64, textAlign: 'right',
-                  }}>
-                    {count} image{count !== 1 ? 's' : ''}
-                  </span>
-                  <input type="file" accept="image/*" multiple style={{ display: 'none' }}
-                    ref={el => { clsFileRefs.current[cls] = el }}
-                    onChange={e => { if (e.target.files?.length) uploadClassImages(cls, e.target.files) }} />
-                  <Btn variant="secondary" size="sm" disabled={uploadingClass === cls}
-                    onClick={() => clsFileRefs.current[cls]?.click()}>
-                    {uploadingClass === cls
-                      ? <><Loader size={11} className="animate-spin" /> Uploading…</>
-                      : <><ImagePlus size={11} /> Add</>}
-                  </Btn>
-                  {count > 0 && (
-                    <Btn variant="ghost" size="sm" disabled={clearingClass === cls}
-                      onClick={() => clearClassImages(cls)}
-                      style={{ color: 'var(--danger)' }}>
-                      {clearingClass === cls ? <Loader size={11} className="animate-spin" /> : <Trash2 size={11} />}
-                    </Btn>
-                  )}
-                </div>
-              )
-            })}
-            {/* ── Add new class row ── */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, marginTop: 4,
-              padding: '8px 12px',
-              background: 'var(--surface)',
-              border: '1px dashed var(--border2)',
-              borderRadius: 6,
-            }}>
-              <ImagePlus size={13} color="var(--text3)" />
-              <input
-                value={newClassName}
-                onChange={e => setNewClassName(e.target.value)}
-                placeholder="New class name…"
-                onKeyDown={e => { if (e.key === 'Enter') newClassFileRef.current?.click() }}
-                style={{
-                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                  color: 'var(--text)', fontSize: 13,
-                }}
-              />
-              <input ref={newClassFileRef} type="file" accept="image/*" multiple
-                style={{ display: 'none' }}
-                onChange={e => { if (e.target.files?.length) uploadNewClass(newClassName, e.target.files) }}
-              />
-              <Btn variant="secondary" size="sm"
-                disabled={!newClassName.trim() || uploadingClass === newClassName}
-                onClick={() => newClassFileRef.current?.click()}>
-                {uploadingClass === newClassName
-                  ? <><Loader size={11} className="animate-spin" /> Uploading…</>
-                  : <><Upload size={11} /> Choose images</>}
-              </Btn>
-            </div>
-
-            <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
-              Green = 10+ images · Yellow = 2–9 · Grey = empty · Or <strong>Import ZIP</strong> to load all classes at once.
-            </p>
-          </div>
-        )}
-      </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 12, alignItems: 'start' }}>
 
