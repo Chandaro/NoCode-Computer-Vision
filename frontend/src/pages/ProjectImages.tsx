@@ -39,8 +39,9 @@ export default function ProjectImages() {
   const fileRef        = useRef<HTMLInputElement>(null)
   const importRef      = useRef<HTMLInputElement>(null)
   const importFolderRef = useRef<HTMLInputElement>(null)
-  const newClassFileRef = useRef<HTMLInputElement>(null)
-  const zipImportRef    = useRef<HTMLInputElement>(null)
+  const newClassFileRef   = useRef<HTMLInputElement>(null)
+  const zipImportRef      = useRef<HTMLInputElement>(null)
+  const clsFolderInputRef = useRef<HTMLInputElement | null>(null)
   const navigate = useNavigate()
 
   const load = async () => {
@@ -263,6 +264,23 @@ export default function ProjectImages() {
     } finally { setClsImporting(false) }
   }
 
+  const importClsFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const allFiles = Array.from(e.target.files || [])
+    if (!allFiles.length) return
+    e.target.value = ''
+    setClsImporting(true)
+    try {
+      const fd = new FormData()
+      for (const f of allFiles) {
+        // Send webkitRelativePath as filename so the backend can parse class structure
+        const relPath = (f as any).webkitRelativePath || f.name
+        fd.append('files', f, relPath)
+      }
+      await api.post(`/projects/${projectId}/classification/dataset/import-folder`, fd)
+      await _refreshAfterImport()
+    } finally { setClsImporting(false) }
+  }
+
   const [filter, setFilter] = useState<'all'|'annotated'|'unannotated'|'corrupt'>('all')
 
   const annotated = images.filter(i => i.annotated).length
@@ -422,7 +440,10 @@ export default function ProjectImages() {
 
           {/* Toolbar */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-            <Btn variant="primary" onClick={() => zipImportRef.current?.click()} disabled={clsImporting}>
+            <Btn variant="primary" onClick={() => clsFolderInputRef.current?.click()} disabled={clsImporting}>
+              <Folder size={13} /> {clsImporting ? 'Importing…' : 'Import Folder'}
+            </Btn>
+            <Btn variant="secondary" onClick={() => zipImportRef.current?.click()} disabled={clsImporting}>
               <FileArchive size={13} /> {clsImporting ? 'Importing…' : 'Import ZIP'}
             </Btn>
             <button onClick={() => setShowClsGuide(v => !v)}
@@ -436,6 +457,19 @@ export default function ProjectImages() {
             <input ref={zipImportRef} type="file" accept=".zip" style={{ display: 'none' }} onChange={importClsZip} />
             <input ref={newClassFileRef} type="file" multiple accept="image/*" style={{ display: 'none' }}
               onChange={e => { if (e.target.files) uploadNewClass(e.target.files); e.target.value = '' }} />
+            {/* webkitdirectory must be set via DOM ref — JSX won't pass it through */}
+            <input
+              ref={el => {
+                clsFolderInputRef.current = el
+                if (el) {
+                  el.setAttribute('webkitdirectory', '')
+                  el.setAttribute('multiple', '')
+                }
+              }}
+              type="file"
+              style={{ display: 'none' }}
+              onChange={importClsFolder}
+            />
           </div>
 
           {/* Format guide */}
