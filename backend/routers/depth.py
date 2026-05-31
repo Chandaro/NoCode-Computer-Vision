@@ -434,26 +434,26 @@ def _backproject(depth_norm, orig_rgb, subsample: int = 4, fx: float = 0.0):
     fy = fx
     cx, cy = w / 2.0, h / 2.0
 
-    # Sub-sampled pixel grid
+    # Sub-sampled pixel grid — use ALL subsampled pixels (no depth mask so
+    # count is never 0 regardless of the depth range of the image)
     ys = np.arange(0, h, subsample)
     xs = np.arange(0, w, subsample)
-    uu, vv = np.meshgrid(xs, ys)
+    uu, vv = np.meshgrid(xs, ys)            # both (len_ys, len_xs)
 
-    d = depth_norm[ys[:, None], xs[None, :]]
-    mask = d > 0.02   # ignore near-zero depth (sky, background clipped)
+    d = depth_norm[ys[:, None], xs[None, :]]   # (len_ys, len_xs)
 
-    uu_m = uu[mask].astype("float32")
-    vv_m = vv[mask].astype("float32")
-    d_m  = d[mask].astype("float32")
+    uu_f = uu.flatten().astype("float32")
+    vv_f = vv.flatten().astype("float32")
+    d_f  = d.flatten().astype("float32")
 
-    X =  (uu_m - cx) * d_m / fx
-    Y = -(vv_m - cy) * d_m / fy   # flip Y: image row 0 = top, 3D Y = up
-    Z = -d_m                       # flip Z: depth=1 is furthest in -Z
+    X =  (uu_f - cx) * d_f / fx
+    Y = -(vv_f - cy) * d_f / fy   # flip Y: image row 0 = top → 3D +Y
+    Z = -d_f                       # flip Z: largest depth → most negative Z
 
-    positions = np.stack([X, Y, Z], axis=1)   # [N, 3]
+    positions = np.stack([X, Y, Z], axis=1)          # [N, 3]
 
-    rgb = orig_rgb[ys[:, None], xs[None, :]][mask]
-    colors = rgb.astype("float32") / 255.0    # [N, 3]
+    rgb    = orig_rgb[ys[:, None], xs[None, :]].reshape(-1, 3)
+    colors = rgb.astype("float32") / 255.0            # [N, 3]
 
     return positions, colors
 
