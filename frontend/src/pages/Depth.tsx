@@ -759,8 +759,14 @@ export default function Depth() {
 
                   {/* ── 3D Point Cloud section ── */}
                   <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                    {!depthResult.result_id && (
+                      <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
+                        ⚠ Restart the backend to enable 3D point cloud (result ID missing from older run).
+                      </p>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                       <Btn variant={showPointCloud ? 'primary' : 'secondary'} size="sm"
+                        disabled={!depthResult.result_id}
                         onClick={() => setShowPointCloud(v => !v)}>
                         <Box size={12} />
                         {showPointCloud ? 'Hide 3D View' : 'View 3D Point Cloud'}
@@ -784,7 +790,7 @@ export default function Depth() {
                       )}
                     </div>
 
-                    {showPointCloud && (
+                    {showPointCloud && depthResult.result_id && (
                       <>
                         <PointCloudViewer
                           resultId={depthResult.result_id}
