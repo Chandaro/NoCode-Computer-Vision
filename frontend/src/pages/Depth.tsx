@@ -78,7 +78,7 @@ function PointCloudViewer({ resultId, pointSize }: { resultId: string; pointSize
         )
         if (cancelled) return
         const { n, pos, col } = res.data
-        setCount(n)
+        setCount(Number(n) || 0)
 
         // Convert JSON arrays directly to typed arrays — simple and reliable
         const posArr = new Float32Array(pos as number[])
@@ -226,7 +226,7 @@ function PointCloudViewer({ resultId, pointSize }: { resultId: string; pointSize
         <div style={{ position: 'absolute', top: 10, left: 12,
           fontSize: 11, color: 'rgba(255,255,255,0.5)',
           fontFamily: 'JetBrains Mono, monospace', pointerEvents: 'none' }}>
-          {count.toLocaleString()} pts
+          {(count ?? 0).toLocaleString()} pts
         </div>
       )}
 
