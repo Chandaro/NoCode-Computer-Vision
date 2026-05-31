@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, StreamingResponse
-import os, io, uuid, shutil, threading, base64, time, struct
+import os, io, uuid, shutil, threading, base64, time
 from pathlib import Path
 
 router = APIRouter(tags=["depth"])
@@ -513,14 +513,21 @@ def depth_pointcloud_data(result_id: str, subsample: int = 4, fx: float = 0.0):
                                      subsample=subsample, fx=fx)
     n = len(positions)
 
-    buf  = struct.pack("<i", n)                            # int32 count
-    buf += positions.astype("<f4").tobytes()               # float32 XYZ
-    buf += colors.astype("<f4").tobytes()                  # float32 RGB
+    # Pack as one flat float32 array:
+    #   [0]        = N (point count, stored as float32 — exact up to 2^24)
+    #   [1 .. N*3] = XYZ positions (stride 3 per point)
+    #   [N*3+1 ..] = RGB colors    (stride 3 per point, 0–1)
+    #
+    # Using a single dtype avoids int32/endianness issues on the JS side —
+    # the browser reads it as one Float32Array and slices by index.
+    import numpy as np
+    count_arr = np.array([float(n)], dtype=np.float32)
+    flat = np.concatenate([count_arr,
+                           positions.flatten().astype(np.float32),
+                           colors.flatten().astype(np.float32)])
+    buf = flat.tobytes()
 
-    return Response(content=buf, media_type="application/octet-stream",
-                    headers={"X-Point-Count": str(n),
-                             "X-Image-W": str(rec["w"]),
-                             "X-Image-H": str(rec["h"])})
+    return Response(content=buf, media_type="application/octet-stream")
 
 
 @router.get("/depth/pointcloud/{result_id}/download")
