@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
-from fastapi.responses import FileResponse
-import os, io, uuid, shutil, threading, base64
+from fastapi.responses import FileResponse, StreamingResponse
+import os, io, uuid, shutil, threading, base64, time, struct
 from pathlib import Path
 
 router = APIRouter(tags=["depth"])
@@ -8,8 +8,9 @@ router = APIRouter(tags=["depth"])
 VIDEO_OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "video_out")
 os.makedirs(VIDEO_OUT_DIR, exist_ok=True)
 
-_depth_cache: dict = {}   # model_id → HF pipeline
-_depth_jobs:  dict = {}   # job_id  → status dict
+_depth_cache:   dict = {}   # model_id  → HF pipeline
+_depth_jobs:    dict = {}   # job_id    → status dict
+_depth_results: dict = {}   # result_id → {depth_norm, orig_rgb, w, h, ts}
 
 # Models that produce metric depth (values in metres)
 METRIC_MODELS = {
@@ -130,6 +131,24 @@ def _build_response(orig_pil, depth_np, colormap: str, model_id: str):
     sbs       = _sidebyside(orig_pil, colorized)
     is_metric = model_id in METRIC_MODELS
 
+    # Normalise depth to [0,1] float32 for point cloud generation
+    span = max(float(d_max - d_min), 1e-6)
+    depth_norm = ((depth_rs - d_min) / span).astype("float32")
+
+    # Store result for point cloud endpoint (keep for 1 hour)
+    result_id = uuid.uuid4().hex
+    orig_rgb  = np.array(orig_pil.convert("RGB"), dtype=np.uint8)
+    # Purge results older than 1 hour to avoid memory creep
+    now = time.time()
+    expired = [k for k, v in _depth_results.items() if now - v["ts"] > 3600]
+    for k in expired:
+        del _depth_results[k]
+    _depth_results[result_id] = {
+        "depth_norm": depth_norm,   # float32 [0..1], bright = close
+        "orig_rgb":   orig_rgb,     # uint8 RGB
+        "w": w, "h": h, "ts": now,
+    }
+
     return {
         "depth_colorized_b64": _to_b64(colorized),
         "depth_gray_b64":      _to_b64(depth_u8),
@@ -146,6 +165,7 @@ def _build_response(orig_pil, depth_np, colormap: str, model_id: str):
         "colormap":   colormap,
         "image_w":    w,
         "image_h":    h,
+        "result_id":  result_id,   # use this to fetch point cloud
     }
 
 
@@ -390,3 +410,125 @@ def depth_video_download(job_id: str):
         raise HTTPException(404, "Output file not found")
     return FileResponse(out_path, filename=f"depth_{job_id[:8]}.mp4",
                         media_type="video/mp4")
+
+
+# ─── 3D Point Cloud ───────────────────────────────────────────────────────────
+
+def _backproject(depth_norm, orig_rgb, subsample: int = 4, fx: float = 0.0):
+    """
+    Back-project a normalised depth map [0,1] to XYZ point cloud.
+
+    Returns:
+        positions  – float32 ndarray [N, 3]  (X, Y, Z in camera space)
+        colors     – float32 ndarray [N, 3]  (R, G, B normalised 0–1)
+
+    Coordinate convention (matches Three.js defaults):
+        +X right, +Y up, +Z toward camera (right-handed)
+    """
+    import numpy as np
+
+    h, w = depth_norm.shape
+    # Estimate focal length from image size if not provided
+    if fx <= 0:
+        fx = max(w, h) * 0.85
+    fy = fx
+    cx, cy = w / 2.0, h / 2.0
+
+    # Sub-sampled pixel grid
+    ys = np.arange(0, h, subsample)
+    xs = np.arange(0, w, subsample)
+    uu, vv = np.meshgrid(xs, ys)
+
+    d = depth_norm[ys[:, None], xs[None, :]]
+    mask = d > 0.02   # ignore near-zero depth (sky, background clipped)
+
+    uu_m = uu[mask].astype("float32")
+    vv_m = vv[mask].astype("float32")
+    d_m  = d[mask].astype("float32")
+
+    X =  (uu_m - cx) * d_m / fx
+    Y = -(vv_m - cy) * d_m / fy   # flip Y: image row 0 = top, 3D Y = up
+    Z = -d_m                       # flip Z: depth=1 is furthest in -Z
+
+    positions = np.stack([X, Y, Z], axis=1)   # [N, 3]
+
+    rgb = orig_rgb[ys[:, None], xs[None, :]][mask]
+    colors = rgb.astype("float32") / 255.0    # [N, 3]
+
+    return positions, colors
+
+
+def _make_ply_binary(positions, colors_f32):
+    """
+    Write a binary PLY file containing XYZ + RGB point cloud.
+    Returns bytes.
+    """
+    import numpy as np
+    n = len(positions)
+    rgb_u8 = (colors_f32 * 255).clip(0, 255).astype(np.uint8)
+
+    header = (
+        "ply\n"
+        "format binary_little_endian 1.0\n"
+        f"element vertex {n}\n"
+        "property float x\n"
+        "property float y\n"
+        "property float z\n"
+        "property uchar red\n"
+        "property uchar green\n"
+        "property uchar blue\n"
+        "end_header\n"
+    ).encode()
+
+    # Pack each vertex: 3 × float32 (12 bytes) + 3 × uint8 (3 bytes) = 15 bytes
+    data = bytearray()
+    for i in range(n):
+        data += struct.pack("<fff", positions[i, 0], positions[i, 1], positions[i, 2])
+        data += struct.pack("BBB", rgb_u8[i, 0], rgb_u8[i, 1], rgb_u8[i, 2])
+
+    return header + bytes(data)
+
+
+@router.get("/depth/pointcloud/{result_id}/data")
+def depth_pointcloud_data(result_id: str, subsample: int = 4, fx: float = 0.0):
+    """
+    Return point cloud as JSON {positions, colors, count} for Three.js.
+    positions and colors are base64-encoded binary float32 arrays (packed XYZ / RGB).
+    """
+    import numpy as np
+
+    rec = _depth_results.get(result_id)
+    if not rec:
+        raise HTTPException(404, "Result not found — re-run depth estimation first.")
+
+    positions, colors = _backproject(rec["depth_norm"], rec["orig_rgb"],
+                                     subsample=subsample, fx=fx)
+
+    # Send as base64-encoded raw float32 binary (much smaller than JSON numbers)
+    pos_b64 = base64.b64encode(positions.astype("float32").tobytes()).decode()
+    col_b64 = base64.b64encode(colors.astype("float32").tobytes()).decode()
+
+    return {
+        "count":        int(len(positions)),
+        "positions_b64": pos_b64,   # float32, stride 3 (x,y,z per point)
+        "colors_b64":    col_b64,   # float32, stride 3 (r,g,b per point, 0–1)
+        "image_w":       rec["w"],
+        "image_h":       rec["h"],
+    }
+
+
+@router.get("/depth/pointcloud/{result_id}/download")
+def depth_pointcloud_download(result_id: str, subsample: int = 4, fx: float = 0.0):
+    """Download a binary PLY file of the point cloud."""
+    rec = _depth_results.get(result_id)
+    if not rec:
+        raise HTTPException(404, "Result not found — re-run depth estimation first.")
+
+    positions, colors = _backproject(rec["depth_norm"], rec["orig_rgb"],
+                                     subsample=subsample, fx=fx)
+    ply_bytes = _make_ply_binary(positions, colors)
+    return StreamingResponse(
+        io.BytesIO(ply_bytes),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="pointcloud_{result_id[:8]}.ply"'},
+    )

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   Upload, Download, Loader, Camera, CameraOff, Video,
   Image as ImageIcon, Layers, Info, ChevronDown, ChevronUp, AlertTriangle,
+  Box, RotateCcw,
 } from 'lucide-react'
 import api, { type Project } from '../api'
 import { PageHeader, Card, Field, Select, Slider, Btn, Badge, ProgressBar } from '../components/ui'
@@ -18,6 +19,7 @@ interface DepthResult {
   sidebyside_b64: string
   depth_stats: DepthStats
   model_used: string; colormap: string; image_w: number; image_h: number
+  result_id: string
 }
 
 type Mode        = 'image' | 'video' | 'webcam'
@@ -40,6 +42,217 @@ const CMAP_GRADIENTS: Record<string, string> = {
 const MODEL_IS_METRIC = (id: string) =>
   id.includes('Metric-Indoor') || id.includes('Metric-Outdoor')
 
+// ─── 3D Point Cloud Viewer (Three.js) ────────────────────────────────────────
+function PointCloudViewer({ resultId, pointSize }: { resultId: string; pointSize: number }) {
+  const mountRef   = useRef<HTMLDivElement>(null)
+  const rendRef    = useRef<any>(null)
+  const [loading,  setLoading]  = useState(true)
+  const [count,    setCount]    = useState(0)
+  const [error,    setError]    = useState('')
+
+  // Reset camera to default position
+  const resetCamera = () => {
+    if (rendRef.current?.camera && rendRef.current?.controls) {
+      rendRef.current.camera.position.set(0, 0, 2)
+      rendRef.current.controls.target.set(0, 0, 0)
+      rendRef.current.controls.update()
+    }
+  }
+
+  useEffect(() => {
+    const container = mountRef.current
+    if (!container) return
+    let cancelled = false
+
+    const init = async () => {
+      try {
+        // ── Dynamic import to avoid bundling Three.js unless viewer is opened ──
+        const THREE = await import('three')
+        const { OrbitControls } = await import(
+          'three/examples/jsm/controls/OrbitControls.js' as any
+        )
+
+        // ── Fetch point cloud data from backend ──────────────────────────────
+        const res  = await api.get(`/depth/pointcloud/${resultId}/data?subsample=4`)
+        if (cancelled) return
+        const { positions_b64, colors_b64, count: n } = res.data
+        setCount(n)
+
+        // Decode base64 → Float32Array
+        const posBuf = Uint8Array.from(atob(positions_b64), c => c.charCodeAt(0))
+        const colBuf = Uint8Array.from(atob(colors_b64),    c => c.charCodeAt(0))
+        const posArr = new Float32Array(posBuf.buffer)
+        const colArr = new Float32Array(colBuf.buffer)
+
+        // ── Scene ────────────────────────────────────────────────────────────
+        const W = container.clientWidth
+        const H = container.clientHeight
+
+        const scene    = new THREE.Scene()
+        scene.background = new THREE.Color(0x0d1117)
+
+        const camera   = new THREE.PerspectiveCamera(60, W / H, 0.001, 100)
+        camera.position.set(0, 0, 2)
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true })
+        renderer.setSize(W, H)
+        renderer.setPixelRatio(window.devicePixelRatio)
+        container.appendChild(renderer.domElement)
+
+        // ── Orbit controls ───────────────────────────────────────────────────
+        const controls = new OrbitControls(camera, renderer.domElement)
+        controls.enableDamping  = true
+        controls.dampingFactor  = 0.06
+        controls.minDistance    = 0.05
+        controls.maxDistance    = 20
+        controls.screenSpacePanning = true
+
+        // ── Point cloud geometry ─────────────────────────────────────────────
+        const geo = new THREE.BufferGeometry()
+        geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3))
+        geo.setAttribute('color',    new THREE.BufferAttribute(colArr, 3))
+        geo.computeBoundingSphere()
+
+        // Centre the cloud at the origin
+        geo.computeBoundingBox()
+        const box    = geo.boundingBox!
+        const centre = new THREE.Vector3()
+        box.getCenter(centre)
+        geo.translate(-centre.x, -centre.y, -centre.z)
+
+        // Fit camera to bounding sphere after centering
+        const sphere = geo.boundingSphere!
+        const radius = sphere?.radius ?? 1
+        camera.position.set(0, 0, radius * 2.2)
+        controls.minDistance = radius * 0.05
+        controls.maxDistance = radius * 10
+
+        const mat  = new THREE.PointsMaterial({
+          size: pointSize * 0.003,
+          vertexColors: true,
+          sizeAttenuation: true,
+        })
+        const pts  = new THREE.Points(geo, mat)
+        scene.add(pts)
+
+        // ── Axis helper (small, bottom corner) ──────────────────────────────
+        const axes = new THREE.AxesHelper(radius * 0.3)
+        scene.add(axes)
+
+        // ── Animation loop ───────────────────────────────────────────────────
+        let animId = 0
+        const animate = () => {
+          animId = requestAnimationFrame(animate)
+          controls.update()
+          renderer.render(scene, camera)
+        }
+        animate()
+
+        // ── Resize handler ───────────────────────────────────────────────────
+        const onResize = () => {
+          const w = container.clientWidth
+          const h = container.clientHeight
+          camera.aspect = w / h
+          camera.updateProjectionMatrix()
+          renderer.setSize(w, h)
+        }
+        window.addEventListener('resize', onResize)
+
+        // Store refs for external controls (reset button, point size)
+        rendRef.current = { camera, controls, mat, renderer, animId }
+
+        setLoading(false)
+
+        return () => {
+          cancelled = true
+          cancelAnimationFrame(animId)
+          window.removeEventListener('resize', onResize)
+          controls.dispose()
+          renderer.dispose()
+          geo.dispose()
+          mat.dispose()
+          if (container.contains(renderer.domElement))
+            container.removeChild(renderer.domElement)
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e?.response?.data?.detail ?? e?.message ?? 'Failed to load point cloud')
+        setLoading(false)
+      }
+    }
+
+    const cleanup = init()
+    return () => {
+      cancelled = true
+      cleanup.then(fn => fn?.())
+    }
+  }, [resultId])   // re-init only when result changes
+
+  // Live point size update (no re-init needed)
+  useEffect(() => {
+    if (rendRef.current?.mat) {
+      rendRef.current.mat.size = pointSize * 0.003
+    }
+  }, [pointSize])
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Viewer canvas mount */}
+      <div ref={mountRef} style={{
+        width: '100%', height: 480, borderRadius: 8,
+        border: '1px solid var(--border)', overflow: 'hidden',
+        background: '#0d1117',
+      }} />
+
+      {/* Loading overlay */}
+      {loading && !error && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', background: 'rgba(13,17,23,0.85)',
+          borderRadius: 8, gap: 10 }}>
+          <Loader size={22} className="animate-spin" style={{ color: 'var(--accent)' }} />
+          <p style={{ fontSize: 12, color: 'var(--text2)' }}>Building point cloud…</p>
+        </div>
+      )}
+
+      {/* Error overlay */}
+      {error && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', background: 'rgba(13,17,23,0.85)', borderRadius: 8 }}>
+          <p style={{ fontSize: 12, color: '#f85149', padding: 20, textAlign: 'center' }}>{error}</p>
+        </div>
+      )}
+
+      {/* HUD — top-left */}
+      {!loading && !error && (
+        <div style={{ position: 'absolute', top: 10, left: 12,
+          fontSize: 11, color: 'rgba(255,255,255,0.5)',
+          fontFamily: 'JetBrains Mono, monospace', pointerEvents: 'none' }}>
+          {count.toLocaleString()} pts
+        </div>
+      )}
+
+      {/* Controls — top-right */}
+      {!loading && !error && (
+        <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 4 }}>
+          <button onClick={resetCamera} title="Reset camera"
+            style={{ padding: '5px 8px', border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 5, background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.7)',
+              cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <RotateCcw size={11} /> Reset
+          </button>
+        </div>
+      )}
+
+      {/* Legend */}
+      {!loading && !error && (
+        <div style={{ position: 'absolute', bottom: 10, left: 12,
+          fontSize: 10, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6, pointerEvents: 'none' }}>
+          🖱 Left drag: rotate&nbsp;&nbsp;Scroll: zoom&nbsp;&nbsp;Right drag: pan
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Depth() {
   const { id }     = useParams<{ id: string }>()
   const projectId  = Number(id)
@@ -61,7 +274,9 @@ export default function Depth() {
   const [origSrc,      setOrigSrc]      = useState('')   // blob URL of original
   const [depthResult,  setDepthResult]  = useState<DepthResult | null>(null)
   const [imgRunning,   setImgRunning]   = useState(false)
-  const [imgError,     setImgError]     = useState('')
+  const [imgError,       setImgError]       = useState('')
+  const [showPointCloud, setShowPointCloud] = useState(false)
+  const [pointSize,      setPointSize]      = useState(2)
   const imgFileRef = useRef<HTMLInputElement>(null)
 
   // ── Video mode ──────────────────────────────────────────────────────────────
@@ -101,7 +316,7 @@ export default function Depth() {
   // ── Image inference ──────────────────────────────────────────────────────────
   const runImageInfer = async (file: File) => {
     const blobUrl = URL.createObjectURL(file)
-    setOrigSrc(blobUrl); setDepthResult(null); setImgError('')
+    setOrigSrc(blobUrl); setDepthResult(null); setImgError(''); setShowPointCloud(false)
     setImgRunning(true)
     try {
       const fd = new FormData()
@@ -117,7 +332,7 @@ export default function Depth() {
 
   const runImageInferUrl = async () => {
     if (!imgUrl.trim()) return
-    setOrigSrc(imgUrl.trim()); setDepthResult(null); setImgError('')
+    setOrigSrc(imgUrl.trim()); setDepthResult(null); setImgError(''); setShowPointCloud(false)
     setImgRunning(true)
     try {
       const fd = new FormData()
@@ -541,6 +756,47 @@ export default function Depth() {
                     {depthResult.image_w} × {depthResult.image_h} px · {depthResult.colormap} colormap ·{' '}
                     {depthResult.depth_stats.is_metric ? 'metric depth (metres)' : 'relative depth'}
                   </p>
+
+                  {/* ── 3D Point Cloud section ── */}
+                  <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                      <Btn variant={showPointCloud ? 'primary' : 'secondary'} size="sm"
+                        onClick={() => setShowPointCloud(v => !v)}>
+                        <Box size={12} />
+                        {showPointCloud ? 'Hide 3D View' : 'View 3D Point Cloud'}
+                      </Btn>
+                      {showPointCloud && (
+                        <Btn variant="ghost" size="sm"
+                          onClick={() => window.open(`/api/depth/pointcloud/${depthResult.result_id}/download?subsample=4`, '_blank')}>
+                          <Download size={12} /> Download PLY
+                        </Btn>
+                      )}
+                      {showPointCloud && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+                          <span style={{ fontSize: 11, color: 'var(--text3)' }}>Point size</span>
+                          <input type="range" min={1} max={6} step={0.5} value={pointSize}
+                            onChange={e => setPointSize(Number(e.target.value))}
+                            style={{ width: 80, accentColor: 'var(--accent)' }} />
+                          <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'monospace' }}>
+                            {pointSize}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {showPointCloud && (
+                      <>
+                        <PointCloudViewer
+                          resultId={depthResult.result_id}
+                          pointSize={pointSize}
+                        />
+                        <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+                          Coloured by original photo RGB · XYZ back-projected from depth map ·
+                          PLY opens in MeshLab, Blender, CloudCompare
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </>
               ) : (
                 !imgRunning && (
