@@ -20,6 +20,7 @@ from routers import analytics, evaluation, export, classification, infer, extern
 from routers import custom as custom_router
 from routers import pose as pose_router
 from routers import segmentation as seg_router
+from routers import depth as depth_router
 
 app = FastAPI(title="NoCode CV Trainer", max_upload_size=500 * 1024 * 1024)  # 500 MB per batch
 
@@ -58,6 +59,7 @@ api.include_router(external_models.router)
 api.include_router(custom_router.router)
 api.include_router(pose_router.router)
 api.include_router(seg_router.router)
+api.include_router(depth_router.router)
 app.include_router(api)
 
 

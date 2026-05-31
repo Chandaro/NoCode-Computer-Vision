@@ -341,6 +341,9 @@ export default function ProjectImages() {
           <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/pose`)}>
             <Activity size={13} /> Pose
           </Btn>
+          <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/depth`)}>
+            <Layers size={13} /> Depth
+          </Btn>
           <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/webcam`)}>
             <Camera size={13} /> Webcam
           </Btn>

@@ -11,6 +11,7 @@ import CustomModel from './pages/CustomModel'
 import Webcam from './pages/Webcam'
 import Pose from './pages/Pose'
 import Segmentation from './pages/Segmentation'
+import Depth from './pages/Depth'
 
 function Nav() {
   return (
@@ -55,6 +56,7 @@ export default function App() {
             <Route path="/projects/:id/webcam"            element={<Webcam />} />
             <Route path="/projects/:id/pose"              element={<Pose />} />
             <Route path="/projects/:id/segment"           element={<Segmentation />} />
+            <Route path="/projects/:id/depth"             element={<Depth />} />
           </Routes>
         </main>
       </div>
