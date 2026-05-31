@@ -72,17 +72,19 @@ function PointCloudViewer({ resultId, pointSize }: { resultId: string; pointSize
           'three/examples/jsm/controls/OrbitControls.js' as any
         )
 
-        // ── Fetch point cloud data from backend ──────────────────────────────
-        const res  = await api.get(`/depth/pointcloud/${resultId}/data?subsample=4`)
+        // ── Fetch point cloud — raw binary (no base64 / atob needed) ─────────
+        const resp = await fetch(`/api/depth/pointcloud/${resultId}/data?subsample=4`)
+        if (!resp.ok) throw new Error(await resp.text())
         if (cancelled) return
-        const { positions_b64, colors_b64, count: n } = res.data
+        const buf = await resp.arrayBuffer()
+
+        // Binary layout: int32 count | float32[N*3] positions | float32[N*3] colors
+        const view = new DataView(buf)
+        const n    = view.getInt32(0, true)          // little-endian
         setCount(n)
 
-        // Decode base64 → Float32Array
-        const posBuf = Uint8Array.from(atob(positions_b64), c => c.charCodeAt(0))
-        const colBuf = Uint8Array.from(atob(colors_b64),    c => c.charCodeAt(0))
-        const posArr = new Float32Array(posBuf.buffer)
-        const colArr = new Float32Array(colBuf.buffer)
+        const posArr = new Float32Array(buf,  4,          n * 3)
+        const colArr = new Float32Array(buf,  4 + n * 12, n * 3)
 
         // ── Scene ────────────────────────────────────────────────────────────
         const W = container.clientWidth

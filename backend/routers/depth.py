@@ -492,10 +492,18 @@ def _make_ply_binary(positions, colors_f32):
 @router.get("/depth/pointcloud/{result_id}/data")
 def depth_pointcloud_data(result_id: str, subsample: int = 4, fx: float = 0.0):
     """
-    Return point cloud as JSON {positions, colors, count} for Three.js.
-    positions and colors are base64-encoded binary float32 arrays (packed XYZ / RGB).
+    Return point cloud as raw binary (application/octet-stream).
+
+    Binary layout (little-endian):
+        4 bytes  — int32   : N (number of points)
+        N*12 bytes — float32[N*3] : positions (x,y,z per point)
+        N*12 bytes — float32[N*3] : colors    (r,g,b per point, 0–1)
+
+    The frontend reads this with DataView / Float32Array — no base64 needed.
     """
     import numpy as np
+    import struct
+    from fastapi.responses import Response
 
     rec = _depth_results.get(result_id)
     if not rec:
@@ -503,18 +511,16 @@ def depth_pointcloud_data(result_id: str, subsample: int = 4, fx: float = 0.0):
 
     positions, colors = _backproject(rec["depth_norm"], rec["orig_rgb"],
                                      subsample=subsample, fx=fx)
+    n = len(positions)
 
-    # Send as base64-encoded raw float32 binary (much smaller than JSON numbers)
-    pos_b64 = base64.b64encode(positions.astype("float32").tobytes()).decode()
-    col_b64 = base64.b64encode(colors.astype("float32").tobytes()).decode()
+    buf  = struct.pack("<i", n)                            # int32 count
+    buf += positions.astype("<f4").tobytes()               # float32 XYZ
+    buf += colors.astype("<f4").tobytes()                  # float32 RGB
 
-    return {
-        "count":        int(len(positions)),
-        "positions_b64": pos_b64,   # float32, stride 3 (x,y,z per point)
-        "colors_b64":    col_b64,   # float32, stride 3 (r,g,b per point, 0–1)
-        "image_w":       rec["w"],
-        "image_h":       rec["h"],
-    }
+    return Response(content=buf, media_type="application/octet-stream",
+                    headers={"X-Point-Count": str(n),
+                             "X-Image-W": str(rec["w"]),
+                             "X-Image-H": str(rec["h"])})
 
 
 @router.get("/depth/pointcloud/{result_id}/download")
