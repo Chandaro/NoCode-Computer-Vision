@@ -5,7 +5,7 @@ cd /d "%~dp0"
 
 echo.
 echo  NoCode CV  ^|  DUSt3R 3D Reconstruction Setup
-echo  ═══════════════════════════════════════════════════════
+echo  ═══════════════════════════════════════════════
 echo.
 
 :: Check venv exists
@@ -25,9 +25,10 @@ if !errorlevel! neq 0 (
     pause & exit /b 1
 )
 
-:: Install Python dependencies
-echo  [1/3]  Installing Python dependencies (roma, einops, scipy, trimesh)...
-venv\Scripts\pip.exe install "roma>=1.5.0" "einops>=0.7.0" "scipy>=1.10.0" "trimesh>=4.0.0" "matplotlib>=3.7.0" --quiet
+:: ── Step 1: Python dependencies ───────────────────────────────────────────
+echo  [1/3]  Installing Python dependencies...
+venv\Scripts\pip.exe install "roma>=1.5.0" "einops>=0.7.0" "scipy>=1.10.0" ^
+    "trimesh>=4.0.0" "matplotlib>=3.7.0" --quiet
 if !errorlevel! neq 0 (
     echo  ERROR: Failed to install dependencies.
     pause & exit /b 1
@@ -35,10 +36,10 @@ if !errorlevel! neq 0 (
 echo         Done.
 echo.
 
-:: Clone DUSt3R
+:: ── Step 2: Clone DUSt3R ──────────────────────────────────────────────────
 echo  [2/3]  Cloning DUSt3R repository...
 if exist "dust3r\.git" (
-    echo         dust3r/ already exists — pulling latest...
+    echo         dust3r/ already exists — updating...
     cd dust3r
     git pull --quiet
     git submodule update --init --recursive --quiet
@@ -53,23 +54,47 @@ if exist "dust3r\.git" (
 echo         Done.
 echo.
 
-:: Install DUSt3R as editable package
-echo  [3/3]  Installing DUSt3R package into venv...
-venv\Scripts\pip.exe install -e dust3r --quiet
-if !errorlevel! neq 0 (
-    echo  ERROR: pip install -e dust3r failed.
+:: ── Step 3: Register dust3r + croco on Python path via .pth file ─────────
+::
+::  DUSt3R has no setup.py / pyproject.toml so pip install -e . does not work.
+::  Instead we write a .pth file into the venv site-packages directory.
+::  Python reads every .pth file at startup and adds each line as a sys.path
+::  entry — identical effect to pip install -e, no build step required.
+::
+echo  [3/3]  Registering dust3r on Python path...
+
+:: Write .pth file directly into venv\Lib\site-packages
+:: (getsitepackages()[0] returns the venv root, not Lib\site-packages)
+set SITE=%~dp0venv\Lib\site-packages
+
+if not exist "%SITE%" (
+    echo  ERROR: %SITE% not found.
     pause & exit /b 1
 )
-echo         Done.
+
+:: Two entries: repo root (dust3r package) + croco submodule (croco package)
+echo %~dp0dust3r>  "%SITE%\dust3r_path.pth"
+echo %~dp0dust3r\croco>> "%SITE%\dust3r_path.pth"
+
+:: Verify Python can now import dust3r
+venv\Scripts\python.exe -c "import dust3r; print('  dust3r import OK')" 2>&1
+if !errorlevel! neq 0 (
+    echo  WARNING: dust3r import test failed — check the output above.
+) else (
+    echo         Done.
+)
 echo.
 
-echo  ═══════════════════════════════════════════════════════
+echo  ═══════════════════════════════════════════════
 echo  DUSt3R is ready!
 echo.
-echo  The model (~330 MB) will download automatically on first
+echo  Model (~330 MB) downloads automatically on first
 echo  use from HuggingFace Hub.
 echo.
-echo  Restart NoCode CV and open any project → Reconstruct 3D
-echo  ═══════════════════════════════════════════════════════
+echo  Next steps:
+echo    1. Restart NoCode CV server
+echo    2. Open any project
+echo    3. Click  Reconstruct 3D
+echo  ═══════════════════════════════════════════════
 echo.
 pause
