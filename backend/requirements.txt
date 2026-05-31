@@ -13,6 +13,11 @@ yt-dlp>=2024.1.0
 # torchvision is pulled in automatically by ultralytics (do NOT add it here — the
 # installer installs the correct CUDA build separately and pins it via constraints)
 
+# ─── HuggingFace / Depth Estimation ──────────────────────────────────────────
+# Required for Monocular Depth Estimation (Depth Anything V2, MiDaS DPT)
+transformers>=4.41.0
+timm>=0.9.0
+
 # ─── PyTorch ──────────────────────────────────────────────────────────────────
 # NOTE: PyTorch is NOT listed here because the correct variant depends on
 # whether you have a CUDA-capable GPU.  The installer handles this for you.

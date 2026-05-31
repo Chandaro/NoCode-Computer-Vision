@@ -427,6 +427,7 @@ class Installer(tk.Tk):
             (ACCENT,  "🎯",  "Pose Estimation",           "17-keypoint skeleton on image / video / webcam · YOLO11-pose models"),
             (PURPLE,  "🧩",  "Instance Segmentation",     "Pixel masks on image / video / webcam · pre-trained or custom .pt"),
             (SUCCESS, "📷",  "Live Webcam Inference",     "Real-time detection + segmentation overlay · FPS counter · per-class stats"),
+            (INFO,    "🌊",  "Depth Estimation",          "Monocular depth maps from any photo · Depth Anything V2 · MiDaS · metric mode"),
         ]
 
         for accent_col, icon, title, desc in features:
