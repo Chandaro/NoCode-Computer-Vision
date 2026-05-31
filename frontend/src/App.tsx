@@ -12,6 +12,7 @@ import Webcam from './pages/Webcam'
 import Pose from './pages/Pose'
 import Segmentation from './pages/Segmentation'
 import Depth from './pages/Depth'
+import Reconstruct3D from './pages/Reconstruct3D'
 
 function Nav() {
   return (
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/projects/:id/pose"              element={<Pose />} />
             <Route path="/projects/:id/segment"           element={<Segmentation />} />
             <Route path="/projects/:id/depth"             element={<Depth />} />
+            <Route path="/projects/:id/reconstruct3d"    element={<Reconstruct3D />} />
           </Routes>
         </main>
       </div>

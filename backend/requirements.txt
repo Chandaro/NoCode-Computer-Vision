@@ -18,6 +18,16 @@ yt-dlp>=2024.1.0
 transformers>=4.41.0
 timm>=0.9.0
 
+# ─── DUSt3R 3D Reconstruction ─────────────────────────────────────────────────
+# Required for multi-view 3D point cloud reconstruction (Reconstruct3D page)
+# NOTE: DUSt3R itself is NOT on PyPI — run setup_dust3r.bat after installing
+#       these dependencies to clone and install the DUSt3R package.
+roma>=1.5.0
+einops>=0.7.0
+scipy>=1.10.0
+trimesh>=4.0.0
+matplotlib>=3.7.0
+
 # ─── PyTorch ──────────────────────────────────────────────────────────────────
 # NOTE: PyTorch is NOT listed here because the correct variant depends on
 # whether you have a CUDA-capable GPU.  The installer handles this for you.
