@@ -3,11 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   Upload, Download, Loader, Camera, CameraOff, Video,
   Image as ImageIcon, Layers, Info, ChevronDown, ChevronUp, AlertTriangle,
-  Box,
+  Box, CheckCircle, XCircle, X,
 } from 'lucide-react'
 import api, { type Project } from '../api'
 import { PageHeader, Card, Field, Select, Slider, Btn, Badge, ProgressBar } from '../components/ui'
 import PointCloudViewer from '../components/PointCloudViewer'
+
+type ReconJobStatus = 'idle' | 'uploading' | 'queued' | 'running' | 'done' | 'failed'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DepthStats {
@@ -48,8 +50,21 @@ export default function Depth() {
   const projectId  = Number(id)
   const navigate   = useNavigate()
 
-  const [project, setProject] = useState<Project | null>(null)
-  const [mode,    setMode]    = useState<Mode>('image')
+  const [project,   setProject]   = useState<Project | null>(null)
+  const [pageMode,  setPageMode]  = useState<'depth' | 'reconstruct'>('depth')
+  const [mode,      setMode]      = useState<Mode>('image')
+
+  // ── 3D Reconstruction state ──────────────────────────────────────────────────
+  const [reconFiles,    setReconFiles]    = useState<File[]>([])
+  const [reconPreviews, setReconPreviews] = useState<string[]>([])
+  const [reconJobId,    setReconJobId]    = useState('')
+  const [reconStatus,   setReconStatus]   = useState<ReconJobStatus>('idle')
+  const [reconMsg,      setReconMsg]      = useState('')
+  const [reconError,    setReconError]    = useState('')
+  const [reconShow3D,   setReconShow3D]   = useState(false)
+  const [reconNiter,    setReconNiter]    = useState(200)
+  const reconFileRef   = useRef<HTMLInputElement>(null)
+  const reconPollerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ── Config ──────────────────────────────────────────────────────────────────
   const [modelId,      setModelId]      = useState('depth-anything/Depth-Anything-V2-Small-hf')
@@ -237,6 +252,62 @@ export default function Depth() {
     setCamActive(false); setCamDepthSrc(''); setCamFps(0); camPendingRef.current = false
   }
 
+  // ── Reconstruction helpers ───────────────────────────────────────────────────
+  const addReconFiles = useCallback((incoming: FileList | File[]) => {
+    const imgs = Array.from(incoming).filter(f => f.type.startsWith('image/'))
+    if (!imgs.length) return
+    setReconFiles(prev => {
+      const combined = [...prev, ...imgs].slice(0, 12)
+      reconPreviews.forEach(URL.revokeObjectURL)
+      setReconPreviews(combined.map(f => URL.createObjectURL(f)))
+      return combined
+    })
+  }, [reconPreviews])
+
+  const removeReconFile = (idx: number) => {
+    setReconFiles(prev => {
+      const next = prev.filter((_, i) => i !== idx)
+      reconPreviews.forEach(URL.revokeObjectURL)
+      setReconPreviews(next.map(f => URL.createObjectURL(f)))
+      return next
+    })
+  }
+
+  const clearRecon = () => {
+    reconPreviews.forEach(URL.revokeObjectURL)
+    setReconFiles([]); setReconPreviews([])
+    setReconJobId(''); setReconStatus('idle'); setReconMsg(''); setReconError(''); setReconShow3D(false)
+    if (reconPollerRef.current) clearInterval(reconPollerRef.current)
+  }
+
+  const startReconstruction = async () => {
+    if (reconFiles.length < 2) return
+    if (reconPollerRef.current) clearInterval(reconPollerRef.current)
+    setReconStatus('uploading'); setReconJobId(''); setReconMsg('Uploading images…')
+    setReconError(''); setReconShow3D(false)
+    try {
+      const fd = new FormData()
+      reconFiles.forEach(f => fd.append('files', f))
+      fd.append('niter', String(reconNiter))
+      const res = await api.post('/reconstruct3d/start', fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } })
+      const jid: string = res.data.job_id
+      setReconJobId(jid); setReconStatus('queued'); setReconMsg('Queued…')
+      reconPollerRef.current = setInterval(async () => {
+        try {
+          const s = await api.get(`/reconstruct3d/${jid}/status`)
+          setReconMsg(s.data.msg)
+          if      (s.data.status === 'done')   { clearInterval(reconPollerRef.current!); setReconStatus('done') }
+          else if (s.data.status === 'failed') { clearInterval(reconPollerRef.current!); setReconStatus('failed'); setReconError(s.data.error ?? 'Unknown error') }
+          else setReconStatus('running')
+        } catch { /* keep polling */ }
+      }, 2000)
+    } catch (e: any) {
+      setReconStatus('failed')
+      setReconError(e?.response?.data?.detail ?? e?.message ?? 'Upload failed')
+    }
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
   const downloadB64 = (b64: string, filename: string) => {
     const a = document.createElement('a')
@@ -271,10 +342,198 @@ export default function Depth() {
     <div style={{ maxWidth: 1080, margin: '0 auto' }}>
       <PageHeader
         back={() => navigate(`/projects/${projectId}/images`)}
-        title="Monocular Depth Estimation"
+        title={pageMode === 'reconstruct' ? 'Multi-View 3D Reconstruction' : 'Depth Estimation'}
         subtitle={project?.name}
       />
 
+      {/* ── Page mode toggle ── */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderRadius: 8, overflow: 'hidden',
+        border: '1px solid var(--border)', width: 'fit-content' }}>
+        {([
+          { key: 'depth'       as const, label: 'Depth Map',         icon: <Layers size={13} /> },
+          { key: 'reconstruct' as const, label: '3D Reconstruction', icon: <Box    size={13} /> },
+        ]).map(({ key, icon, label }) => (
+          <button key={key} onClick={() => setPageMode(key)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '8px 18px', border: 'none', cursor: 'pointer',
+              fontSize: 12, fontWeight: pageMode === key ? 600 : 400,
+              background: pageMode === key ? 'var(--accent)' : 'var(--surface)',
+              color: pageMode === key ? '#fff' : 'var(--text2)',
+              transition: 'all 0.15s',
+            }}>
+            {icon}{label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── 3D Reconstruction panel ── */}
+      {pageMode === 'reconstruct' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16 }}>
+
+          {/* Sidebar */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Card style={{ padding: 16 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)',
+                textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                How to get best results
+              </p>
+              {[
+                ['📸', '4–8 photos', 'Walk around every 30–45°'],
+                ['🔄', 'Full coverage', 'Front, sides, back, top'],
+                ['💡', 'Even lighting', 'No harsh shadows or reflections'],
+                ['🎯', '~60% overlap', 'Each photo shares area with the next'],
+                ['📐', 'Hold steady', 'Motion blur hurts feature matching'],
+              ].map(([icon, title, desc]) => (
+                <div key={String(title)} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, flexShrink: 0 }}>{icon}</span>
+                  <div>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3 }}>{title}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.4 }}>{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </Card>
+            <Card style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Slider label="Alignment quality" value={reconNiter} onChange={setReconNiter}
+                min={50} max={500} step={50}
+                format={v => v <= 100 ? `${v} — fast` : v >= 400 ? `${v} — best` : String(v)} />
+              <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.6 }}>
+                Higher = better alignment, longer processing. 200 recommended.
+              </p>
+              {reconShow3D && (
+                <Slider label="Point size" value={pointSize} onChange={setPointSize}
+                  min={1} max={6} step={0.5} format={v => String(v)} />
+              )}
+            </Card>
+            <Card style={{ padding: 12, background: 'rgba(94,106,210,0.06)',
+              border: '1px solid rgba(94,106,210,0.2)' }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>First-time setup</p>
+              <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.6 }}>
+                Run <code style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>setup_dust3r.bat</code> then
+                restart the server. GPU: ~20–30 s · CPU: ~5–15 min
+              </p>
+            </Card>
+          </div>
+
+          {/* Main panel */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* Upload zone */}
+            <Card style={{ padding: 16 }}>
+              {/* Drop zone */}
+              <div
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); addReconFiles(e.dataTransfer.files) }}
+                onClick={() => reconFiles.length < 12 && reconFileRef.current?.click()}
+                style={{
+                  border: `2px dashed ${reconFiles.length >= 2 ? 'var(--accent)' : 'var(--border2)'}`,
+                  borderRadius: 8, padding: '20px 16px', textAlign: 'center',
+                  cursor: reconFiles.length < 12 ? 'pointer' : 'default', marginBottom: 12,
+                  background: reconFiles.length >= 2 ? 'rgba(94,106,210,0.04)' : 'transparent',
+                }}>
+                <Camera size={26} style={{ color: 'var(--text3)', opacity: 0.5, marginBottom: 6 }} />
+                <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 2 }}>
+                  {reconFiles.length === 0 ? 'Drag & drop photos, or click to browse'
+                    : reconFiles.length < 2 ? `${reconFiles.length} photo — add at least 1 more`
+                    : `${reconFiles.length} / 12 photos${reconFiles.length < 12 ? ' — click to add more' : ' — max'}`}
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--text3)' }}>JPG, PNG, WebP · 2–12 images</p>
+              </div>
+              <input ref={reconFileRef} type="file" multiple accept="image/*" style={{ display: 'none' }}
+                onChange={e => { if (e.target.files) addReconFiles(e.target.files); e.target.value = '' }} />
+
+              {/* Thumbnails */}
+              {reconFiles.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+                  gap: 6, marginBottom: 12 }}>
+                  {reconFiles.map((f, i) => (
+                    <div key={i} style={{ position: 'relative', borderRadius: 6, overflow: 'hidden',
+                      border: '1px solid var(--border)', aspectRatio: '1' }}>
+                      <img src={reconPreviews[i]} alt={f.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <button onClick={e => { e.stopPropagation(); removeReconFile(i) }}
+                        style={{ position: 'absolute', top: 3, right: 3, width: 16, height: 16,
+                          borderRadius: '50%', background: 'rgba(0,0,0,0.65)', border: 'none',
+                          color: '#fff', cursor: 'pointer', display: 'flex',
+                          alignItems: 'center', justifyContent: 'center' }}>
+                        <X size={9} />
+                      </button>
+                      <span style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 9,
+                        color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace' }}>{i + 1}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Btn variant="primary" disabled={reconFiles.length < 2 ||
+                  reconStatus === 'uploading' || reconStatus === 'queued' || reconStatus === 'running'}
+                  onClick={startReconstruction}>
+                  {(reconStatus === 'uploading' || reconStatus === 'queued' || reconStatus === 'running')
+                    ? <><Loader size={12} className="animate-spin" /> Reconstructing…</>
+                    : <><Box size={12} /> Reconstruct 3D</>}
+                </Btn>
+                {reconFiles.length > 0 && reconStatus === 'idle' && (
+                  <Btn variant="ghost" size="sm" onClick={clearRecon}><X size={12} /> Clear</Btn>
+                )}
+              </div>
+            </Card>
+
+            {/* Status */}
+            {reconStatus !== 'idle' && (
+              <Card style={{ padding: 16 }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <div style={{ flexShrink: 0, marginTop: 2 }}>
+                    {reconStatus === 'done'   && <CheckCircle size={18} style={{ color: '#3fb950' }} />}
+                    {reconStatus === 'failed' && <XCircle     size={18} style={{ color: '#f85149' }} />}
+                    {(reconStatus === 'uploading' || reconStatus === 'queued' || reconStatus === 'running')
+                      && <Loader size={18} className="animate-spin" style={{ color: 'var(--accent)' }} />}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
+                      {reconStatus === 'done' ? '3D reconstruction complete'
+                        : reconStatus === 'failed' ? 'Reconstruction failed' : 'Processing…'}
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--text2)' }}>{reconMsg}</p>
+                    {reconError && (
+                      <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, fontSize: 12,
+                        background: 'rgba(248,81,73,0.1)', border: '1px solid rgba(248,81,73,0.3)',
+                        color: '#f85149' }}>{reconError}</div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Viewer */}
+            {reconStatus === 'done' && reconJobId && (
+              <Card style={{ padding: 16 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <Btn variant={reconShow3D ? 'primary' : 'secondary'} size="sm"
+                    onClick={() => setReconShow3D(v => !v)}>
+                    <Box size={12} />{reconShow3D ? 'Hide 3D View' : 'View 3D Point Cloud'}
+                  </Btn>
+                  <Btn variant="ghost" size="sm"
+                    onClick={() => window.open(`/api/reconstruct3d/${reconJobId}/download`, '_blank')}>
+                    <Download size={12} /> Download PLY
+                  </Btn>
+                </div>
+                {reconShow3D && (
+                  <PointCloudViewer
+                    fetchUrl={`/reconstruct3d/${reconJobId}/result`}
+                    pointSize={pointSize}
+                  />
+                )}
+              </Card>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ── Depth Map panel ── */}
+      {pageMode === 'depth' && (
       <div style={{ display: 'grid', gridTemplateColumns: '270px 1fr', gap: 16 }}>
 
         {/* ═══ SIDEBAR ═══════════════════════════════════════════════════════ */}
@@ -807,6 +1066,8 @@ export default function Depth() {
 
         </div>
       </div>
+      )} {/* end depth panel */}
+
     </div>
   )
 }
