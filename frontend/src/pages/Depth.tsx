@@ -72,20 +72,17 @@ function PointCloudViewer({ resultId, pointSize }: { resultId: string; pointSize
           'three/examples/jsm/controls/OrbitControls.js' as any
         )
 
-        // ── Fetch point cloud — flat float32 binary ────────────────────────
-        // Layout: [N as float32] [X,Y,Z × N] [R,G,B × N]
-        const resp = await fetch(`/api/depth/pointcloud/${resultId}/data?subsample=4`)
-        if (!resp.ok) throw new Error(await resp.text())
+        // ── Fetch point cloud as JSON { n, pos, col } ─────────────────────
+        const res = await api.get(
+          `/depth/pointcloud/${resultId}/data?subsample=4`
+        )
         if (cancelled) return
-        const buf  = await resp.arrayBuffer()
-        const full = new Float32Array(buf)          // entire buffer as float32
-
-        const n = Math.round(full[0])               // element [0] = point count
+        const { n, pos, col } = res.data
         setCount(n)
 
-        // Slice views directly — no copies, no DataView needed
-        const posArr = full.slice(1,         1 + n * 3)
-        const colArr = full.slice(1 + n * 3, 1 + n * 6)
+        // Convert JSON arrays directly to typed arrays — simple and reliable
+        const posArr = new Float32Array(pos as number[])
+        const colArr = new Float32Array(col as number[])
 
         // ── Scene ────────────────────────────────────────────────────────────
         const W = container.clientWidth

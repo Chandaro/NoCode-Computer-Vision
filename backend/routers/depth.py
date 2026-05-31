@@ -492,18 +492,13 @@ def _make_ply_binary(positions, colors_f32):
 @router.get("/depth/pointcloud/{result_id}/data")
 def depth_pointcloud_data(result_id: str, subsample: int = 4, fx: float = 0.0):
     """
-    Return point cloud as raw binary (application/octet-stream).
-
-    Binary layout (little-endian):
-        4 bytes  — int32   : N (number of points)
-        N*12 bytes — float32[N*3] : positions (x,y,z per point)
-        N*12 bytes — float32[N*3] : colors    (r,g,b per point, 0–1)
-
-    The frontend reads this with DataView / Float32Array — no base64 needed.
+    Return point cloud as JSON  { n, pos, col }
+      n   — number of points
+      pos — flat list of float32  [x0,y0,z0, x1,y1,z1, ...]
+      col — flat list of float32  [r0,g0,b0, ...] values in 0–1
+    The frontend converts these directly to Float32Array — no binary parsing.
     """
     import numpy as np
-    import struct
-    from fastapi.responses import Response
 
     rec = _depth_results.get(result_id)
     if not rec:
@@ -513,21 +508,11 @@ def depth_pointcloud_data(result_id: str, subsample: int = 4, fx: float = 0.0):
                                      subsample=subsample, fx=fx)
     n = len(positions)
 
-    # Pack as one flat float32 array:
-    #   [0]        = N (point count, stored as float32 — exact up to 2^24)
-    #   [1 .. N*3] = XYZ positions (stride 3 per point)
-    #   [N*3+1 ..] = RGB colors    (stride 3 per point, 0–1)
-    #
-    # Using a single dtype avoids int32/endianness issues on the JS side —
-    # the browser reads it as one Float32Array and slices by index.
-    import numpy as np
-    count_arr = np.array([float(n)], dtype=np.float32)
-    flat = np.concatenate([count_arr,
-                           positions.flatten().astype(np.float32),
-                           colors.flatten().astype(np.float32)])
-    buf = flat.tobytes()
+    # Round floats to 5 decimal places to keep JSON compact
+    pos_list = [round(float(v), 5) for v in positions.flatten()]
+    col_list = [round(float(v), 4) for v in colors.flatten()]
 
-    return Response(content=buf, media_type="application/octet-stream")
+    return {"n": n, "pos": pos_list, "col": col_list}
 
 
 @router.get("/depth/pointcloud/{result_id}/download")
