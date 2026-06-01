@@ -29,6 +29,18 @@ server.log
 # User datasets
 Dataset/
 
+# DUSt3R cloned repo (installed locally by setup_dust3r.bat)
+dust3r/
+
+# Classification upload cache
+backend/cls_uploads/
+
+# Video output cache
+backend/video_out/
+
+# Frontend build hash
+frontend/dist/.build_hash
+
 # OS / editor
 .DS_Store
 Thumbs.db
