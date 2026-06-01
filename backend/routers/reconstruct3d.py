@@ -28,6 +28,84 @@ _model_lock = threading.Lock()
 MAX_VIEWER_PTS = 200_000   # subsample result to keep Three.js fast
 
 
+# ─── croco 'models' namespace-package collision fix ──────────────────────────
+#
+# DUSt3R's croco submodule imports its internal packages with bare names:
+#     from models.dpt_block import DPTOutputAdapter
+#     from models.blocks import ...
+# croco/models/ is an implicit namespace package (no __init__.py).
+#
+# Our backend has its OWN backend/models.py (the SQLModel DB definitions).
+# Once the server imports that, sys.modules['models'] points to our file —
+# a regular module, NOT a package — so croco's `from models.X import` fails
+# with "ModuleNotFoundError: 'models' is not a package".
+#
+# This context manager temporarily removes our 'models' from sys.modules and
+# prepends croco's path so the bare `models` / `utils` imports resolve to
+# croco's namespace packages, then restores our 'models' afterwards.  Class
+# references bound during croco's import survive the restore, so subsequent
+# model use is unaffected.
+import sys
+import importlib.machinery
+import importlib.util
+from contextlib import contextmanager
+
+
+@contextmanager
+def _croco_import_context():
+    """
+    Make croco's bare `from models.X import` / `from utils.X import` resolve
+    to croco's namespace packages instead of backend/models.py.
+
+    Path-ordering alone does not work: a regular module file (backend/models.py)
+    always takes precedence over a namespace-directory portion during import
+    search.  So we INJECT croco's namespace packages directly into sys.modules,
+    bypassing the path search entirely, then restore the originals afterward.
+    """
+    import dust3r
+    croco_path = os.path.normpath(
+        os.path.join(os.path.dirname(dust3r.__file__), "..", "croco")
+    )
+
+    shadowed = ("models", "utils")
+
+    # Snapshot originals (backend's 'models' etc.) and any submodules.
+    saved = {k: v for k, v in sys.modules.items()
+             if k in shadowed or any(k.startswith(s + ".") for s in shadowed)}
+    for k in list(saved):
+        del sys.modules[k]
+
+    # Inject a namespace package for each shadowed name pointing at croco/<name>/.
+    injected = []
+    for name in shadowed:
+        pkg_dir = os.path.join(croco_path, name)
+        if not os.path.isdir(pkg_dir):
+            continue
+        spec = importlib.machinery.ModuleSpec(name, None, is_package=True)
+        spec.submodule_search_locations = [pkg_dir]
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        injected.append(name)
+
+    path_added = croco_path not in sys.path
+    if path_added:
+        sys.path.insert(0, croco_path)
+
+    try:
+        yield
+    finally:
+        # Remove croco's transient modules, restore the originals.
+        for k in list(sys.modules.keys()):
+            if k in shadowed or any(k.startswith(s + ".") for s in shadowed):
+                del sys.modules[k]
+        sys.modules.update(saved)
+        if path_added:
+            try:
+                sys.path.remove(croco_path)
+            except ValueError:
+                pass
+
+
 # ─── Model loader ─────────────────────────────────────────────────────────────
 def _ensure_model():
     """Load and cache the DUSt3R model.  Thread-safe, lazy, raises on error."""
@@ -37,9 +115,22 @@ def _ensure_model():
     with _model_lock:
         if _model is not None:
             return _model
+
+        # 1. Is the dust3r package importable at all?
+        try:
+            import dust3r  # noqa: F401
+        except ImportError:
+            raise RuntimeError(
+                "DUSt3R is not installed. "
+                "Run setup_dust3r.bat (Windows) or setup_dust3r.sh (Mac/Linux) "
+                "from the NoCode CV folder, then restart the server."
+            )
+
+        # 2. dust3r IS installed — load the model with the croco import fix.
         try:
             import torch
-            from dust3r.model import AsymmetricCroCo3DStereo
+            with _croco_import_context():
+                from dust3r.model import AsymmetricCroCo3DStereo
             device = "cuda" if torch.cuda.is_available() else "cpu"
             m = AsymmetricCroCo3DStereo.from_pretrained(
                 "naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt"
@@ -47,11 +138,12 @@ def _ensure_model():
             m.eval()
             _model = m
             return _model
-        except ImportError:
+        except Exception as exc:
+            import traceback
+            tb = traceback.format_exc()
             raise RuntimeError(
-                "DUSt3R is not installed. "
-                "Run setup_dust3r.bat (Windows) or setup_dust3r.sh (Mac/Linux) "
-                "from the NoCode CV folder, then restart the server."
+                f"DUSt3R is installed but failed to load the model: "
+                f"{type(exc).__name__}: {exc}\n\n{tb}"
             )
 
 
