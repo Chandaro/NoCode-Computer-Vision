@@ -276,6 +276,50 @@ def _run_reconstruction(job_id: str, image_bytes_list: list, niter: int):
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
+@router.get("/reconstruct3d/model-status")
+def model_status():
+    """
+    Report whether DUSt3R is installed and whether its model is cached.
+    Lets the UI warn the user BEFORE they upload photos and hit Reconstruct.
+
+    Returns:
+        installed     — is the dust3r package importable?
+        model_cached  — are the model weights already in the HF cache?
+        loaded        — is the model already loaded in memory (instant)?
+    """
+    # 1. dust3r package present?
+    try:
+        import dust3r  # noqa: F401
+        installed = True
+    except ImportError:
+        installed = False
+
+    # 2. model weights in HF cache? (check without downloading or loading)
+    model_cached = False
+    if installed:
+        try:
+            from huggingface_hub import try_to_load_from_cache
+            # The model repo's main weight file
+            hit = try_to_load_from_cache(
+                "naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt",
+                "model.safetensors",
+            )
+            if hit is None:
+                hit = try_to_load_from_cache(
+                    "naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt",
+                    "DUSt3R_ViTLarge_BaseDecoder_512_dpt.pth",
+                )
+            model_cached = isinstance(hit, str) and os.path.exists(hit)
+        except Exception:
+            model_cached = False
+
+    return {
+        "installed":    installed,
+        "model_cached": model_cached,
+        "loaded":       _model is not None,
+    }
+
+
 @router.post("/reconstruct3d/start")
 async def start_reconstruction(
     files: List[UploadFile] = File(...),

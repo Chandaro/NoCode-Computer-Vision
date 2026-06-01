@@ -63,6 +63,8 @@ export default function Depth() {
   const [reconError,    setReconError]    = useState('')
   const [reconShow3D,   setReconShow3D]   = useState(false)
   const [reconNiter,    setReconNiter]    = useState(200)
+  const [reconModelStatus, setReconModelStatus] =
+    useState<{ installed: boolean; model_cached: boolean; loaded: boolean } | null>(null)
   const reconFileRef   = useRef<HTMLInputElement>(null)
   const reconPollerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -112,6 +114,14 @@ export default function Depth() {
   useEffect(() => {
     api.get(`/projects/${projectId}`).then(r => setProject(r.data))
   }, [projectId])
+
+  // Check DUSt3R model readiness whenever the user opens 3D Reconstruction
+  useEffect(() => {
+    if (pageMode !== 'reconstruct') return
+    api.get('/reconstruct3d/model-status')
+      .then(r => setReconModelStatus(r.data))
+      .catch(() => setReconModelStatus({ installed: false, model_cached: false, loaded: false }))
+  }, [pageMode])
 
   useEffect(() => () => {
     stopCam()
@@ -418,6 +428,45 @@ export default function Depth() {
 
           {/* Main panel */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* Model-readiness banner */}
+            {reconModelStatus && !reconModelStatus.installed && (
+              <Card style={{ padding: 14, background: 'rgba(248,81,73,0.08)',
+                border: '1px solid rgba(248,81,73,0.3)' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <XCircle size={16} style={{ color: '#f85149', flexShrink: 0, marginTop: 1 }} />
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: '#f85149', marginBottom: 3 }}>
+                      DUSt3R not installed
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
+                      Run <code style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>setup_dust3r.bat</code> in
+                      the NoCode CV folder, then restart the server. The setup also downloads
+                      the model (~2.3 GB) so reconstruction starts instantly.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            )}
+            {reconModelStatus && reconModelStatus.installed && !reconModelStatus.model_cached && (
+              <Card style={{ padding: 14, background: 'rgba(210,153,34,0.08)',
+                border: '1px solid rgba(210,153,34,0.3)' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <AlertTriangle size={16} style={{ color: '#d29922', flexShrink: 0, marginTop: 1 }} />
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: '#d29922', marginBottom: 3 }}>
+                      Model not downloaded yet (~2.3 GB)
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
+                      The first reconstruction will download the model and take several minutes.
+                      To download it ahead of time, run <code style={{ fontFamily: 'monospace',
+                      color: 'var(--accent)' }}>setup_dust3r.bat</code> — it fetches the model so
+                      future runs start instantly.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {/* Upload zone */}
             <Card style={{ padding: 16 }}>

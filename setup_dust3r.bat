@@ -61,7 +61,7 @@ echo.
 ::  Python reads every .pth file at startup and adds each line as a sys.path
 ::  entry — identical effect to pip install -e, no build step required.
 ::
-echo  [3/3]  Registering dust3r on Python path...
+echo  [3/4]  Registering dust3r on Python path...
 
 :: Write .pth file directly into venv\Lib\site-packages
 :: (getsitepackages()[0] returns the venv root, not Lib\site-packages)
@@ -85,11 +85,32 @@ if !errorlevel! neq 0 (
 )
 echo.
 
+:: ── Step 4: Pre-download the model (~2.3 GB) NOW, not at first use ────────
+::
+::  Without this, the 2.3 GB model downloads the first time the user clicks
+::  "Reconstruct 3D" — making that first run appear to hang for minutes.
+::  snapshot_download fetches the files into the HF cache (auto-resumes if
+::  interrupted) without loading the model, so reconstruction is instant later.
+::
+echo  [4/4]  Downloading DUSt3R model (~2.3 GB, one-time)...
+echo         This may take several minutes depending on your connection.
+echo         It resumes automatically if interrupted — just re-run this script.
+echo.
+venv\Scripts\python.exe -c "from huggingface_hub import snapshot_download; snapshot_download('naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt'); print('  Model cached successfully')"
+if !errorlevel! neq 0 (
+    echo.
+    echo  WARNING: Model download did not complete.
+    echo  Re-run this script to resume — it picks up where it left off.
+    echo  (The app still works; it will finish the download on first use.)
+) else (
+    echo.
+)
+
 echo  ═══════════════════════════════════════════════
 echo  DUSt3R is ready!
 echo.
-echo  Model (~330 MB) downloads automatically on first
-echo  use from HuggingFace Hub.
+echo  Model is downloaded and cached — reconstruction
+echo  will start instantly, no waiting on first use.
 echo.
 echo  Next steps:
 echo    1. Restart NoCode CV server
