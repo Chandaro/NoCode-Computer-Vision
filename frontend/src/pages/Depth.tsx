@@ -62,7 +62,9 @@ export default function Depth() {
   const [reconMsg,      setReconMsg]      = useState('')
   const [reconError,    setReconError]    = useState('')
   const [reconShow3D,   setReconShow3D]   = useState(false)
-  const [reconNiter,    setReconNiter]    = useState(200)
+  const [reconNiter,    setReconNiter]    = useState(300)
+  const [reconDetail,   setReconDetail]   = useState(1.5)   // conf_thr: lower=more detail
+  const [reconCleanup,  setReconCleanup]  = useState(true)  // remove noise points
   const [reconModelStatus, setReconModelStatus] =
     useState<{ installed: boolean; model_cached: boolean; loaded: boolean } | null>(null)
   const reconFileRef   = useRef<HTMLInputElement>(null)
@@ -299,6 +301,8 @@ export default function Depth() {
       const fd = new FormData()
       reconFiles.forEach(f => fd.append('files', f))
       fd.append('niter', String(reconNiter))
+      fd.append('conf_thr', String(reconDetail))
+      fd.append('cleanup', String(reconCleanup))
       const res = await api.post('/reconstruct3d/start', fd,
         { headers: { 'Content-Type': 'multipart/form-data' } })
       const jid: string = res.data.job_id
@@ -404,13 +408,44 @@ export default function Depth() {
                 </div>
               ))}
             </Card>
-            <Card style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Card style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)',
+                textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                Quality
+              </p>
+
               <Slider label="Alignment quality" value={reconNiter} onChange={setReconNiter}
                 min={50} max={500} step={50}
                 format={v => v <= 100 ? `${v} — fast` : v >= 400 ? `${v} — best` : String(v)} />
+
+              {/* Detail = inverse of confidence threshold (lower thr = more points) */}
+              <Slider label="Detail" value={reconDetail} onChange={setReconDetail}
+                min={1.0} max={3.0} step={0.1}
+                format={v => v <= 1.3 ? 'High (more pts)' : v >= 2.5 ? 'Clean (fewer)' : 'Balanced'} />
+
+              {/* Noise removal toggle */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                userSelect: 'none' }}>
+                <div onClick={() => setReconCleanup(c => !c)}
+                  style={{ width: 32, height: 18, borderRadius: 9, flexShrink: 0,
+                    background: reconCleanup ? 'var(--accent)' : 'var(--surface3)',
+                    border: `1px solid ${reconCleanup ? 'var(--accent)' : 'var(--border2)'}`,
+                    position: 'relative', transition: 'background 0.15s', cursor: 'pointer' }}>
+                  <div style={{ position: 'absolute', top: 2, left: reconCleanup ? 14 : 2,
+                    width: 12, height: 12, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.15s' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>Remove noise</p>
+                  <p style={{ fontSize: 10, color: 'var(--text3)' }}>Strips floating stray points</p>
+                </div>
+              </label>
+
               <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.6 }}>
-                Higher = better alignment, longer processing. 200 recommended.
+                Higher alignment = better geometry, slower. Lower detail keeps only
+                confident points. Noise removal cleans up floaters.
               </p>
+
               {reconShow3D && (
                 <Slider label="Point size" value={pointSize} onChange={setPointSize}
                   min={1} max={6} step={0.5} format={v => String(v)} />

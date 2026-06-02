@@ -147,8 +147,59 @@ def _ensure_model():
             )
 
 
+# ─── Point cloud cleanup helpers ─────────────────────────────────────────────
+def _remove_statistical_outliers(xyz, rgb, k: int = 16, std_ratio: float = 2.0):
+    """
+    Remove floating noise points (the #1 cause of ugly DUSt3R output).
+
+    For each point, compute the mean distance to its k nearest neighbours.
+    Points whose mean distance exceeds (global_mean + std_ratio*global_std)
+    are statistical outliers — isolated floaters — and get removed.
+    Same algorithm as Open3D's remove_statistical_outlier, using scipy.
+    """
+    import numpy as np
+    if len(xyz) < k + 1:
+        return xyz, rgb
+    try:
+        from scipy.spatial import cKDTree
+    except ImportError:
+        return xyz, rgb
+    tree = cKDTree(xyz)
+    # k+1 because the nearest neighbour of a point is itself (distance 0)
+    dists, _ = tree.query(xyz, k=k + 1, workers=-1)
+    mean_d   = dists[:, 1:].mean(axis=1)          # drop self-distance
+    thresh   = mean_d.mean() + std_ratio * mean_d.std()
+    keep     = mean_d < thresh
+    return xyz[keep], rgb[keep]
+
+
+def _voxel_downsample(xyz, rgb, voxel: float):
+    """
+    Downsample to one averaged point per voxel cell — gives uniform point
+    density (much cleaner than naive [::step] which keeps dense/sparse patches).
+    """
+    import numpy as np
+    if voxel <= 0 or len(xyz) == 0:
+        return xyz, rgb
+    keys = np.floor(xyz / voxel).astype(np.int64)
+    # Map each unique voxel to the indices of points inside it.
+    # numpy 2.x can return a 2-D inverse with axis= — flatten to 1-D.
+    _, inverse = np.unique(keys, axis=0, return_inverse=True)
+    inverse = np.asarray(inverse).ravel()
+    n_vox = int(inverse.max()) + 1
+    out_xyz = np.zeros((n_vox, 3), dtype=np.float32)
+    out_rgb = np.zeros((n_vox, 3), dtype=np.float32)
+    counts  = np.zeros(n_vox, dtype=np.int64)
+    np.add.at(out_xyz, inverse, xyz)
+    np.add.at(out_rgb, inverse, rgb)
+    np.add.at(counts, inverse, 1)
+    counts = counts[:, None].clip(min=1)
+    return out_xyz / counts, out_rgb / counts
+
+
 # ─── Core reconstruction (runs in background thread) ─────────────────────────
-def _run_reconstruction(job_id: str, image_bytes_list: list, niter: int):
+def _run_reconstruction(job_id: str, image_bytes_list: list, niter: int,
+                        conf_thr: float = 1.5, cleanup: bool = True):
     def push(msg: str):
         if job_id in _recon_jobs:
             _recon_jobs[job_id]["msg"] = msg
@@ -216,7 +267,9 @@ def _run_reconstruction(job_id: str, image_bytes_list: list, niter: int):
 
         # ── Extract XYZ + RGB ─────────────────────────────────────────────
         push("Extracting point cloud…")
-        scene.min_conf_thr = 1.5
+        # Confidence threshold: lower = more points (more detail, more noise),
+        # higher = fewer points (cleaner).  Driven by the UI "Detail" slider.
+        scene.min_conf_thr = float(conf_thr)
 
         pts3d_list = [p.detach().cpu().numpy() for p in scene.get_pts3d()]
         conf_masks = [m.detach().cpu().numpy() for m in scene.get_masks()]
@@ -230,6 +283,8 @@ def _run_reconstruction(job_id: str, image_bytes_list: list, niter: int):
         xyz = np.concatenate(xyz_parts, axis=0).astype(np.float32)  # [N, 3]
         rgb = np.concatenate(rgb_parts, axis=0).astype(np.float32)  # [N, 3] 0-1
 
+        n_raw = len(xyz)
+
         # ── OpenCV → Three.js coordinate flip ────────────────────────────
         # DUSt3R: Z-forward, Y-down  →  Three.js: Z-toward-viewer, Y-up
         xyz[:, 1] *= -1
@@ -242,12 +297,25 @@ def _run_reconstruction(job_id: str, image_bytes_list: list, niter: int):
         if scale > 1e-8:
             xyz /= scale
 
-        # ── Subsample for the viewer (keep full data for PLY download) ────
+        # ── Statistical outlier removal — strips floating noise points ────
+        if cleanup and n_raw > 100:
+            push("Cleaning point cloud (removing noise)…")
+            xyz, rgb = _remove_statistical_outliers(xyz, rgb, k=16, std_ratio=2.0)
+
         n_full = len(xyz)
+
+        # ── Voxel downsample for the viewer (uniform density, not [::step]) ─
         if n_full > MAX_VIEWER_PTS:
-            step     = n_full // MAX_VIEWER_PTS
-            xyz_view = xyz[::step]
-            rgb_view = rgb[::step]
+            push("Optimising for display…")
+            # Pick a voxel size that lands near the target point budget.
+            # Coordinates are normalised to roughly [-1, 1] → span ~2.
+            voxel = 2.0 / (MAX_VIEWER_PTS ** (1 / 3)) * 1.1
+            xyz_view, rgb_view = _voxel_downsample(xyz, rgb, voxel)
+            # If still too many, fall back to a uniform stride.
+            if len(xyz_view) > MAX_VIEWER_PTS:
+                step = len(xyz_view) // MAX_VIEWER_PTS
+                xyz_view = xyz_view[::step]
+                rgb_view = rgb_view[::step]
         else:
             xyz_view = xyz
             rgb_view = rgb
@@ -256,12 +324,14 @@ def _run_reconstruction(job_id: str, image_bytes_list: list, niter: int):
         pos_list = [round(float(v), 5) for v in xyz_view.flatten()]
         col_list = [round(float(v), 4) for v in rgb_view.flatten()]
 
+        removed = n_raw - n_full
+        clean_note = f" · {removed:,} noise pts removed" if (cleanup and removed > 0) else ""
         _recon_jobs[job_id].update({
             "status": "done",
-            "msg":    f"Done — {n_full:,} pts from {n_imgs} images "
-                      f"({n_view:,} shown in viewer)",
+            "msg":    f"Done — {n_full:,} pts from {n_imgs} images{clean_note} "
+                      f"({n_view:,} shown)",
             "result": {"n": n_view, "pos": pos_list, "col": col_list},
-            "xyz":    xyz,           # full-res for PLY download
+            "xyz":    xyz,           # cleaned full-res for PLY download
             "rgb":    rgb,
         })
 
@@ -322,8 +392,10 @@ def model_status():
 
 @router.post("/reconstruct3d/start")
 async def start_reconstruction(
-    files: List[UploadFile] = File(...),
-    niter: int              = Form(200),
+    files:    List[UploadFile] = File(...),
+    niter:    int              = Form(200),
+    conf_thr: float            = Form(1.5),    # detail level (lower=more pts)
+    cleanup:  bool             = Form(True),   # statistical outlier removal
 ):
     """Accept 2–12 images and start a background DUSt3R reconstruction job."""
     if not (2 <= len(files) <= 12):
@@ -356,7 +428,7 @@ async def start_reconstruction(
 
     threading.Thread(
         target=_run_reconstruction,
-        args=(job_id, image_bytes_list, niter),
+        args=(job_id, image_bytes_list, niter, conf_thr, cleanup),
         daemon=True,
     ).start()
 
