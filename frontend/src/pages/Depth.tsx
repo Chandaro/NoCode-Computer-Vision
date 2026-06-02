@@ -350,7 +350,13 @@ export default function Depth() {
         `/depth/measure/${rid}?x1=${a.x}&y1=${a.y}&x2=${b.x}&y2=${b.y}` +
         `&hfov_deg=${hfov}&scale=${scale}`
       )
-      setMeasureResult(res.data)
+      // Guard: if the backend route isn't loaded the SPA returns HTML (200),
+      // so res.data won't be a valid measurement object.
+      if (res.data && typeof res.data.distance_m === 'number') {
+        setMeasureResult(res.data)
+      } else {
+        setMeasureResult({ error: 'Measurement endpoint not available — restart the backend, then re-run depth estimation.' })
+      }
     } catch (e: any) {
       setMeasureResult({ error: e?.response?.data?.detail ?? 'Measurement failed' })
     }
@@ -1036,7 +1042,7 @@ export default function Depth() {
                           </div>
 
                           {/* Result */}
-                          {measureResult && !measureResult.error && (
+                          {measureResult && typeof measureResult.distance_m === 'number' && (
                             <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 8,
                               background: 'var(--surface2)', border: '1px solid var(--border)' }}>
                               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
