@@ -86,6 +86,13 @@ export default function Depth() {
   const [imgError,       setImgError]       = useState('')
   const [showPointCloud, setShowPointCloud] = useState(false)
   const [pointSize,      setPointSize]      = useState(2)
+  // ── Click-to-measure (metric models only) ──
+  const [showMeasure,   setShowMeasure]   = useState(false)
+  const [measurePts,    setMeasurePts]    = useState<{ x: number; y: number }[]>([])
+  const [measureResult, setMeasureResult] = useState<any>(null)
+  const [measureHfov,   setMeasureHfov]   = useState(65)
+  const [measureScale,  setMeasureScale]  = useState(1.0)
+  const [calibInput,    setCalibInput]    = useState('')
   // ── Portrait / depth-of-field blur ──
   const [showPortrait,  setShowPortrait]  = useState(false)
   const [pFocus,        setPFocus]        = useState(0.6)
@@ -142,6 +149,7 @@ export default function Depth() {
   const runImageInfer = async (file: File) => {
     const blobUrl = URL.createObjectURL(file)
     setOrigSrc(blobUrl); setDepthResult(null); setImgError(''); setShowPointCloud(false); setShowPortrait(false); setPortraitSrc('')
+    setShowMeasure(false); setMeasurePts([]); setMeasureResult(null); setMeasureScale(1.0)
     setImgRunning(true)
     try {
       const fd = new FormData()
@@ -158,6 +166,7 @@ export default function Depth() {
   const runImageInferUrl = async () => {
     if (!imgUrl.trim()) return
     setOrigSrc(imgUrl.trim()); setDepthResult(null); setImgError(''); setShowPointCloud(false); setShowPortrait(false); setPortraitSrc('')
+    setShowMeasure(false); setMeasurePts([]); setMeasureResult(null); setMeasureScale(1.0)
     setImgRunning(true)
     try {
       const fd = new FormData()
@@ -328,6 +337,54 @@ export default function Depth() {
       setReconStatus('failed')
       setReconError(e?.response?.data?.detail ?? e?.message ?? 'Upload failed')
     }
+  }
+
+  // ── Click-to-measure ────────────────────────────────────────────────────────
+  const runMeasure = useCallback(async (
+    rid: string, pts: { x: number; y: number }[], hfov: number, scale: number,
+  ) => {
+    if (pts.length !== 2) return
+    try {
+      const [a, b] = pts
+      const res = await api.get(
+        `/depth/measure/${rid}?x1=${a.x}&y1=${a.y}&x2=${b.x}&y2=${b.y}` +
+        `&hfov_deg=${hfov}&scale=${scale}`
+      )
+      setMeasureResult(res.data)
+    } catch (e: any) {
+      setMeasureResult({ error: e?.response?.data?.detail ?? 'Measurement failed' })
+    }
+  }, [])
+
+  // Handle a click on the measure image: collect up to 2 points (normalised)
+  const onMeasureClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width
+    const y = (e.clientY - rect.top)  / rect.height
+    setMeasurePts(prev => {
+      const next = prev.length >= 2 ? [{ x, y }] : [...prev, { x, y }]
+      if (next.length === 2 && depthResult?.result_id)
+        runMeasure(depthResult.result_id, next, measureHfov, measureScale)
+      else
+        setMeasureResult(null)
+      return next
+    })
+  }
+
+  // Re-measure when FOV or calibration scale changes
+  useEffect(() => {
+    if (showMeasure && measurePts.length === 2 && depthResult?.result_id)
+      runMeasure(depthResult.result_id, measurePts, measureHfov, measureScale)
+  }, [measureHfov, measureScale]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply calibration: solve scale so the current measured distance = known value
+  const applyCalibration = () => {
+    const known = parseFloat(calibInput)
+    if (!known || !measureResult?.distance_m) return
+    // distance scales linearly, so new scale = known / (current_raw_distance)
+    const rawDist = measureResult.distance_m / measureScale
+    setMeasureScale(known / rawDist)
+    setCalibInput('')
   }
 
   // ── Portrait blur (debounced — reuses stored depth, no re-inference) ─────────
@@ -919,6 +976,139 @@ export default function Depth() {
                     {depthResult.image_w} × {depthResult.image_h} px · {depthResult.colormap} colormap ·{' '}
                     {depthResult.depth_stats.is_metric ? 'metric depth (metres)' : 'relative depth'}
                   </p>
+
+                  {/* ── Click-to-measure section (metric models only) ── */}
+                  {depthResult.result_id && (
+                    <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                        <Btn variant={showMeasure ? 'primary' : 'secondary'} size="sm"
+                          disabled={!depthResult.depth_stats.is_metric}
+                          onClick={() => { setShowMeasure(v => !v); setMeasurePts([]); setMeasureResult(null) }}>
+                          📏 {showMeasure ? 'Hide Measure' : 'Measure Distance'}
+                        </Btn>
+                        {!depthResult.depth_stats.is_metric && (
+                          <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+                            Switch to a <strong>Metric</strong> model (Indoor/Outdoor) to measure real distances
+                          </span>
+                        )}
+                        {showMeasure && measurePts.length > 0 && (
+                          <Btn variant="ghost" size="sm"
+                            onClick={() => { setMeasurePts([]); setMeasureResult(null) }}>
+                            <XCircle size={12} /> Clear points
+                          </Btn>
+                        )}
+                      </div>
+
+                      {showMeasure && depthResult.depth_stats.is_metric && (
+                        <>
+                          <p style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>
+                            Click <strong>two points</strong> on the image to measure the distance between them.
+                            {measurePts.length === 1 && ' (1 point set — click the second)'}
+                          </p>
+
+                          {/* Clickable image with point markers + line */}
+                          <div style={{ position: 'relative', display: 'inline-block', width: '100%',
+                            lineHeight: 0, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                            <img
+                              src={'data:image/png;base64,' + depthResult.depth_colorized_b64}
+                              alt="measure"
+                              onClick={onMeasureClick}
+                              style={{ width: '100%', display: 'block', maxHeight: 500,
+                                objectFit: 'contain', background: '#000', cursor: 'crosshair' }}
+                            />
+                            <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%',
+                              pointerEvents: 'none' }}>
+                              {measurePts.length === 2 && (
+                                <line x1={`${measurePts[0].x * 100}%`} y1={`${measurePts[0].y * 100}%`}
+                                  x2={`${measurePts[1].x * 100}%`} y2={`${measurePts[1].y * 100}%`}
+                                  stroke="#fff" strokeWidth={2} strokeDasharray="5,4" />
+                              )}
+                              {measurePts.map((p, i) => (
+                                <g key={i}>
+                                  <circle cx={`${p.x * 100}%`} cy={`${p.y * 100}%`} r={6}
+                                    fill="var(--accent)" stroke="#fff" strokeWidth={2} />
+                                  <text x={`${p.x * 100}%`} y={`${p.y * 100}%`} dy={-10} dx={8}
+                                    fill="#fff" fontSize={12} fontWeight={700}
+                                    style={{ textShadow: '0 1px 3px #000' }}>{i + 1}</text>
+                                </g>
+                              ))}
+                            </svg>
+                          </div>
+
+                          {/* Result */}
+                          {measureResult && !measureResult.error && (
+                            <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 8,
+                              background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)',
+                                  fontFamily: 'JetBrains Mono, monospace' }}>
+                                  {measureResult.distance_m < 1
+                                    ? `${(measureResult.distance_m * 100).toFixed(1)} cm`
+                                    : `${measureResult.distance_m.toFixed(2)} m`}
+                                </span>
+                                <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+                                  P1: {measureResult.point1.depth_m}m · P2: {measureResult.point2.depth_m}m deep ·
+                                  focal: {measureResult.fx_source}
+                                </span>
+                              </div>
+                              {measureResult.warnings?.map((w: string, i: number) => (
+                                <p key={i} style={{ fontSize: 11, color: '#d29922', marginTop: 4,
+                                  display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <AlertTriangle size={11} /> {w}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {measureResult?.error && (
+                            <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 6, fontSize: 12,
+                              background: 'rgba(248,81,73,0.1)', border: '1px solid rgba(248,81,73,0.3)',
+                              color: '#f85149' }}>{measureResult.error}</div>
+                          )}
+
+                          {/* Controls: FOV + calibration */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11,
+                                color: 'var(--text3)', marginBottom: 3 }}>
+                                <span>Camera FOV</span><span>{measureHfov}°</span>
+                              </div>
+                              <input type="range" min={40} max={100} step={1} value={measureHfov}
+                                onChange={e => setMeasureHfov(Number(e.target.value))}
+                                style={{ width: '100%', accentColor: 'var(--accent)' }} />
+                              <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>
+                                ~65° = typical phone. Wider FOV if the photo looks zoomed-out.
+                              </p>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 3 }}>
+                                Calibrate {measureScale !== 1 && `(×${measureScale.toFixed(3)})`}
+                              </div>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <input type="number" placeholder="known dist (m)" value={calibInput}
+                                  onChange={e => setCalibInput(e.target.value)}
+                                  disabled={measurePts.length !== 2}
+                                  style={{ flex: 1, padding: '5px 8px', fontSize: 12, borderRadius: 6,
+                                    background: 'var(--surface2)', border: '1px solid var(--border)',
+                                    color: 'var(--text)', outline: 'none' }} />
+                                <Btn variant="secondary" size="sm" onClick={applyCalibration}
+                                  disabled={!calibInput || measurePts.length !== 2}>Set</Btn>
+                              </div>
+                              <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>
+                                Measure a known length, enter its real value to correct scale.
+                              </p>
+                            </div>
+                          </div>
+
+                          {measureResult?.disclaimer && (
+                            <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 8, lineHeight: 1.5,
+                              fontStyle: 'italic' }}>
+                              ⚠ {measureResult.disclaimer}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* ── Portrait / Depth-of-Field blur section ── */}
                   {depthResult.result_id && (

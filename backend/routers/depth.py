@@ -18,6 +18,13 @@ METRIC_MODELS = {
     "depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf",
 }
 
+# Max depth each metric model can represent (sigmoid * max_depth clamp).
+# Depth values near these are saturated/unreliable for measurement.
+METRIC_MAX_DEPTH = {
+    "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf":  20.0,
+    "depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf": 80.0,
+}
+
 CV2_COLORMAPS = {
     "inferno": 8,   # cv2.COLORMAP_INFERNO
     "magma":   16,  # cv2.COLORMAP_MAGMA
@@ -115,16 +122,18 @@ def _sidebyside(orig_pil, colorized_bgr):
     return np.hstack([orig_bgr, depth_rs])
 
 
-def _build_response(orig_pil, depth_np, colormap: str, model_id: str):
+def _build_response(orig_pil, depth_np, colormap: str, model_id: str,
+                    exif_focal35: float = 0.0):
     """Produce the complete JSON response for single-image endpoints."""
     from PIL import Image as PILImage
     import numpy as np
 
-    # Resize depth to original image dimensions
+    # Resize depth to original image dimensions.
+    # For METRIC models depth_np is absolute metres — depth_rs preserves that.
     w, h = orig_pil.size
     depth_rs = np.array(
         PILImage.fromarray(depth_np).resize((w, h), PILImage.BILINEAR)
-    )
+    ).astype("float32")
 
     depth_u8, uniform, d_min, d_max = _normalize_depth(depth_rs)
     colorized = _colorize(depth_u8, colormap)
@@ -135,7 +144,7 @@ def _build_response(orig_pil, depth_np, colormap: str, model_id: str):
     span = max(float(d_max - d_min), 1e-6)
     depth_norm = ((depth_rs - d_min) / span).astype("float32")
 
-    # Store result for point cloud endpoint (keep for 1 hour)
+    # Store result for point cloud + measure endpoints (keep for 1 hour)
     result_id = uuid.uuid4().hex
     orig_rgb  = np.array(orig_pil.convert("RGB"), dtype=np.uint8)
     # Purge results older than 1 hour to avoid memory creep
@@ -144,8 +153,15 @@ def _build_response(orig_pil, depth_np, colormap: str, model_id: str):
     for k in expired:
         del _depth_results[k]
     _depth_results[result_id] = {
-        "depth_norm": depth_norm,   # float32 [0..1], bright = close
-        "orig_rgb":   orig_rgb,     # uint8 RGB
+        "depth_norm":   depth_norm,   # float32 [0..1] — for point cloud
+        # Raw depth in METRES (metric models only) — required for measurement.
+        # None for relative models (no real-world scale available).
+        "depth_meters": depth_rs.copy() if is_metric else None,
+        "orig_rgb":     orig_rgb,     # uint8 RGB
+        "is_metric":    is_metric,
+        "model_id":     model_id,
+        "max_depth":    METRIC_MAX_DEPTH.get(model_id, 0.0),
+        "exif_focal35": float(exif_focal35),
         "w": w, "h": h, "ts": now,
     }
 
@@ -165,8 +181,27 @@ def _build_response(orig_pil, depth_np, colormap: str, model_id: str):
         "colormap":   colormap,
         "image_w":    w,
         "image_h":    h,
-        "result_id":  result_id,   # use this to fetch point cloud
+        "result_id":  result_id,   # use this to fetch point cloud / measure
     }
+
+
+def _read_exif_focal35(pil_img) -> float:
+    """
+    Return the 35mm-equivalent focal length from EXIF, or 0.0 if absent.
+    This lets us compute true fx = (f35 / 36) * image_width without needing
+    the sensor size.  Most social-media images have EXIF stripped → returns 0.
+    """
+    try:
+        exif = pil_img.getexif()
+        if not exif:
+            return 0.0
+        # 0xA405 = FocalLengthIn35mmFilm
+        f35 = exif.get(0xA405)
+        if f35:
+            return float(f35)
+    except Exception:
+        pass
+    return 0.0
 
 
 # ─── Image inference (file upload) ───────────────────────────────────────────
@@ -179,13 +214,15 @@ async def depth_infer(
     from PIL import Image as PILImage
     raw = await file.read()
     try:
-        img = PILImage.open(io.BytesIO(raw)).convert("RGB")
+        img_full = PILImage.open(io.BytesIO(raw))
+        focal35  = _read_exif_focal35(img_full)   # read EXIF before convert/resize
+        img      = img_full.convert("RGB")
     except Exception as exc:
         raise HTTPException(400, f"Cannot read image: {exc}")
     img     = _cap_image(img, 1024)
     pipe    = _get_depth_pipe(model_id)
     depth   = _run_depth(pipe, img)
-    return _build_response(img, depth, colormap, model_id)
+    return _build_response(img, depth, colormap, model_id, exif_focal35=focal35)
 
 
 # ─── Image inference (URL) ────────────────────────────────────────────────────
@@ -590,3 +627,104 @@ def depth_portrait(result_id: str,
     out    = (lo_img * (1 - frac) + hi_img * frac).astype(np.uint8)
 
     return {"image_b64": _to_b64(out)}
+
+
+# ─── Click-to-measure (metric models only) ───────────────────────────────────
+
+def _sample_depth_median(depth_m, px: int, py: int, r: int = 2):
+    """5x5 median depth around (px,py) — robust to edge/outlier pixels.
+    Returns (median_depth, relative_std) where relative_std flags edge noise."""
+    import numpy as np
+    h, w = depth_m.shape
+    x0, x1 = max(0, px - r), min(w, px + r + 1)
+    y0, y1 = max(0, py - r), min(h, py + r + 1)
+    patch = depth_m[y0:y1, x0:x1]
+    if patch.size == 0:
+        return 0.0, 0.0
+    med = float(np.median(patch))
+    rel_std = float(patch.std() / med) if med > 1e-6 else 0.0
+    return med, rel_std
+
+
+@router.get("/depth/measure/{result_id}")
+def depth_measure(result_id: str,
+                  x1: float, y1: float, x2: float, y2: float,  # normalised 0..1
+                  hfov_deg: float = 65.0,    # assumed horizontal FOV if no EXIF
+                  scale:    float = 1.0):    # user calibration multiplier
+    """
+    Measure the real-world distance (metres) between two clicked points,
+    using the stored RAW METRIC depth map.  Metric models only.
+
+    Math (pinhole back-projection):
+        fx = fy = (W/2) / tan(HFOV/2)   [or EXIF: (f35/36)*W]
+        cx, cy = W/2, H/2
+        X = (u-cx)*Z/fx,  Y = (v-cy)*Z/fy,  Z = depth_metres
+        distance = ||P2 - P1|| * scale
+
+    Depth is sampled as a 5x5 median at each point (robust to edges).
+    """
+    import numpy as np, math
+
+    rec = _depth_results.get(result_id)
+    if not rec:
+        raise HTTPException(404, "Result not found — re-run depth estimation first.")
+    if not rec.get("is_metric") or rec.get("depth_meters") is None:
+        raise HTTPException(400,
+            "Distance measurement requires a metric depth model "
+            "(Metric Indoor / Metric Outdoor). The selected model only "
+            "produces relative depth, which has no real-world scale.")
+
+    depth_m = rec["depth_meters"]            # [H,W] float32 in metres
+    h, w    = depth_m.shape
+
+    # ── Resolve focal length (px) ────────────────────────────────────────────
+    f35 = rec.get("exif_focal35", 0.0)
+    if f35 and f35 > 0:
+        fx = (f35 / 36.0) * w               # full-frame width = 36 mm
+        fx_source = f"EXIF ({f35:.0f}mm equiv.)"
+    else:
+        hfov = max(20.0, min(float(hfov_deg), 120.0))
+        fx = (w / 2.0) / math.tan(math.radians(hfov) / 2.0)
+        fx_source = f"assumed {hfov:.0f}° FOV"
+    fy = fx
+    cx, cy = w / 2.0, h / 2.0
+
+    # ── Pixel coordinates (clamp normalised → pixel) ────────────────────────
+    px1 = int(round(min(max(x1, 0.0), 1.0) * (w - 1)))
+    py1 = int(round(min(max(y1, 0.0), 1.0) * (h - 1)))
+    px2 = int(round(min(max(x2, 0.0), 1.0) * (w - 1)))
+    py2 = int(round(min(max(y2, 0.0), 1.0) * (h - 1)))
+
+    z1, rel1 = _sample_depth_median(depth_m, px1, py1)
+    z2, rel2 = _sample_depth_median(depth_m, px2, py2)
+
+    # ── Back-project to camera space (no Y/Z flip — Euclidean is sign-safe) ──
+    def to_cam(px, py, z):
+        return ((px - cx) * z / fx, (py - cy) * z / fy, z)
+    X1, Y1, Z1 = to_cam(px1, py1, z1)
+    X2, Y2, Z2 = to_cam(px2, py2, z2)
+
+    dist = math.sqrt((X2 - X1) ** 2 + (Y2 - Y1) ** 2 + (Z2 - Z1) ** 2)
+    dist *= max(0.01, float(scale))
+
+    # ── Warnings ─────────────────────────────────────────────────────────────
+    warnings = []
+    max_depth = rec.get("max_depth", 0.0)
+    if max_depth > 0:
+        if z1 >= 0.95 * max_depth or z2 >= 0.95 * max_depth:
+            warnings.append(f"A point is near the model's {max_depth:.0f} m limit — depth unreliable there.")
+    if rel1 > 0.15 or rel2 > 0.15:
+        warnings.append("A point sits on a depth edge — click on a flat surface for accuracy.")
+
+    return {
+        "distance_m":  round(dist, 3),
+        "point1":      {"depth_m": round(z1, 3), "x": px1, "y": py1},
+        "point2":      {"depth_m": round(z2, 3), "x": px2, "y": py2},
+        "fx_px":       round(fx, 1),
+        "fx_source":   fx_source,
+        "warnings":    warnings,
+        "disclaimer":  ("Estimate only — not for precision, safety, medical, "
+                        "or construction use. Front-to-back (depth) distances are "
+                        "more reliable than side-to-side. Calibrate with a known "
+                        "distance for best accuracy."),
+    }
