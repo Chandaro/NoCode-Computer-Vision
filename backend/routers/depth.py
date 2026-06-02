@@ -530,3 +530,63 @@ def depth_pointcloud_download(result_id: str, subsample: int = 4, fx: float = 0.
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="pointcloud_{result_id[:8]}.ply"'},
     )
+
+
+# ─── Depth-of-field / Portrait blur ───────────────────────────────────────────
+
+@router.get("/depth/portrait/{result_id}")
+def depth_portrait(result_id: str,
+                   focus:    float = 0.6,    # focus plane (0=far, 1=near)
+                   strength: int   = 18,     # max blur kernel radius
+                   aperture: float = 0.18):  # focus band half-width (depth-of-field)
+    """
+    Depth-of-field "portrait mode" blur, computed from the stored depth map.
+
+    Pixels whose depth is near the `focus` plane stay sharp; pixels farther
+    from it (in depth) get progressively blurred — a realistic bokeh effect.
+    Reuses the depth result, so no re-inference is needed (instant slider drag).
+
+    Returns: { image_b64 } — colorized blurred result as base64 PNG.
+    """
+    import cv2, numpy as np
+
+    rec = _depth_results.get(result_id)
+    if not rec:
+        raise HTTPException(404, "Result not found — re-run depth estimation first.")
+
+    depth = rec["depth_norm"]                       # [H,W] float32, 1=near
+    rgb   = rec["orig_rgb"]                          # [H,W,3] uint8 RGB
+    bgr   = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    h, w  = depth.shape
+
+    # Blur amount per pixel = distance from the focus plane in depth space,
+    # outside an in-focus band of half-width `aperture`.
+    dist     = np.abs(depth - float(focus))
+    blur_amt = np.clip((dist - float(aperture)) / max(1e-6, 1.0 - aperture), 0.0, 1.0)
+
+    strength = max(1, min(int(strength), 60))
+
+    # Build a small pyramid of increasingly blurred versions, then blend each
+    # pixel from the level matching its blur amount.  Far cheaper than a
+    # per-pixel variable kernel and visually equivalent for a preview.
+    levels = 6
+    blurred_stack = [bgr.astype(np.float32)]
+    cur = bgr.copy()
+    for i in range(1, levels):
+        k = max(1, int(strength * i / (levels - 1)))
+        k = k * 2 + 1                                # odd kernel
+        cur = cv2.GaussianBlur(bgr, (k, k), 0)
+        blurred_stack.append(cur.astype(np.float32))
+
+    # For each pixel pick the two nearest pyramid levels and lerp between them.
+    lvl_f = blur_amt * (levels - 1)
+    lo    = np.floor(lvl_f).astype(np.int32)
+    hi    = np.clip(lo + 1, 0, levels - 1)
+    frac  = (lvl_f - lo)[..., None]                  # [H,W,1]
+
+    stack = np.stack(blurred_stack, axis=0)          # [levels,H,W,3]
+    lo_img = np.take_along_axis(stack, lo[None, ..., None].repeat(3, -1), axis=0)[0]
+    hi_img = np.take_along_axis(stack, hi[None, ..., None].repeat(3, -1), axis=0)[0]
+    out    = (lo_img * (1 - frac) + hi_img * frac).astype(np.uint8)
+
+    return {"image_b64": _to_b64(out)}

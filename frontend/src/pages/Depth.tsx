@@ -86,6 +86,14 @@ export default function Depth() {
   const [imgError,       setImgError]       = useState('')
   const [showPointCloud, setShowPointCloud] = useState(false)
   const [pointSize,      setPointSize]      = useState(2)
+  // ── Portrait / depth-of-field blur ──
+  const [showPortrait,  setShowPortrait]  = useState(false)
+  const [pFocus,        setPFocus]        = useState(0.6)
+  const [pStrength,     setPStrength]     = useState(18)
+  const [pAperture,     setPAperture]     = useState(0.18)
+  const [portraitSrc,   setPortraitSrc]   = useState('')
+  const [portraitBusy,  setPortraitBusy]  = useState(false)
+  const portraitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const imgFileRef = useRef<HTMLInputElement>(null)
 
   // ── Video mode ──────────────────────────────────────────────────────────────
@@ -133,7 +141,7 @@ export default function Depth() {
   // ── Image inference ──────────────────────────────────────────────────────────
   const runImageInfer = async (file: File) => {
     const blobUrl = URL.createObjectURL(file)
-    setOrigSrc(blobUrl); setDepthResult(null); setImgError(''); setShowPointCloud(false)
+    setOrigSrc(blobUrl); setDepthResult(null); setImgError(''); setShowPointCloud(false); setShowPortrait(false); setPortraitSrc('')
     setImgRunning(true)
     try {
       const fd = new FormData()
@@ -149,7 +157,7 @@ export default function Depth() {
 
   const runImageInferUrl = async () => {
     if (!imgUrl.trim()) return
-    setOrigSrc(imgUrl.trim()); setDepthResult(null); setImgError(''); setShowPointCloud(false)
+    setOrigSrc(imgUrl.trim()); setDepthResult(null); setImgError(''); setShowPointCloud(false); setShowPortrait(false); setPortraitSrc('')
     setImgRunning(true)
     try {
       const fd = new FormData()
@@ -321,6 +329,28 @@ export default function Depth() {
       setReconError(e?.response?.data?.detail ?? e?.message ?? 'Upload failed')
     }
   }
+
+  // ── Portrait blur (debounced — reuses stored depth, no re-inference) ─────────
+  const fetchPortrait = useCallback((rid: string, focus: number, strength: number, aperture: number) => {
+    if (portraitTimer.current) clearTimeout(portraitTimer.current)
+    portraitTimer.current = setTimeout(async () => {
+      setPortraitBusy(true)
+      try {
+        const res = await api.get(
+          `/depth/portrait/${rid}?focus=${focus}&strength=${strength}&aperture=${aperture}`
+        )
+        setPortraitSrc('data:image/png;base64,' + res.data.image_b64)
+      } catch { /* ignore */ }
+      finally { setPortraitBusy(false) }
+    }, 180)
+  }, [])
+
+  // Re-render the blur whenever a control changes (while the panel is open)
+  useEffect(() => {
+    if (showPortrait && depthResult?.result_id) {
+      fetchPortrait(depthResult.result_id, pFocus, pStrength, pAperture)
+    }
+  }, [showPortrait, pFocus, pStrength, pAperture, depthResult?.result_id, fetchPortrait])
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
   const downloadB64 = (b64: string, filename: string) => {
@@ -889,6 +919,80 @@ export default function Depth() {
                     {depthResult.image_w} × {depthResult.image_h} px · {depthResult.colormap} colormap ·{' '}
                     {depthResult.depth_stats.is_metric ? 'metric depth (metres)' : 'relative depth'}
                   </p>
+
+                  {/* ── Portrait / Depth-of-Field blur section ── */}
+                  {depthResult.result_id && (
+                    <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                        <Btn variant={showPortrait ? 'primary' : 'secondary'} size="sm"
+                          onClick={() => setShowPortrait(v => !v)}>
+                          <ImageIcon size={12} />
+                          {showPortrait ? 'Hide Portrait Blur' : 'Portrait Blur (bokeh)'}
+                        </Btn>
+                        {showPortrait && portraitSrc && (
+                          <Btn variant="ghost" size="sm"
+                            onClick={() => downloadB64(portraitSrc.split(',')[1], 'portrait_blur.png')}>
+                            <Download size={12} /> Download
+                          </Btn>
+                        )}
+                        {showPortrait && portraitBusy && (
+                          <Loader size={13} className="animate-spin" style={{ color: 'var(--accent)' }} />
+                        )}
+                      </div>
+
+                      {showPortrait && (
+                        <>
+                          {/* Sliders */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
+                            gap: 12, marginBottom: 10 }}>
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11,
+                                color: 'var(--text3)', marginBottom: 3 }}>
+                                <span>Focus</span><span>{pFocus < 0.4 ? 'far' : pFocus > 0.7 ? 'near' : 'mid'}</span>
+                              </div>
+                              <input type="range" min={0} max={1} step={0.02} value={pFocus}
+                                onChange={e => setPFocus(Number(e.target.value))}
+                                style={{ width: '100%', accentColor: 'var(--accent)' }} />
+                            </div>
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11,
+                                color: 'var(--text3)', marginBottom: 3 }}>
+                                <span>Blur</span><span>{pStrength}</span>
+                              </div>
+                              <input type="range" min={2} max={50} step={1} value={pStrength}
+                                onChange={e => setPStrength(Number(e.target.value))}
+                                style={{ width: '100%', accentColor: 'var(--accent)' }} />
+                            </div>
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11,
+                                color: 'var(--text3)', marginBottom: 3 }}>
+                                <span>Focus depth</span><span>{Math.round(pAperture * 100)}%</span>
+                              </div>
+                              <input type="range" min={0.05} max={0.5} step={0.01} value={pAperture}
+                                onChange={e => setPAperture(Number(e.target.value))}
+                                style={{ width: '100%', accentColor: 'var(--accent)' }} />
+                            </div>
+                          </div>
+
+                          {portraitSrc ? (
+                            <img src={portraitSrc} alt="portrait blur"
+                              style={{ width: '100%', borderRadius: 6, border: '1px solid var(--border)',
+                                display: 'block', maxHeight: 500, objectFit: 'contain', background: '#000' }} />
+                          ) : (
+                            <div style={{ border: '1px dashed var(--border2)', borderRadius: 8,
+                              padding: '32px', textAlign: 'center', color: 'var(--text3)', fontSize: 12 }}>
+                              {portraitBusy ? 'Rendering…' : 'Adjust sliders to render'}
+                            </div>
+                          )}
+                          <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
+                            Drag <strong>Focus</strong> to pick what stays sharp · <strong>Blur</strong> sets bokeh
+                            strength · <strong>Focus depth</strong> widens the in-focus band. Computed from the
+                            depth map — no re-processing.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* ── 3D Point Cloud section ── */}
                   <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
