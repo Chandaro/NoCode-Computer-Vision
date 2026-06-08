@@ -1080,11 +1080,11 @@ function buildScene(
   sun.position.set(4, 10, 6)
   scene.add(sun)
 
-  // Depth fog
-  scene.fog = new THREE.FogExp2(0x0d0d0f, 0.016)
+  // Depth fog (light, so distant layers stay legible)
+  scene.fog = new THREE.FogExp2(0x0d0d0f, 0.011)
 
   const shapes   = computeAllShapes(layers, inputH, inputW)
-  const MAX_PLANES = 10
+  const MAX_PLANES = 6        // fewer stacked planes = clearer, less visual noise
   const NORM_MAX   = 1.4
   const BOX_DEPTH  = 0.055
 
@@ -1132,7 +1132,8 @@ function buildScene(
 
       const labelType = si === 0 ? 'input' : layers[si - 1].type
       const sprite    = makeLabel(LAYER_DISPLAY[labelType] ?? labelType, `${N}`, colorCSS)
-      sprite.position.set(0, -(height / 2) - 0.62, z)
+      const labelDrop = 0.62 + (si % 2) * 0.95
+      sprite.position.set(0, -(height / 2) - labelDrop, z)
       scene.add(sprite)
 
     } else {
@@ -1145,22 +1146,22 @@ function buildScene(
 
       for (let pi = 0; pi < nPlanes; pi++) {
         const t   = nPlanes > 1 ? pi / (nPlanes - 1) : 0
-        const ox  = pi * 0.09
-        const oy  = pi * 0.032
-        const oz  = pi * 0.075
+        const ox  = pi * 0.06
+        const oy  = pi * 0.022
+        const oz  = pi * 0.05
 
         const geo = new THREE.BoxGeometry(planeW, planeH, BOX_DEPTH)
         const actCanvas = activationCanvases?.[si]
         const mat = (viewMode === 'image' && actCanvas)
           ? new THREE.MeshBasicMaterial({
               map: new THREE.CanvasTexture(actCanvas),
-              transparent: true, opacity: 0.2 + t * 0.7,
+              transparent: true, opacity: 0.55 + t * 0.45,
               side: THREE.DoubleSide,
             })
           : viewMode === 'image'
           ? new THREE.MeshBasicMaterial({
               map: makeLayerTexture(layerType, colorHex, si * 100 + pi),
-              transparent: true, opacity: 0.2 + t * 0.7,
+              transparent: true, opacity: 0.55 + t * 0.45,
               side: THREE.DoubleSide,
             })
           : new THREE.MeshStandardMaterial({
@@ -1183,7 +1184,9 @@ function buildScene(
       const labelType = si === 0 ? 'input' : layers[si - 1].type
       const shapeText = `${C}×${H}×${W}`
       const sprite    = makeLabel(LAYER_DISPLAY[labelType] ?? labelType, shapeText, colorCSS)
-      sprite.position.set(0, -(planeH / 2) - 0.65, z)
+      // Alternate label height so neighbouring labels never overlap on screen
+      const labelDrop = 0.65 + (si % 2) * 0.95
+      sprite.position.set(0, -(planeH / 2) - labelDrop, z)
       scene.add(sprite)
     }
 
@@ -1499,7 +1502,7 @@ export default function CustomModel() {
   const canvas2DRef = useRef<HTMLCanvasElement>(null)
 
   // Orbit state — slightly dramatic angle by default
-  const orbitRef = useRef({ theta: 0.45, phi: 0.88, radius: 11, dragging: false, lastX: 0, lastY: 0 })
+  const orbitRef = useRef({ theta: 0.5, phi: 0.92, radius: 13, dragging: false, lastX: 0, lastY: 0 })
 
   // Free-fly camera (Blender/UE style)
   const [flyMode, setFlyMode] = useState(false)
@@ -2445,7 +2448,7 @@ export default function CustomModel() {
                 {flyMode ? '✈ Exit Fly' : '✈ Fly Mode'}
               </button>
               <button
-                onClick={() => { if (flyMode) exitFlyMode(); orbitRef.current = { ...orbitRef.current, theta: 0.45, phi: 0.88, radius: 11 }; updateCamera() }}
+                onClick={() => { if (flyMode) exitFlyMode(); orbitRef.current = { ...orbitRef.current, theta: 0.5, phi: 0.92, radius: 13 }; updateCamera() }}
                 style={{
                   padding: '4px 10px', borderRadius: 5,
                   background: 'rgba(15,15,18,0.85)', border: '1px solid var(--border2)',
