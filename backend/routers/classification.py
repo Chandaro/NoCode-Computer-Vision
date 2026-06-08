@@ -475,6 +475,36 @@ def cls_dataset_stats(project_id: int, session: Session = Depends(get_session)):
     return _dataset_stats(project_id, project.classes)
 
 
+@router.get("/dataset/sample")
+def cls_dataset_sample(project_id: int, session: Session = Depends(get_session)):
+    """
+    Return ONE random image file from this project's classification dataset.
+    Used by the Conv Builder 3D view to show a real sample as the input layer.
+    Falls back to a 404 when the dataset is empty (the UI then keeps its
+    default synthetic image).
+    """
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    proj_dir = os.path.join(CLS_DATA_DIR, str(project_id))
+    candidates: list[str] = []
+    if os.path.isdir(proj_dir):
+        for cls in os.listdir(proj_dir):
+            cls_dir = os.path.join(proj_dir, cls)
+            if not os.path.isdir(cls_dir):
+                continue
+            for f in os.listdir(cls_dir):
+                if os.path.splitext(f)[1].lower() in IMG_EXTS:
+                    candidates.append(os.path.join(cls_dir, f))
+
+    if not candidates:
+        raise HTTPException(404, "No classification dataset images yet")
+
+    chosen = random.choice(candidates)
+    return FileResponse(chosen)
+
+
 @router.post("/dataset/upload/{class_name}")
 async def cls_dataset_upload(project_id: int, class_name: str,
                               files: list[UploadFile] = File(...),

@@ -857,6 +857,11 @@ function draw2DScene(
 // makeLayerTextureCanvas returns the raw canvas (shared by 2D and 3D views).
 // makeLayerTexture wraps it as a Three.js texture for the 3D renderer.
 
+// A real sample image from the project dataset, shown as the INPUT layer.
+// Stays null until one loads; the input case then falls back to the
+// synthetic "house" image so there is always something to show.
+let sampleInputImage: HTMLImageElement | null = null
+
 function makeLayerTextureCanvas(layerType: string, colorHex: number, seed: number): HTMLCanvasElement {
   const S = 64
   const canvas = document.createElement('canvas')
@@ -880,7 +885,21 @@ function makeLayerTextureCanvas(layerType: string, colorHex: number, seed: numbe
 
   switch (layerType) {
     case 'input': {
-      // Simulate a natural image: sky/object/ground gradient with texture
+      // If a real dataset image is loaded, draw it (cover-fit). Otherwise
+      // fall back to the synthetic "house" sky/ground gradient.
+      if (sampleInputImage && sampleInputImage.complete && sampleInputImage.naturalWidth > 0) {
+        const img = sampleInputImage
+        const iw = img.naturalWidth, ih = img.naturalHeight
+        const scale = Math.max(S / iw, S / ih)        // cover
+        const dw = iw * scale, dh = ih * scale
+        try {
+          ctx.drawImage(img, (S - dw) / 2, (S - dh) / 2, dw, dh)
+          break
+        } catch {
+          // drawImage can throw if the image is tainted; fall through to default
+        }
+      }
+      // Default synthetic image (sky / object / ground gradient with texture)
       const gy = ctx.createLinearGradient(0, 0, 0, S)
       gy.addColorStop(0,    'rgba(25,70,160,1)')
       gy.addColorStop(0.35, 'rgba(70,170,70,1)')
@@ -1458,6 +1477,9 @@ export default function CustomModel() {
   const autoRotateRef = useRef(true)
   const [viewMode, setViewMode] = useState<'color' | 'image'>('color')
   const [viewDim,  setViewDim]  = useState<'3d' | '2d'>('3d')
+  // Bumped when a real dataset sample image finishes loading, to force the
+  // 3D / 2D scenes to regenerate their input texture with the real image.
+  const [sampleVersion, setSampleVersion] = useState(0)
   const canvas2DRef = useRef<HTMLCanvasElement>(null)
 
   // Orbit state — slightly dramatic angle by default
@@ -1616,14 +1638,32 @@ export default function CustomModel() {
     }
   }, [])
 
-  // Rebuild scene when layers / input size change
+  // Fetch a random sample image from the project dataset for the input layer.
+  // If none exists the synthetic "house" default stays.
+  useEffect(() => {
+    sampleInputImage = null   // reset on project change
+    let cancelled = false
+    const img = new Image()
+    img.crossOrigin = 'anonymous'   // allow drawImage onto the texture canvas
+    img.onload = () => {
+      if (cancelled) return
+      sampleInputImage = img
+      setSampleVersion(v => v + 1)   // trigger scene rebuild with the real image
+    }
+    img.onerror = () => { /* keep synthetic default */ }
+    // cache-bust so a fresh random image is picked each visit
+    img.src = `/api/projects/${projectId}/classification/dataset/sample?t=${Date.now()}`
+    return () => { cancelled = true }
+  }, [projectId])
+
+  // Rebuild scene when layers / input size / sample image change
   useEffect(() => {
     if (!sceneRef.current || !cameraRef.current) return
     const activations = viewMode === 'image' ? buildActivationSequence(layers, numClasses) : null
     buildScene(sceneRef.current, layers, inputH, inputW, particlesRef, numClasses, viewMode, activations)
     updateCamera()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layers, inputH, inputW, numClasses, viewMode])
+  }, [layers, inputH, inputW, numClasses, viewMode, sampleVersion])
 
   // ── Camera orbit ──────────────────────────────────────────────────────────
 
@@ -1723,7 +1763,7 @@ export default function CustomModel() {
       const activations = viewMode === 'image' ? buildActivationSequence(layers, numClasses) : null
       draw2DScene(c, layers, inputH, inputW, numClasses, activations)
     }
-  }, [viewDim, layers, inputH, inputW, numClasses, viewMode])
+  }, [viewDim, layers, inputH, inputW, numClasses, viewMode, sampleVersion])
 
   // Keep cameraUpdateRef current so the animation loop can call it without stale closure
   useEffect(() => {
