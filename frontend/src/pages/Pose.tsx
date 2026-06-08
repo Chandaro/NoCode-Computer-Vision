@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Download, Loader, Camera, CameraOff, Video, Image as ImageIcon, Activity } from 'lucide-react'
+import { Upload, Download, Loader, Camera, CameraOff, Video, Image as ImageIcon, Activity, RotateCcw } from 'lucide-react'
 import api, { type Project } from '../api'
 import { PageHeader, Card, Field, Select, Slider, Btn, Badge, ProgressBar } from '../components/ui'
+import PoseLab from '../components/PoseLab'
+import {
+  computeAngles, EXERCISES, initRep, stepRep,
+  type RepState,
+} from '../lib/poseAnalysis'
 
 // COCO 17-keypoint skeleton connections
 const SKELETON = [
@@ -28,14 +33,15 @@ interface Person {
 }
 
 // ── Skeleton SVG overlay ──────────────────────────────────────────────────────
-function SkeletonOverlay({ persons, width, height, skeleton }:
-  { persons: Person[]; width: number; height: number; skeleton: number[][] }) {
+function SkeletonOverlay({ persons, width, height, skeleton, showAngles }:
+  { persons: Person[]; width: number; height: number; skeleton: number[][]; showAngles?: boolean }) {
   return (
     <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
       viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
       {persons.map((person, pi) => {
         const kps: Keypoint[] = person.keypoints.map(([x, y]) => ({ x: x * width, y: y * height }))
         const confs = person.kp_conf
+        const jointAngles = showAngles ? computeAngles(person.keypoints, person.kp_conf) : []
         return (
           <g key={pi}>
             {/* Skeleton lines */}
@@ -62,6 +68,16 @@ function SkeletonOverlay({ persons, width, height, skeleton }:
                   fill={kpColor(ki)} stroke="rgba(0,0,0,0.5)" strokeWidth={1} />
               )
             })}
+            {/* Angle labels at joints */}
+            {jointAngles.filter(a => a.valid).map((a, ai) => (
+              <g key={`ang${ai}`}>
+                <rect x={a.vx * width + 6} y={a.vy * height - 9} width={34} height={15}
+                  rx={3} fill="rgba(94,106,210,0.85)" />
+                <text x={a.vx * width + 8} y={a.vy * height + 2}
+                  fill="#fff" fontSize={11} fontWeight={700}
+                  fontFamily="JetBrains Mono, monospace">{Math.round(a.angle)}°</text>
+              </g>
+            ))}
           </g>
         )
       })}
@@ -82,6 +98,14 @@ export default function Pose() {
   const [mode,       setMode]       = useState<Mode>('image')
   const [modelName,  setModelName]  = useState('yolo11n-pose.pt')
   const [conf,       setConf]       = useState(0.25)
+
+  // ── Learn & Explore ───────────────────────────────────────────────────────
+  const [showAngles, setShowAngles] = useState(true)
+  const [showLab,    setShowLab]    = useState(true)
+  // Rep counter (webcam)
+  const [exerciseId, setExerciseId] = useState('')   // '' = off
+  const [repState,   setRepState]   = useState<RepState>(initRep())
+  const repStateRef = useRef<RepState>(initRep())     // live state inside cam loop
 
   // ── Image mode ──────────────────────────────────────────────────────────────
   const [imgInputMode, setImgInputMode] = useState<'file'|'url'>('file')
@@ -224,13 +248,23 @@ export default function Pose() {
         fd.append('model_name', modelName)
         fd.append('conf', String(conf))
         const res = await api.post('/pose/webcam-frame', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-        setCamPersons(res.data.persons ?? [])
+        const persons = res.data.persons ?? []
+        setCamPersons(persons)
+        // Advance the rep counter on the first detected person
+        if (exerciseId && persons.length > 0) {
+          const ex = EXERCISES.find(e => e.id === exerciseId)
+          if (ex) {
+            const { state } = stepRep(repStateRef.current, persons[0].keypoints, persons[0].kp_conf, ex)
+            repStateRef.current = state
+            setRepState(state)
+          }
+        }
         camFpsCountRef.current += 1
         updateCamSize()
       } catch { /* drop frame */ }
       finally { camPendingRef.current = false }
     }, 'image/jpeg', 0.75)
-  }, [modelName, conf, updateCamSize])
+  }, [modelName, conf, updateCamSize, exerciseId])
 
   const startCamLoop = useCallback(() => {
     if (camIntervalRef.current) clearInterval(camIntervalRef.current)
@@ -317,6 +351,41 @@ export default function Pose() {
               min={0.1} max={0.9} step={0.05} format={v => `${Math.round(v * 100)}%`} />
           </Card>
 
+          {/* Learn & Explore controls */}
+          <Card style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)',
+              textTransform: 'uppercase', letterSpacing: '0.07em' }}>Learn &amp; Explore</p>
+
+            {[['Show joint angles', showAngles, setShowAngles],
+              ['Show analysis panel', showLab, setShowLab]].map(([label, val, set]) => (
+              <label key={label as string} style={{ display: 'flex', alignItems: 'center',
+                gap: 9, cursor: 'pointer', userSelect: 'none' }}>
+                <div onClick={() => (set as any)((v: boolean) => !v)}
+                  style={{ width: 30, height: 17, borderRadius: 9, flexShrink: 0,
+                    background: val ? 'var(--accent)' : 'var(--surface3)',
+                    border: `1px solid ${val ? 'var(--accent)' : 'var(--border2)'}`,
+                    position: 'relative', transition: 'background 0.15s' }}>
+                  <div style={{ position: 'absolute', top: 2, left: val ? 13 : 2,
+                    width: 11, height: 11, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.15s' }} />
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--text2)' }}>{label as string}</span>
+              </label>
+            ))}
+
+            {/* Exercise rep counter — webcam only */}
+            {mode === 'webcam' && (
+              <Field label="Exercise rep counter">
+                <Select value={exerciseId} onChange={v => {
+                  setExerciseId(v); repStateRef.current = initRep(); setRepState(initRep())
+                }}>
+                  <option value="">Off</option>
+                  {EXERCISES.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
+                </Select>
+              </Field>
+            )}
+          </Card>
+
           {/* Keypoint legend */}
           <Card style={{ padding: 14 }}>
             <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Skeleton</p>
@@ -387,7 +456,8 @@ export default function Pose() {
                     style={{ width: '100%', borderRadius: 6, display: 'block', border: '1px solid var(--border)' }} />
                   {imgPersons.length > 0 && (
                     <SkeletonOverlay persons={imgPersons}
-                      width={imgRendered.w} height={imgRendered.h} skeleton={imgSkeleton} />
+                      width={imgRendered.w} height={imgRendered.h} skeleton={imgSkeleton}
+                      showAngles={showAngles} />
                   )}
                 </div>
               ) : (
@@ -404,7 +474,13 @@ export default function Pose() {
                   borderRadius: 6, fontSize: 12, color: 'var(--text2)' }}>
                   {imgPersons.length} person{imgPersons.length !== 1 ? 's' : ''} detected
                   {imgPersons.length > 0 && ` · avg confidence ${(imgPersons.reduce((s, p) => s + p.conf, 0) / imgPersons.length * 100).toFixed(0)}%`}
+                  {imgPersons.length > 1 && ' · analysis shown for person 1'}
                 </div>
+              )}
+
+              {/* Educational analysis for the first detected person */}
+              {showLab && imgPersons.length > 0 && (
+                <PoseLab keypoints={imgPersons[0].keypoints} kpConf={imgPersons[0].kp_conf} />
               )}
             </Card>
           )}
@@ -536,16 +612,50 @@ export default function Pose() {
 
                 {camActive && camPersons.length > 0 && (
                   <SkeletonOverlay persons={camPersons}
-                    width={camRendered.w} height={camRendered.h} skeleton={SKELETON} />
+                    width={camRendered.w} height={camRendered.h} skeleton={SKELETON}
+                    showAngles={showAngles} />
+                )}
+
+                {/* Rep counter HUD */}
+                {camActive && exerciseId && (
+                  <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10,
+                    background: 'rgba(0,0,0,0.7)', borderRadius: 10, padding: '10px 16px',
+                    display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div>
+                      <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)',
+                        textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        {EXERCISES.find(e => e.id === exerciseId)?.label} reps
+                      </p>
+                      <p style={{ fontSize: 32, fontWeight: 800, color: '#fff', lineHeight: 1,
+                        fontFamily: 'JetBrains Mono, monospace' }}>{repState.count}</p>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5,
+                        background: repState.phase === 'down' ? '#f0a500' : '#3fb950',
+                        color: '#000', fontWeight: 700 }}>
+                        {repState.phase === 'down' ? 'DOWN' : 'UP'}
+                      </span>
+                      {!isNaN(repState.angle) && (
+                        <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 3,
+                          fontFamily: 'JetBrains Mono, monospace' }}>{Math.round(repState.angle)}°</p>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
               <canvas ref={camCanvasRef} style={{ display: 'none' }} />
 
-              <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <Btn variant={camActive ? 'ghost' : 'primary'} onClick={camActive ? stopCam : startCam}
                   style={{ ...(camActive ? { color: 'var(--red, #f87171)', borderColor: 'var(--red, #f87171)' } : {}) }}>
                   {camActive ? <><CameraOff size={13} /> Stop</> : <><Camera size={13} /> Start Camera</>}
                 </Btn>
+                {exerciseId && (
+                  <Btn variant="ghost" size="sm"
+                    onClick={() => { repStateRef.current = initRep(); setRepState(initRep()) }}>
+                    <RotateCcw size={12} /> Reset reps
+                  </Btn>
+                )}
                 {camActive && (
                   <span style={{ fontSize: 12, color: 'var(--text3)' }}>
                     {camPersons.length} person{camPersons.length !== 1 ? 's' : ''} detected
@@ -553,6 +663,20 @@ export default function Pose() {
                 )}
                 {camError && <span style={{ fontSize: 11, color: 'var(--red, #f87171)' }}>{camError}</span>}
               </div>
+
+              {/* Exercise hint */}
+              {exerciseId && (
+                <div style={{ padding: '0 16px 12px', fontSize: 11, color: 'var(--text3)' }}>
+                  💡 {EXERCISES.find(e => e.id === exerciseId)?.hint}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Educational analysis for webcam (first person) */}
+          {mode === 'webcam' && showLab && camActive && camPersons.length > 0 && (
+            <Card style={{ padding: 16 }}>
+              <PoseLab keypoints={camPersons[0].keypoints} kpConf={camPersons[0].kp_conf} />
             </Card>
           )}
         </div>
