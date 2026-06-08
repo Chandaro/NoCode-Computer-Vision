@@ -168,3 +168,19 @@ textarea:focus {
   fill: var(--text3);
 }
 .recharts-tooltip-wrapper { filter: none; }
+
+/* ── Modal / popup animations ───────────────────────────────────────────────── */
+@keyframes guideBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes guideBackdropOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes guideCardIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes guideCardOut {
+  from { opacity: 1; transform: translateY(0)    scale(1); }
+  to   { opacity: 0; transform: translateY(16px) scale(0.97); }
+}
+.guide-backdrop-in  { animation: guideBackdropIn  0.18s ease-out both; }
+.guide-backdrop-out { animation: guideBackdropOut 0.16s ease-in  both; }
+.guide-card-in  { animation: guideCardIn  0.26s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.guide-card-out { animation: guideCardOut 0.16s ease-in both; }

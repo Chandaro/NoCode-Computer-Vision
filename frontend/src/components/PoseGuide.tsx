@@ -3,10 +3,10 @@
  * and what each tool is for. Written for students with no prior knowledge.
  * Collapsible; remembers the open/closed choice in localStorage.
  */
-import { useState } from 'react'
-import { BookOpen, ChevronDown, ChevronUp } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BookOpen, X, ArrowRight } from 'lucide-react'
 
-const LS_KEY = 'pose_guide_open'
+const LS_KEY = 'pose_guide_seen'
 
 // ── COCO-17 keypoint layout for the reference diagram ─────────────────────────
 // Positions are laid out on a simple standing figure (viewBox 0 0 200 330).
@@ -169,38 +169,10 @@ const Mono = ({ children }: { children: React.ReactNode }) => (
   <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>{children}</span>
 )
 
-export default function PoseGuide() {
-  const [open, setOpen] = useState(() => localStorage.getItem(LS_KEY) !== 'false')
-  const toggle = () => {
-    setOpen(o => { localStorage.setItem(LS_KEY, String(!o)); return !o })
-  }
-
+// ── The full guide content (rendered inside the modal) ───────────────────────
+function GuideContent() {
   return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 10, overflow: 'hidden', marginBottom: 16,
-    }}>
-      {/* Header */}
-      <button onClick={toggle} style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-        padding: '13px 18px', background: 'transparent', border: 'none',
-        cursor: 'pointer', textAlign: 'left',
-      }}>
-        <BookOpen size={15} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-        <span style={{ flex: 1 }}>
-          <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
-            What is this page, and what can you do here?
-          </span>
-          <span style={{ display: 'block', fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>
-            A short guide. Read this first if you are new to pose estimation.
-          </span>
-        </span>
-        {open ? <ChevronUp size={16} style={{ color: 'var(--text3)' }} />
-              : <ChevronDown size={16} style={{ color: 'var(--text3)' }} />}
-      </button>
-
-      {open && (
-        <div style={{ padding: '4px 18px 20px', borderTop: '1px solid var(--border)' }}>
+        <div style={{ padding: '4px 24px 24px' }}>
 
           {/* Intro */}
           <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.7, margin: '16px 0 0' }}>
@@ -318,7 +290,130 @@ export default function PoseGuide() {
             recognise faces or identity.
           </p>
         </div>
+  )
+}
+
+// ── Trigger banner + animated popup modal ────────────────────────────────────
+export default function PoseGuide() {
+  const [mounted, setMounted] = useState(false)   // is the modal in the DOM?
+  const [closing, setClosing] = useState(false)   // playing the exit animation?
+
+  const openGuide = () => { setClosing(false); setMounted(true) }
+  const closeGuide = () => {
+    setClosing(true)
+    setTimeout(() => { setMounted(false); setClosing(false) }, 170)  // match guideCardOut
+  }
+
+  // Auto-open once for first-time visitors
+  useEffect(() => {
+    if (localStorage.getItem(LS_KEY) !== 'true') {
+      localStorage.setItem(LS_KEY, 'true')
+      const t = setTimeout(openGuide, 350)
+      return () => clearTimeout(t)
+    }
+  }, [])
+
+  // Escape to close + lock body scroll while open
+  useEffect(() => {
+    if (!mounted) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeGuide() }
+    document.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [mounted])
+
+  return (
+    <>
+      {/* Trigger banner */}
+      <button onClick={openGuide} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 11,
+        padding: '13px 18px', marginBottom: 16, textAlign: 'left',
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 10, cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s',
+      }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}>
+        <span style={{
+          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+          background: 'var(--accent-s)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <BookOpen size={16} style={{ color: 'var(--accent)' }} />
+        </span>
+        <span style={{ flex: 1 }}>
+          <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+            What is this page, and what can you do here?
+          </span>
+          <span style={{ display: 'block', fontSize: 12, color: 'var(--text3)', marginTop: 1 }}>
+            New to pose estimation? Open the quick guide.
+          </span>
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+          fontSize: 12, fontWeight: 500, color: 'var(--accent)' }}>
+          Open guide <ArrowRight size={14} />
+        </span>
+      </button>
+
+      {/* Modal */}
+      {mounted && (
+        <div
+          onClick={closeGuide}
+          className={closing ? 'guide-backdrop-out' : 'guide-backdrop-in'}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(8, 10, 14, 0.62)', backdropFilter: 'blur(3px)',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            padding: '6vh 16px 16px', overflowY: 'auto',
+          }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            className={closing ? 'guide-card-out' : 'guide-card-in'}
+            style={{
+              width: '100%', maxWidth: 780, background: 'var(--surface)',
+              border: '1px solid var(--border2)', borderRadius: 16,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden',
+              maxHeight: '88vh', display: 'flex', flexDirection: 'column',
+            }}>
+            {/* Sticky header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 11,
+              padding: '16px 22px', borderBottom: '1px solid var(--border)',
+              flexShrink: 0, background: 'var(--surface)',
+            }}>
+              <BookOpen size={17} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+                  Pose Estimation Guide
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--text3)', margin: '1px 0 0' }}>
+                  Everything on this page, explained simply.
+                </p>
+              </div>
+              <button onClick={closeGuide} title="Close (Esc)" style={{
+                width: 30, height: 30, borderRadius: 7, border: '1px solid var(--border)',
+                background: 'var(--surface2)', color: 'var(--text3)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'color 0.12s, border-color 0.12s',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)';
+                  e.currentTarget.style.borderColor = 'var(--border2)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text3)';
+                  e.currentTarget.style.borderColor = 'var(--border)' }}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Scrollable body */}
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              <GuideContent />
+            </div>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   )
 }
