@@ -36,56 +36,92 @@ const BONES = [
 const sideColor = (s: 'L' | 'R' | 'C') =>
   s === 'L' ? '#38bdf8' : s === 'R' ? '#fb923c' : '#e2e8f0'
 
+// A real example photo (Unsplash CDN, stable). Falls back to hidden if it
+// ever fails to load, so the layout never shows a broken image icon.
+const EXAMPLE_PHOTO =
+  'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=640&q=80'
+
 function KeypointDiagram() {
+  const [photoOk, setPhotoOk] = useState(true)
+
   return (
     <div style={{
-      display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center',
       background: 'var(--surface2)', border: '1px solid var(--border)',
-      borderRadius: 10, padding: 16,
+      borderRadius: 12, padding: 18,
+      display: 'flex', flexDirection: 'column', gap: 18,
     }}>
-      {/* The figure */}
-      <svg viewBox="0 0 200 330" style={{ width: 150, height: 248, flexShrink: 0 }}>
-        {BONES.map(([a, b], i) => (
-          <line key={i} x1={KP[a].x} y1={KP[a].y} x2={KP[b].x} y2={KP[b].y}
-            stroke="var(--border2)" strokeWidth={2} strokeLinecap="round" />
-        ))}
-        {KP.map(k => (
-          <g key={k.i}>
-            <circle cx={k.x} cy={k.y} r={6} fill={sideColor(k.side)}
-              stroke="#0d1117" strokeWidth={1.5} />
-            <text x={k.x} y={k.y + 3} textAnchor="middle" fontSize={7}
-              fontWeight={700} fill="#0d1117"
-              fontFamily="JetBrains Mono, monospace">{k.i}</text>
-          </g>
-        ))}
-      </svg>
 
-      {/* The numbered list */}
-      <div style={{ flex: 1, minWidth: 220 }}>
-        <p style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6, margin: '0 0 10px' }}>
-          The model places these 17 points on every person it finds. Each one has a fixed
-          number, so point 9 is always the left wrist.
-        </p>
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '2px 14px',
-        }}>
-          {KP.map(k => (
-            <div key={k.i} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <span style={{
-                width: 16, textAlign: 'right', fontSize: 11, fontWeight: 700,
-                color: sideColor(k.side), fontFamily: 'JetBrains Mono, monospace',
-              }}>{k.i}</span>
-              <span style={{ fontSize: 11.5, color: 'var(--text2)' }}>{k.name}</span>
-            </div>
-          ))}
+      {/* Row 1: example photo + what happens to it */}
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+        {photoOk && (
+          <figure style={{ margin: 0, flexShrink: 0, width: 230 }}>
+            <img src={EXAMPLE_PHOTO} alt="People exercising"
+              onError={() => setPhotoOk(false)}
+              style={{
+                width: '100%', height: 150, objectFit: 'cover',
+                borderRadius: 10, display: 'block', border: '1px solid var(--border)',
+              }} />
+            <figcaption style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6,
+              textAlign: 'center' }}>
+              A normal photo you might upload
+            </figcaption>
+          </figure>
+        )}
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.7, margin: 0 }}>
+            When you give the model a photo like this, it finds <Term>each person</Term> in
+            the picture and places <Term>17 points</Term> on their body. The diagram below
+            shows where those points go and the fixed number that each one always uses, so
+            point <Mono>9</Mono> is always the left wrist on every person.
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
-          {[['#38bdf8', 'left side'], ['#fb923c', 'right side'], ['#e2e8f0', 'centre']].map(([c, l]) => (
-            <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 11, color: 'var(--text3)' }}>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: c }} />{l}
-            </span>
+      </div>
+
+      {/* Row 2: the labelled figure + the numbered list */}
+      <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'center',
+        borderTop: '1px solid var(--border)', paddingTop: 18 }}>
+        {/* Bigger figure */}
+        <svg viewBox="0 0 200 330" style={{ width: 210, height: 346, flexShrink: 0 }}>
+          {BONES.map(([a, b], i) => (
+            <line key={i} x1={KP[a].x} y1={KP[a].y} x2={KP[b].x} y2={KP[b].y}
+              stroke="var(--border2)" strokeWidth={3} strokeLinecap="round" />
           ))}
+          {KP.map(k => (
+            <g key={k.i}>
+              <circle cx={k.x} cy={k.y} r={9} fill={sideColor(k.side)}
+                stroke="#0d1117" strokeWidth={2} />
+              <text x={k.x} y={k.y + 3.5} textAnchor="middle" fontSize={9.5}
+                fontWeight={700} fill="#0d1117"
+                fontFamily="JetBrains Mono, monospace">{k.i}</text>
+            </g>
+          ))}
+        </svg>
+
+        {/* Numbered name list */}
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)',
+            textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 12px' }}>
+            The 17 points and their numbers
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '5px 18px' }}>
+            {KP.map(k => (
+              <div key={k.i} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <span style={{
+                  width: 18, textAlign: 'right', fontSize: 12.5, fontWeight: 700,
+                  color: sideColor(k.side), fontFamily: 'JetBrains Mono, monospace',
+                }}>{k.i}</span>
+                <span style={{ fontSize: 12.5, color: 'var(--text2)' }}>{k.name}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 18, marginTop: 16 }}>
+            {[['#38bdf8', 'left side'], ['#fb923c', 'right side'], ['#e2e8f0', 'centre']].map(([c, l]) => (
+              <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 6,
+                fontSize: 12, color: 'var(--text3)' }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: c }} />{l}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     </div>
