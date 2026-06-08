@@ -1495,6 +1495,7 @@ export default function CustomModel() {
   // Bumped when a real dataset sample image finishes loading, to force the
   // 3D / 2D scenes to regenerate their input texture with the real image.
   const [sampleVersion, setSampleVersion] = useState(0)
+  const [sampleLoading, setSampleLoading] = useState(false)
   const canvas2DRef = useRef<HTMLCanvasElement>(null)
 
   // Orbit state — slightly dramatic angle by default
@@ -1653,24 +1654,30 @@ export default function CustomModel() {
     }
   }, [])
 
-  // Fetch a random sample image from the project dataset for the input layer.
-  // If none exists the synthetic "house" default stays.
-  useEffect(() => {
-    sampleInputImage = null   // reset on project change
-    let cancelled = false
+  // Load a random sample image from the project dataset for the input layer.
+  // Callable on demand (Shuffle button) and on mount. Cache-busts so each call
+  // gets a fresh random pick. Keeps the synthetic "house" default on failure.
+  const loadSampleImage = useCallback(() => {
+    setSampleLoading(true)
     const img = new Image()
-    // Same-origin (/api) image, so no crossOrigin needed; the canvas stays
-    // untainted and avoids any CORS-header dependency.
     img.onload = () => {
-      if (cancelled) return
       sampleInputImage = img
+      setSampleLoading(false)
       setSampleVersion(v => v + 1)   // trigger scene rebuild with the real image
     }
-    img.onerror = () => { /* keep synthetic default */ }
-    // cache-bust so a fresh random image is picked each visit
+    img.onerror = () => {
+      sampleInputImage = null        // no dataset image → keep synthetic default
+      setSampleLoading(false)
+      setSampleVersion(v => v + 1)
+    }
     img.src = `/api/projects/${projectId}/classification/dataset/sample?t=${Date.now()}`
-    return () => { cancelled = true }
   }, [projectId])
+
+  // Load one on mount / project change
+  useEffect(() => {
+    sampleInputImage = null
+    loadSampleImage()
+  }, [projectId, loadSampleImage])
 
   // Rebuild scene when layers / input size / sample image change
   useEffect(() => {
@@ -2393,6 +2400,21 @@ export default function CustomModel() {
               title="Toggle between color blocks and educational activation textures"
             >
               {viewMode === 'image' ? '◉ Activations' : '◎ Activations'}
+            </button>
+            <button
+              onClick={loadSampleImage}
+              disabled={sampleLoading}
+              style={{
+                padding: '4px 10px', borderRadius: 5,
+                background: 'rgba(15,15,18,0.85)',
+                border: '1px solid var(--border2)',
+                color: 'var(--text2)', fontSize: 11,
+                cursor: sampleLoading ? 'default' : 'pointer',
+                backdropFilter: 'blur(4px)', opacity: sampleLoading ? 0.5 : 1,
+              }}
+              title="Load a different random image from your dataset as the input sample"
+            >
+              {sampleLoading ? '⟳ Loading…' : '🎲 Shuffle Image'}
             </button>
             {viewDim === '3d' && <>
               <button
