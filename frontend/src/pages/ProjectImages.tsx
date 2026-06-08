@@ -11,6 +11,60 @@ interface ImportResult {
   classes_updated: boolean
 }
 
+// ── Grouped navigation dropdown ───────────────────────────────────────────────
+interface NavItem { label: string; desc: string; icon: React.ReactNode; onClick: () => void }
+function NavDropdown({ label, icon, items }:
+  { label: string; icon: React.ReactNode; items: NavItem[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <Btn variant="secondary" size="sm" onClick={() => setOpen(o => !o)}>
+        {icon} {label} <ChevronDown size={12} style={{
+          transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+      </Btn>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
+          minWidth: 230, background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', padding: 5,
+          display: 'flex', flexDirection: 'column', gap: 2,
+        }}>
+          {items.map(it => (
+            <button key={it.label} onClick={() => { setOpen(false); it.onClick() }}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 9, textAlign: 'left',
+                padding: '8px 10px', border: 'none', borderRadius: 6, cursor: 'pointer',
+                background: 'transparent', color: 'var(--text)', width: '100%',
+                transition: 'background 0.1s', fontFamily: 'inherit',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface2)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              <span style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 1,
+                display: 'flex' }}>{it.icon}</span>
+              <span>
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 500 }}>{it.label}</span>
+                <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)',
+                  lineHeight: 1.4 }}>{it.desc}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ProjectImages() {
   const { id } = useParams<{ id: string }>()
   const projectId = Number(id)
@@ -326,27 +380,34 @@ export default function ProjectImages() {
         title={project?.name ?? '…'}
         subtitle={`${total} images · ${annotated} annotated · ${pct}%`}
         actions={<>
-          <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/analytics`)}>
-            <BarChart2 size={13} /> Analytics
-          </Btn>
-          <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/classify`)}>
-            <Brain size={13} /> Classify
-          </Btn>
-          <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/custom`)}>
-            <Cpu size={13} /> Conv Builder
-          </Btn>
-          <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/segment`)}>
-            <Layers size={13} /> Segment
-          </Btn>
-          <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/pose`)}>
-            <Activity size={13} /> Pose
-          </Btn>
-          <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/depth`)}>
-            <Layers size={13} /> Depth
-          </Btn>
-          <Btn variant="secondary" size="sm" onClick={() => navigate(`/projects/${projectId}/webcam`)}>
-            <Camera size={13} /> Webcam
-          </Btn>
+          {/* Detection family — uses bounding-box / polygon annotations */}
+          <NavDropdown label="Detection" icon={<Crosshair size={13} />} items={[
+            { label: 'Detect & Train', desc: 'Train a YOLO object detector',
+              icon: <Zap size={14} />, onClick: () => navigate(`/projects/${projectId}/train`) },
+            { label: 'Segmentation', desc: 'Pixel-mask instance segmentation',
+              icon: <Layers size={14} />, onClick: () => navigate(`/projects/${projectId}/segment`) },
+            { label: 'Pose', desc: '17-keypoint skeleton estimation',
+              icon: <Activity size={14} />, onClick: () => navigate(`/projects/${projectId}/pose`) },
+          ]} />
+
+          {/* Classification family — uses the classification image dataset */}
+          <NavDropdown label="Classification" icon={<ScanLine size={13} />} items={[
+            { label: 'Classify', desc: 'Transfer-learning image classifier',
+              icon: <Brain size={14} />, onClick: () => navigate(`/projects/${projectId}/classify`) },
+            { label: 'Conv Builder', desc: 'Design & train a custom CNN',
+              icon: <Cpu size={14} />, onClick: () => navigate(`/projects/${projectId}/custom`) },
+          ]} />
+
+          {/* Tools — analysis & standalone inference (any image) */}
+          <NavDropdown label="Tools" icon={<BarChart2 size={13} />} items={[
+            { label: 'Analytics', desc: 'Dataset distribution & statistics',
+              icon: <BarChart2 size={14} />, onClick: () => navigate(`/projects/${projectId}/analytics`) },
+            { label: 'Depth & 3D', desc: 'Depth maps, point cloud, measure',
+              icon: <Layers size={14} />, onClick: () => navigate(`/projects/${projectId}/depth`) },
+            { label: 'Webcam', desc: 'Live real-time inference',
+              icon: <Camera size={14} />, onClick: () => navigate(`/projects/${projectId}/webcam`) },
+          ]} />
+
           <Btn variant="primary" size="sm" onClick={() => navigate(`/projects/${projectId}/train`)}>
             <Zap size={13} strokeWidth={2.5} /> Detect & Train
           </Btn>
