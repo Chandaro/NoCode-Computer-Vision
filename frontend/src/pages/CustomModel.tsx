@@ -400,6 +400,21 @@ function createBaseImage(size: number): HTMLCanvasElement {
   c.width = c.height = size
   const ctx = c.getContext('2d')!
 
+  // If a real dataset image is loaded, use it as the base. Every downstream
+  // activation (conv, relu, pool…) is then computed from the real image.
+  if (sampleInputImage && sampleInputImage.complete && sampleInputImage.naturalWidth > 0) {
+    const img = sampleInputImage
+    const iw = img.naturalWidth, ih = img.naturalHeight
+    const scale = Math.max(size / iw, size / ih)   // cover-fit
+    const dw = iw * scale, dh = ih * scale
+    try {
+      ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh)
+      return c
+    } catch {
+      // tainted canvas — fall through to the synthetic default below
+    }
+  }
+
   const sky = ctx.createLinearGradient(0, 0, 0, size * 0.45)
   sky.addColorStop(0, '#1a3a6e'); sky.addColorStop(1, '#4a90d9')
   ctx.fillStyle = sky; ctx.fillRect(0, 0, size, size * 0.45)
@@ -1644,7 +1659,8 @@ export default function CustomModel() {
     sampleInputImage = null   // reset on project change
     let cancelled = false
     const img = new Image()
-    img.crossOrigin = 'anonymous'   // allow drawImage onto the texture canvas
+    // Same-origin (/api) image, so no crossOrigin needed; the canvas stays
+    // untainted and avoids any CORS-header dependency.
     img.onload = () => {
       if (cancelled) return
       sampleInputImage = img
