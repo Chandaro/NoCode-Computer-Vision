@@ -478,15 +478,19 @@ def cls_dataset_stats(project_id: int, session: Session = Depends(get_session)):
 @router.get("/dataset/sample")
 def cls_dataset_sample(project_id: int, session: Session = Depends(get_session)):
     """
-    Return ONE random image file from this project's classification dataset.
-    Used by the Conv Builder 3D view to show a real sample as the input layer.
-    Falls back to a 404 when the dataset is empty (the UI then keeps its
-    default synthetic image).
+    Return ONE random sample image from this project for the Conv Builder
+    3D input layer.
+
+    Priority:
+      1. The classification dataset (cls_uploads/<project>/<class>/...)
+      2. Fallback: any regular uploaded project image (the Image table)
+    404 only when the project has no images at all (UI keeps its default).
     """
     project = session.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
 
+    # 1. Classification dataset images
     proj_dir = os.path.join(CLS_DATA_DIR, str(project_id))
     candidates: list[str] = []
     if os.path.isdir(proj_dir):
@@ -498,11 +502,22 @@ def cls_dataset_sample(project_id: int, session: Session = Depends(get_session))
                 if os.path.splitext(f)[1].lower() in IMG_EXTS:
                     candidates.append(os.path.join(cls_dir, f))
 
+    # 2. Fallback: any regular project image
     if not candidates:
-        raise HTTPException(404, "No classification dataset images yet")
+        upload_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
+        imgs = session.exec(
+            select(Image).where(Image.project_id == project_id,
+                                 Image.is_corrupt == False)  # noqa: E712
+        ).all()
+        for img in imgs:
+            p = os.path.join(upload_dir, img.filename)
+            if os.path.exists(p):
+                candidates.append(p)
 
-    chosen = random.choice(candidates)
-    return FileResponse(chosen)
+    if not candidates:
+        raise HTTPException(404, "No images in this project yet")
+
+    return FileResponse(random.choice(candidates))
 
 
 @router.post("/dataset/upload/{class_name}")
