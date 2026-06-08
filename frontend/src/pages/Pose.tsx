@@ -4,6 +4,7 @@ import { Upload, Download, Loader, Camera, CameraOff, Video, Image as ImageIcon,
 import api, { type Project } from '../api'
 import { PageHeader, Card, Field, Select, Slider, Btn, Badge, ProgressBar } from '../components/ui'
 import PoseLab from '../components/PoseLab'
+import PoseGuide from '../components/PoseGuide'
 import {
   computeAngles, EXERCISES, initRep, stepRep,
   type RepState,
@@ -400,6 +401,9 @@ export default function Pose() {
 
         {/* ── Main panel ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* Student guide */}
+          <PoseGuide />
 
           {/* IMAGE MODE */}
           {mode === 'image' && (
