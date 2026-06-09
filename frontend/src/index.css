@@ -207,3 +207,19 @@ textarea:focus {
   font-family: 'Rajdhani', 'Inter', sans-serif;
   letter-spacing: 0.02em;
 }
+
+/* ── Guide figure animations (looping, GIF-like) ───────────────────────────── */
+@keyframes augFlipX { 0%,15% { transform: scaleX(1); } 50% { transform: scaleX(-1); } 85%,100% { transform: scaleX(1); } }
+@keyframes augFlipY { 0%,15% { transform: scaleY(1); } 50% { transform: scaleY(-1); } 85%,100% { transform: scaleY(1); } }
+@keyframes augRotate { 0%,100% { transform: rotate(-16deg) scale(1.28); } 50% { transform: rotate(16deg) scale(1.28); } }
+@keyframes augShift  { 0%,100% { transform: translateX(-16%) scale(1.18); } 50% { transform: translateX(16%) scale(1.18); } }
+@keyframes augZoom   { 0%,100% { transform: scale(1.05); } 50% { transform: scale(1.55); } }
+.aug-flipx  { animation: augFlipX 3s ease-in-out infinite; }
+.aug-flipy  { animation: augFlipY 3s ease-in-out infinite; }
+.aug-rotate { animation: augRotate 2.6s ease-in-out infinite; }
+.aug-shift  { animation: augShift  2.6s ease-in-out infinite; }
+.aug-zoom   { animation: augZoom   2.6s ease-in-out infinite; }
+
+/* Pipeline "data flow" glow that sweeps left to right via staggered delays */
+@keyframes stageFlow { 0%, 100% { box-shadow: 0 0 0 transparent; } 50% { box-shadow: 0 0 14px var(--flow); } }
+.stage-flow { animation: stageFlow 2.4s ease-in-out infinite; }

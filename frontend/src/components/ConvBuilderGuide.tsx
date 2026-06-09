@@ -51,11 +51,13 @@ function PipelineDiagram() {
         {stages.map((s, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ textAlign: 'center', flexShrink: 0 }}>
-              <div style={{
+              <div className="stage-flow" style={{
                 width: 54, height: 54, borderRadius: 8,
                 background: `${s.c}22`, border: `1.5px solid ${s.c}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 11, fontWeight: 700, color: s.c,
+                // staggered delay makes the glow sweep through the pipeline
+                ['--flow' as any]: s.c, animationDelay: `${i * 0.35}s`,
               }}>{s.label}</div>
               <span style={{ fontSize: 9.5, color: 'var(--text3)', display: 'block', marginTop: 2 }}>{s.sub}</span>
             </div>
@@ -69,17 +71,33 @@ function PipelineDiagram() {
 
 // ── Training figures (inline SVG, crisp + themed) ─────────────────────────────
 
-// A loss curve dropping over epochs. Optional early-stop marker.
+// A loss curve dropping over epochs, with a comet that traces it on a loop.
 function LossCurveFig({ earlyStop = false }: { earlyStop?: boolean }) {
+  const PATH = 'M30 20 C 60 78, 95 84, 130 85 C 165 86, 195 86, 212 86'
   return (
     <svg viewBox="0 0 230 110" style={{ width: '100%', maxWidth: 260, height: 'auto' }}>
+      <defs>
+        <filter id="lcGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.5" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
       <line x1="26" y1="12" x2="26" y2="90" stroke="var(--border2)" strokeWidth="1.5" />
       <line x1="26" y1="90" x2="216" y2="90" stroke="var(--border2)" strokeWidth="1.5" />
       <text x="8" y="50" fontSize="9" fill="var(--text3)" transform="rotate(-90 8 50)">loss</text>
       <text x="120" y="105" fontSize="9" fill="var(--text3)" textAnchor="middle">epochs →</text>
-      {/* high → drops fast → flattens */}
-      <path d="M30 20 C 60 78, 95 84, 130 85 C 165 86, 195 86, 212 86"
-        fill="none" stroke="var(--accent)" strokeWidth="2.5" />
+      {/* faint full curve */}
+      <path d={PATH} fill="none" stroke="var(--accent)" strokeWidth="2.5" opacity="0.35" />
+      {/* bright segment that "draws" the curve on a loop */}
+      <path d={PATH} fill="none" stroke="var(--accent)" strokeWidth="2.8"
+        strokeDasharray="60 260" strokeLinecap="round">
+        <animate attributeName="stroke-dashoffset" from="320" to="0"
+          dur="2.6s" repeatCount="indefinite" />
+      </path>
+      {/* comet head travelling along the curve */}
+      <circle r="4" fill="#fff" filter="url(#lcGlow)">
+        <animateMotion dur="2.6s" repeatCount="indefinite" path={PATH} />
+      </circle>
       {earlyStop && (
         <>
           <line x1="130" y1="18" x2="130" y2="90" stroke="#f0a500" strokeWidth="1.5" strokeDasharray="4 3" />
@@ -92,51 +110,53 @@ function LossCurveFig({ earlyStop = false }: { earlyStop?: boolean }) {
   )
 }
 
-// One little "ball rolling into a valley" panel for learning rate.
+// One animated "ball rolling into a valley" panel for learning rate.
 function ValleyPanel({ kind, label }: { kind: 'low' | 'good' | 'high'; label: string }) {
-  const dots =
-    kind === 'low'  ? [[24, 30], [30, 36], [36, 41]]
-    : kind === 'good' ? [[18, 26], [30, 48], [42, 62], [48, 67]]
-    : [[22, 30], [66, 32], [28, 52], [62, 54], [30, 22]]   // bouncing
   const col = kind === 'good' ? '#3fb950' : kind === 'low' ? '#8b8b9a' : '#f87171'
+  // The ball's looping trajectory in each case.
+  const ballPath =
+    kind === 'low'  ? 'M22 30 Q 28 36, 34 40'                     // barely moves
+    : kind === 'good' ? 'M16 22 Q 30 56, 45 50'                   // rolls to the bottom
+    : 'M22 28 L 66 30 L 28 50 L 62 50 L 26 20'                    // bounces, escapes
+  const dur = kind === 'low' ? '2.8s' : kind === 'good' ? '1.9s' : '1.5s'
   return (
     <div style={{ textAlign: 'center' }}>
       <svg viewBox="0 0 90 80" style={{ width: 90, height: 80 }}>
         <path d="M10 14 Q 45 82, 80 14" fill="none" stroke="var(--border2)" strokeWidth="2" />
-        {kind === 'high' && (
-          <path d="M30 22 L 24 10" stroke={col} strokeWidth="1.5" markerEnd="url(#arrow)" />
-        )}
-        <defs>
-          <marker id="arrow" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-            <path d="M0 0 L6 3 L0 6 Z" fill={col} />
-          </marker>
-        </defs>
-        {dots.map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r="3.5" fill={col} opacity={0.45 + i * 0.14} />
-        ))}
+        {/* target at the valley bottom */}
+        <circle cx="45" cy="50" r="2.5" fill="none" stroke={col} strokeWidth="1" opacity="0.5" />
+        {/* the rolling ball */}
+        <circle r="4" fill={col}>
+          <animateMotion dur={dur} repeatCount="indefinite" path={ballPath}
+            keyPoints={kind === 'good' ? '0;1;1' : undefined}
+            keyTimes={kind === 'good' ? '0;0.7;1' : undefined}
+            calcMode={kind === 'good' ? 'linear' : undefined} />
+        </circle>
       </svg>
       <p style={{ fontSize: 10.5, color: col, fontWeight: 600, margin: 0 }}>{label}</p>
     </div>
   )
 }
 
-// Cosine vs Step learning-rate schedule curves.
+// Cosine vs Step learning-rate schedule curves, each traced by a moving dot.
 function SchedulerFig() {
   const Curve = ({ d, title }: { d: string; title: string }) => (
     <div style={{ textAlign: 'center' }}>
       <svg viewBox="0 0 120 70" style={{ width: 120, height: 70 }}>
+        <text x="6" y="36" fontSize="7" fill="var(--text3)" transform="rotate(-90 6 36)">LR</text>
         <line x1="14" y1="8" x2="14" y2="58" stroke="var(--border2)" strokeWidth="1.2" />
         <line x1="14" y1="58" x2="112" y2="58" stroke="var(--border2)" strokeWidth="1.2" />
-        <path d={d} fill="none" stroke="var(--accent)" strokeWidth="2" />
+        <path d={d} fill="none" stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+        <circle r="3.2" fill="#fff">
+          <animateMotion dur="3s" repeatCount="indefinite" path={d} />
+        </circle>
       </svg>
       <p style={{ fontSize: 10.5, color: 'var(--text3)', margin: 0 }}>{title}</p>
     </div>
   )
   return (
     <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-      {/* cosine: smooth half-wave down */}
       <Curve title="Cosine (smooth)" d="M18 14 C 50 16, 70 52, 108 54" />
-      {/* step: staircase down */}
       <Curve title="Step (drops in stages)" d="M18 14 L 48 14 L 48 32 L 78 32 L 78 48 L 108 48" />
     </div>
   )
@@ -154,21 +174,22 @@ function AugStrip() {
     border: '1px solid var(--border2)', flexShrink: 0,
   }
   const img: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'cover', display: 'block' }
-  const items: { label: string; t: string }[] = [
-    { label: 'Original',  t: 'none' },
-    { label: 'Flip LR',   t: 'scaleX(-1)' },
-    { label: 'Flip UD',   t: 'scaleY(-1)' },
-    { label: 'Rotation',  t: 'rotate(18deg) scale(1.25)' },
-    { label: 'Translate', t: 'translateX(22%) scale(1.1)' },
-    { label: 'Zoom',      t: 'scale(1.5)' },
+  // Each tile runs a looping animation class that demonstrates that transform.
+  const items: { label: string; cls: string }[] = [
+    { label: 'Original',  cls: '' },
+    { label: 'Flip LR',   cls: 'aug-flipx' },
+    { label: 'Flip UD',   cls: 'aug-flipy' },
+    { label: 'Rotation',  cls: 'aug-rotate' },
+    { label: 'Translate', cls: 'aug-shift' },
+    { label: 'Zoom',      cls: 'aug-zoom' },
   ]
   return (
     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
       {items.map((it, i) => (
         <div key={i} style={{ textAlign: 'center' }}>
           <div style={box}>
-            <img src={DOG_PHOTO} alt={it.label} onError={() => setOk(false)}
-              style={{ ...img, transform: it.t }} />
+            <img className={it.cls} src={DOG_PHOTO} alt={it.label} onError={() => setOk(false)}
+              style={img} />
           </div>
           <span style={{ fontSize: 10, color: 'var(--text3)' }}>{it.label}</span>
         </div>
