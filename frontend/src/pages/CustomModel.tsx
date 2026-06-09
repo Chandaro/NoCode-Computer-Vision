@@ -62,17 +62,17 @@ const LAYER_COLORS: Record<string, number> = {
 }
 
 const LAYER_CSS: Record<string, string> = {
-  input:       '#58586e',
-  conv2d:      '#7c6af7',
-  batchnorm2d: '#4e9e8c',
-  maxpool2d:   '#5b8cd6',
-  avgpool2d:   '#5b8cd6',
-  relu:        '#d4865a',
-  gelu:        '#c47a6a',
-  sigmoid:     '#b87898',
-  dropout:     '#9e9c64',
-  flatten:     '#7a7a90',
-  linear:      '#8878b8',
+  input:       '#6b7280',
+  conv2d:      '#8b5cf6',   // vivid purple
+  batchnorm2d: '#22d3ee',   // cyan
+  maxpool2d:   '#38bdf8',   // sky blue
+  avgpool2d:   '#0ea5e9',   // deeper blue
+  relu:        '#fb923c',   // orange
+  gelu:        '#f97316',   // deep orange
+  sigmoid:     '#ec4899',   // pink
+  dropout:     '#eab308',   // amber
+  flatten:     '#94a3b8',   // slate
+  linear:      '#6366f1',   // indigo
 }
 
 const ALL_LAYER_TYPES: LayerType[] = [
@@ -2170,49 +2170,74 @@ export default function CustomModel() {
                   {/* Connector spine + drop indicator */}
                   <div style={{ position: 'relative', height: 12, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     {isDropTarget ? (
-                      <div style={{
-                        position: 'absolute', inset: '4px 6px',
-                        borderRadius: 2, height: 2,
-                        background: color,
+                      <div className="drop-indicator" style={{
+                        position: 'absolute', inset: '3px 6px',
+                        borderRadius: 3, height: 4,
+                        background: `linear-gradient(90deg, transparent, ${color}, transparent)`,
+                        boxShadow: `0 0 10px ${color}`,
                       }} />
                     ) : (
-                      <div style={{ width: 1, height: '100%', background: `linear-gradient(${LAYER_CSS[layers[index - 1]?.type] ?? color}, ${color})`, opacity: 0.22 }} />
+                      <div style={{ width: 2, height: '100%', borderRadius: 2,
+                        background: `linear-gradient(${LAYER_CSS[layers[index - 1]?.type] ?? color}, ${color})`,
+                        opacity: 0.3 }} />
                     )}
                   </div>
 
                   {/* Block card */}
                   <div
+                    className="layer-card"
                     draggable
                     onDragStart={e => onLayerDragStart(e, index)}
                     onDragOver={e => onLayerDragOver(e, index)}
                     onDrop={e => onLayerDrop(e, index)}
                     onDragEnd={onLayerDragEnd}
+                    onMouseEnter={e => {
+                      if (isDragging || dragIdx !== null) return
+                      const el = e.currentTarget
+                      el.style.transform = 'translateY(-2px)'
+                      el.style.boxShadow = `0 8px 22px -6px ${color}55, 0 0 0 1px ${color}55`
+                      el.style.borderColor = `${color}77`
+                    }}
+                    onMouseLeave={e => {
+                      const el = e.currentTarget
+                      el.style.transform = 'none'
+                      el.style.boxShadow = isSelected ? `0 0 0 1px ${color}44` : 'none'
+                      el.style.borderColor = isSelected ? `${color}55` : 'rgba(255,255,255,0.07)'
+                    }}
                     style={{
-                      display: 'flex', borderRadius: 8, overflow: 'hidden',
-                      border: `1px solid ${isSelected ? color + '44' : 'rgba(255,255,255,0.055)'}`,
+                      display: 'flex', borderRadius: 10, overflow: 'hidden',
+                      border: `1px solid ${isSelected ? color + '55' : 'rgba(255,255,255,0.07)'}`,
                       background: isSelected
-                        ? `${color}0d`
-                        : isDragging ? 'rgba(255,255,255,0.015)' : 'rgba(255,255,255,0.028)',
-                      opacity: isDragging ? 0.22 : 1,
-                      boxShadow: 'none',
-                      transition: 'border-color 0.14s, box-shadow 0.14s, background 0.14s, opacity 0.14s',
+                        ? `linear-gradient(135deg, ${color}1f, ${color}0d)`
+                        : `linear-gradient(135deg, ${color}14, ${color}07)`,
+                      opacity: isDragging ? 0.35 : 1,
+                      boxShadow: isSelected ? `0 0 0 1px ${color}44` : 'none',
+                      transform: isDragging ? 'scale(0.98) rotate(-1.2deg)' : 'none',
+                      transition: 'transform 0.16s cubic-bezier(0.16,1,0.3,1), box-shadow 0.16s, border-color 0.16s, background 0.16s, opacity 0.16s',
+                      willChange: 'transform',
                     }}
                   >
-                    {/* Accent bar */}
-                    <div style={{ width: 3, flexShrink: 0, background: color, opacity: 0.8 }} />
+                    {/* Glowing accent bar */}
+                    <div style={{
+                      width: 4, flexShrink: 0,
+                      background: `linear-gradient(180deg, ${color}, ${color}aa)`,
+                      boxShadow: `0 0 8px ${color}99`,
+                    }} />
 
                     {/* Drag handle */}
                     <div
                       style={{
-                        width: 20, flexShrink: 0, cursor: 'grab',
+                        width: 22, flexShrink: 0, cursor: 'grab',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        opacity: 0.3,
+                        opacity: 0.35, transition: 'opacity 0.12s',
                       }}
+                      onMouseEnter={e => { e.currentTarget.style.opacity = '0.8' }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = '0.35' }}
                       title="Drag to reorder"
                     >
-                      <svg width="8" height="12" viewBox="0 0 8 12" fill="none">
+                      <svg width="8" height="13" viewBox="0 0 8 12" fill="none">
                         {([[2,1],[6,1],[2,5],[6,5],[2,9],[6,9]] as [number,number][]).map(([cx,cy],i) => (
-                          <circle key={i} cx={cx} cy={cy} r="1.3" fill="var(--text2)" />
+                          <circle key={i} cx={cx} cy={cy} r="1.4" fill={color} />
                         ))}
                       </svg>
                     </div>
@@ -2234,12 +2259,14 @@ export default function CustomModel() {
                         </span>
                         {valid && (
                           <span style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.07em',
                             fontFamily: 'JetBrains Mono, monospace',
-                            color: color, opacity: 0.9,
-                            background: `${color}15`,
-                            padding: '1px 5px', borderRadius: 3,
-                            flexShrink: 0, lineHeight: '16px',
+                            color: color,
+                            background: `${color}26`,
+                            border: `1px solid ${color}55`,
+                            padding: '1px 6px', borderRadius: 4,
+                            flexShrink: 0, lineHeight: '15px',
+                            textShadow: `0 0 6px ${color}66`,
                           }}>
                             {LAYER_CATEGORY[layer.type] ?? ''}
                           </span>
@@ -2322,17 +2349,32 @@ export default function CustomModel() {
           <div style={{ padding: '8px 9px', borderTop: '1px solid rgba(255,255,255,0.055)', flexShrink: 0, position: 'relative' }}>
             <button
               onClick={() => setShowAddMenu(prev => !prev)}
+              onMouseEnter={e => { if (!showAddMenu) {
+                e.currentTarget.style.borderColor = 'rgba(139,92,246,0.55)'
+                e.currentTarget.style.color = '#a78bfa'
+                e.currentTarget.style.boxShadow = '0 4px 16px -6px rgba(139,92,246,0.6)'
+              } }}
+              onMouseLeave={e => { if (!showAddMenu) {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
+                e.currentTarget.style.color = 'rgba(190,190,210,0.8)'
+                e.currentTarget.style.boxShadow = 'none'
+              } }}
               style={{
-                width: '100%', padding: '7px', borderRadius: 6,
-                background: showAddMenu ? 'rgba(88,101,242,0.15)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${showAddMenu ? 'rgba(88,101,242,0.4)' : 'rgba(255,255,255,0.09)'}`,
-                color: showAddMenu ? 'var(--accent)' : 'rgba(180,180,200,0.7)',
-                fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                transition: 'all 0.12s',
+                width: '100%', padding: '9px', borderRadius: 9,
+                background: showAddMenu
+                  ? 'linear-gradient(135deg, rgba(139,92,246,0.22), rgba(99,102,241,0.14))'
+                  : 'linear-gradient(135deg, rgba(139,92,246,0.1), rgba(99,102,241,0.05))',
+                border: `1px solid ${showAddMenu ? 'rgba(139,92,246,0.55)' : 'rgba(255,255,255,0.1)'}`,
+                color: showAddMenu ? '#a78bfa' : 'rgba(190,190,210,0.8)',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                transition: 'all 0.15s',
               }}
             >
-              <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add Layer
+              <span style={{
+                fontSize: 16, lineHeight: 1, transition: 'transform 0.2s',
+                transform: showAddMenu ? 'rotate(45deg)' : 'none', display: 'inline-block',
+              }}>+</span> Add Layer
             </button>
             {showAddMenu && (
               <div style={{

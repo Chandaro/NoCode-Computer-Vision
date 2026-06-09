@@ -184,3 +184,15 @@ textarea:focus {
 .guide-backdrop-out { animation: guideBackdropOut 0.16s ease-in  both; }
 .guide-card-in  { animation: guideCardIn  0.26s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .guide-card-out { animation: guideCardOut 0.16s ease-in both; }
+
+/* ── Conv Builder layer cards ──────────────────────────────────────────────── */
+@keyframes layerSlideIn {
+  from { opacity: 0; transform: translateX(-14px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0)     scale(1); }
+}
+@keyframes dropPulse {
+  0%, 100% { opacity: 0.55; transform: scaleX(0.96); }
+  50%      { opacity: 1;    transform: scaleX(1); }
+}
+.layer-card { animation: layerSlideIn 0.26s cubic-bezier(0.16, 1, 0.3, 1); }
+.drop-indicator { animation: dropPulse 0.9s ease-in-out infinite; }
