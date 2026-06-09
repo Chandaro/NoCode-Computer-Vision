@@ -246,9 +246,9 @@ export function PageHeader({ back, title, subtitle, actions }: {
         </button>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <h1 style={{
-          fontSize: 17, fontWeight: 700, color: 'var(--text)',
-          letterSpacing: '-0.02em', lineHeight: 1.2,
+        <h1 className="font-display" style={{
+          fontSize: 16, fontWeight: 700, color: 'var(--text)',
+          letterSpacing: '0.02em', lineHeight: 1.25,
         }}>
           {title}
         </h1>

@@ -196,3 +196,14 @@ textarea:focus {
 }
 .layer-card { animation: layerSlideIn 0.26s cubic-bezier(0.16, 1, 0.3, 1); }
 .drop-indicator { animation: dropPulse 0.9s ease-in-out infinite; }
+
+/* ── Display / gaming fonts ─────────────────────────────────────────────────── */
+/* Orbitron = sci-fi / gaming display. Rajdhani = techy condensed UI labels. */
+.font-display {
+  font-family: 'Orbitron', 'JetBrains Mono', sans-serif;
+  letter-spacing: 0.01em;
+}
+.font-tech {
+  font-family: 'Rajdhani', 'Inter', sans-serif;
+  letter-spacing: 0.02em;
+}

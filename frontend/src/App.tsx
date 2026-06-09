@@ -20,7 +20,7 @@ function Nav() {
       <div className="flex items-center gap-6 px-6 h-12">
         <NavLink to="/" className="flex items-center gap-2 no-underline">
           <Eye size={16} style={{ color: 'var(--accent)' }} strokeWidth={1.8} />
-          <span style={{ color: 'var(--text)', fontWeight: 600, fontSize: 14, letterSpacing: '-0.01em' }}>
+          <span className="font-display" style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15, letterSpacing: '0.04em' }}>
             NoCode CV
           </span>
         </NavLink>

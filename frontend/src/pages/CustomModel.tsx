@@ -376,7 +376,7 @@ function makeLabel(text1: string, text2: string, color: string): THREE.Sprite {
   canvas.height = H
   const ctx = canvas.getContext('2d')!
   ctx.clearRect(0, 0, W, H)
-  ctx.font      = 'bold 22px "JetBrains Mono", monospace'
+  ctx.font      = '700 20px "Orbitron", "JetBrains Mono", monospace'
   ctx.fillStyle = color
   ctx.textAlign = 'center'
   ctx.fillText(text1, W / 2, 26)
@@ -2092,12 +2092,13 @@ export default function CustomModel() {
           {/* ── Header: model name + params + input size ────────────────────── */}
           <div style={{ padding: '12px 13px 10px', borderBottom: '1px solid rgba(255,255,255,0.055)', flexShrink: 0 }}>
             <input
+              className="font-display"
               value={modelName} onChange={e => setModelName(e.target.value)}
               placeholder="Model name"
               style={{
                 width: '100%', background: 'transparent', border: 'none', outline: 'none',
-                color: 'rgba(225,225,235,0.92)', fontSize: 13, fontWeight: 600,
-                fontFamily: 'inherit', padding: 0, marginBottom: 6, display: 'block',
+                color: 'rgba(225,225,235,0.92)', fontSize: 13, fontWeight: 700,
+                letterSpacing: '0.03em', padding: 0, marginBottom: 6, display: 'block',
               }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2249,11 +2250,11 @@ export default function CustomModel() {
                     >
                       {/* Row 1: name + category tag + shape + delete */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{
-                          fontSize: 13, fontWeight: 600, letterSpacing: '-0.02em',
-                          fontFamily: 'inherit', lineHeight: 1,
+                        <span className="font-tech" style={{
+                          fontSize: 15, fontWeight: 700, letterSpacing: '0.03em',
+                          lineHeight: 1,
                           color: valid ? 'var(--text)' : '#f87171',
-                          flex: 1, minWidth: 0,
+                          flex: 1, minWidth: 0, textShadow: valid ? `0 0 12px ${color}44` : 'none',
                         }}>
                           {LAYER_DISPLAY[layer.type] ?? layer.type}
                         </span>
