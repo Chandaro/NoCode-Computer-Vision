@@ -182,8 +182,9 @@ def get_run(project_id: int, run_id: int, session: Session = Depends(get_session
 
 def _build_custom_dataset(project_id: int, run_id: int, classes: list,
                            input_h: int, input_w: int,
-                           val_split: float, session: Session) -> tuple[str, int, dict]:
-    """Build ImageFolder from the project's classification-specific uploads, resized to input_h×input_w.
+                           val_split: float, session: Session) -> tuple[str, int, dict, int]:
+    """Build an ImageFolder from the project's classification dataset
+    (cls_uploads/<project>/<class>/...), resized to input_h×input_w.
     Returns (dataset_dir, total_skipped, skip_reason_counts, placed).
     """
     from PIL import Image as PILImage
@@ -251,26 +252,39 @@ def _build_torch_model(layers: list, input_h: int, input_w: int, num_classes: in
             stride      = int(p.get("stride", 1))
             padding     = int(p.get("padding", 1))
             if flattened:
-                raise ValueError(f"Cannot add conv2d after flatten")
+                raise ValueError("Cannot add a Conv layer after Flatten. "
+                                 "Convolution layers must come before Flatten / Linear.")
             modules.append(nn.Conv2d(current_channels, filters, kernel_size, stride, padding))
             current_channels = filters
             spatial_h = (spatial_h + 2 * padding - kernel_size) // stride + 1
             spatial_w = (spatial_w + 2 * padding - kernel_size) // stride + 1
+            if spatial_h < 1 or spatial_w < 1:
+                raise ValueError(
+                    "The image has shrunk to nothing before the end of the network. "
+                    "You have too many Conv/Pool layers (or kernels too large) for a "
+                    f"{input_h}×{input_w} input. Remove some pooling layers, increase the "
+                    "input size, or use padding.")
 
         elif lt == "batchnorm2d":
             if flattened:
-                raise ValueError("Cannot add batchnorm2d after flatten")
+                raise ValueError("Cannot add Batch Norm after Flatten.")
             modules.append(nn.BatchNorm2d(current_channels))
 
         elif lt in ("maxpool2d", "avgpool2d"):
             if flattened:
-                raise ValueError(f"Cannot add {lt} after flatten")
+                disp = "Max Pool" if lt == "maxpool2d" else "Avg Pool"
+                raise ValueError(f"Cannot add {disp} after Flatten.")
             ks = int(p.get("kernel_size", 2))
             st = int(p.get("stride", ks))
             pool_cls = nn.MaxPool2d if lt == "maxpool2d" else nn.AvgPool2d
             modules.append(pool_cls(ks, st))
-            spatial_h = max(1, spatial_h // st)
-            spatial_w = max(1, spatial_w // st)
+            spatial_h = spatial_h // st
+            spatial_w = spatial_w // st
+            if spatial_h < 1 or spatial_w < 1:
+                raise ValueError(
+                    "The image has shrunk to nothing after too many pooling layers. "
+                    f"For a {input_h}×{input_w} input, remove some Max/Avg Pool layers "
+                    "or increase the input size.")
 
         elif lt == "relu":
             modules.append(nn.ReLU())
@@ -357,18 +371,19 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
             )
             push(f"Dataset ready — {placed} images placed, {skipped} skipped")
             if reasons["file_not_found"] > 0:
-                push(f"  ⚠ {reasons['file_not_found']} image files missing from uploads folder")
+                push(f"  ⚠ {reasons['file_not_found']} image files missing")
             if reasons["corrupt"] > 0:
                 push(f"  ⚠ {reasons['corrupt']} images could not be opened (corrupt files)")
             if placed == 0:
-                hint = []
-                if reasons["no_annotation"] == skipped:
-                    hint.append("None of your images have annotations. Go to the Annotate page and draw at least one bounding box per image to assign a class label.")
-                elif reasons["file_not_found"] == skipped:
-                    hint.append("Image files are missing from the uploads folder. Try re-uploading your images.")
+                # This dataset comes from the Classification Dataset section
+                # (per-class image folders), NOT from bounding-box annotations.
+                if reasons["corrupt"] == skipped and skipped > 0:
+                    hint = "All images were corrupt or unreadable. Try re-uploading them."
                 else:
-                    hint.append(f"Breakdown: {reasons}")
-                raise ValueError("No images could be placed into the dataset. " + " ".join(hint))
+                    hint = ("Upload images for at least 2 classes in the Classification "
+                            "Dataset section (on the Image Classification page), then come "
+                            "back and train.")
+                raise ValueError("No images could be placed into the dataset. " + hint)
 
         # CUDA detection
         use_cuda = torch.cuda.is_available()

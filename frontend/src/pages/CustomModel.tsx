@@ -2025,6 +2025,9 @@ export default function CustomModel() {
   const allShapes = computeAllShapes(layers, inputH, inputW)
   // allShapes[0] = input, allShapes[i+1] = output of layers[i]
   const totalParams = estimateParams(layers, inputH, inputW)
+  // Architecture is invalid if any layer produced an impossible shape ([-1]):
+  // e.g. too many pools shrank the image to nothing, or a conv after flatten.
+  const architectureValid = allShapes.every(s => isValidShape(s))
 
   // Status badge color
   const statusColor = (s: string): 'green' | 'yellow' | 'red' | 'gray' | 'blue' => {
@@ -2560,13 +2563,24 @@ export default function CustomModel() {
           })()}
 
           <div style={{ padding: '0 12px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {!architectureValid && (
+              <div style={{
+                padding: '8px 10px', borderRadius: 6, fontSize: 11, lineHeight: 1.5,
+                background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)',
+                color: '#f87171',
+              }}>
+                ⚠ Your network is invalid — a layer marked <strong>bad</strong> shrinks the
+                image to nothing. Remove some Max/Avg Pool layers or increase the input size.
+              </div>
+            )}
             <Btn
               variant="primary"
               onClick={startTraining}
-              disabled={activeRun?.status === 'running' || activeRun?.status === 'pending'}
+              disabled={activeRun?.status === 'running' || activeRun?.status === 'pending' || !architectureValid}
               style={{ width: '100%', justifyContent: 'center' }}
             >
-              {activeRun?.status === 'running' ? 'Training…' : 'Train'}
+              {activeRun?.status === 'running' ? 'Training…'
+                : !architectureValid ? 'Fix network to train' : 'Train'}
             </Btn>
             {activeRun?.status === 'running' && (
               <Btn variant="ghost" size="sm" onClick={stopRun}
