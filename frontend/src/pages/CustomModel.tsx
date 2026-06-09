@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import * as THREE from 'three'
 import api from '../api'
 import { PageHeader, Btn, Badge } from '../components/ui'
+import ConvBuilderGuide from '../components/ConvBuilderGuide'
 import { Cpu } from 'lucide-react'
 import {
   LineChart, Line, BarChart, Bar, Cell,
@@ -2071,6 +2072,7 @@ export default function CustomModel() {
       />
 
       <div style={{ padding: '8px 0 10px', flexShrink: 0 }}>
+        <ConvBuilderGuide />
         <div style={{ padding: '9px 14px', background: 'rgba(88,101,242,0.08)',
           border: '1px solid rgba(88,101,242,0.22)', borderRadius: 8,
           fontSize: 12, color: '#a5b4fc', lineHeight: 1.6 }}>
