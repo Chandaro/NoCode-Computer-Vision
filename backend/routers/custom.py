@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlmodel import Session, select
 from pydantic import BaseModel
@@ -942,5 +942,124 @@ def export_run_onnx(project_id: int, run_id: int,
 
     return FileResponse(onnx_path, filename=f"custom_model_run{run_id}.onnx",
                         media_type="application/octet-stream")
+
+
+# ── Grad-CAM (show what the model looks at) ─────────────────────────────────────
+
+@router.post("/runs/{run_id}/gradcam")
+async def custom_gradcam(project_id: int, run_id: int,
+                         file: UploadFile = File(...),
+                         session: Session = Depends(get_session)):
+    """
+    Grad-CAM: run the trained custom CNN on an image and return a heatmap that
+    highlights the regions the model used to make its decision.
+
+    How it works (the teaching value):
+      1. Forward pass; record the feature maps of the last conv layer.
+      2. Backward pass from the predicted class score; record the gradients.
+      3. Weight each feature map by the average of its gradients, sum, ReLU.
+      4. That map = where the model "looked". Upscale and overlay on the photo.
+    """
+    import io, base64
+    import torch
+    import torch.nn.functional as F
+    import numpy as np
+    import torchvision.transforms as T
+    from PIL import Image as PILImage
+
+    run = session.get(CustomTrainingRun, run_id)
+    if not run or run.project_id != project_id:
+        raise HTTPException(404, "Run not found")
+    if not run.model_path or not os.path.exists(run.model_path):
+        raise HTTPException(404, "Train this run first, then try Grad-CAM.")
+
+    project = session.get(Project, project_id)
+    cfg     = session.get(CustomModelConfig, run.config_id)
+    if not cfg:
+        raise HTTPException(404, "Config not found")
+
+    saved   = json.loads(run.results_json) if run.results_json else {}
+    classes = saved.get("class_names") or sorted(project.classes)
+    layers  = json.loads(cfg.layers_json)
+    input_h, input_w = cfg.input_h, cfg.input_w
+
+    # Build + load the model
+    model = _build_torch_model(layers, input_h, input_w, len(classes))
+    model.load_state_dict(torch.load(run.model_path, map_location="cpu", weights_only=False))
+    model.eval()
+
+    # Target = the LAST convolutional layer (standard Grad-CAM choice)
+    target = None
+    for m in model.modules():
+        if isinstance(m, torch.nn.Conv2d):
+            target = m
+    if target is None:
+        raise HTTPException(400,
+            "This network has no convolutional layer, so there is nothing spatial "
+            "to visualise. Add at least one Conv layer.")
+
+    # Read + preprocess the image
+    raw = await file.read()
+    try:
+        pil = PILImage.open(io.BytesIO(raw)).convert("RGB")
+    except Exception as exc:
+        raise HTTPException(400, f"Cannot read image: {exc}")
+    tf = T.Compose([
+        T.Resize((input_h, input_w)),
+        T.ToTensor(),
+        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+    ])
+    x = tf(pil).unsqueeze(0)
+
+    # Hooks to capture activations + gradients of the target layer
+    store = {}
+    def fwd(_m, _i, o): store["act"] = o
+    def bwd(_m, _gi, go): store["grad"] = go[0]
+    h1 = target.register_forward_hook(fwd)
+    h2 = target.register_full_backward_hook(bwd)
+
+    try:
+        out   = model(x)                         # [1, n_classes]
+        probs = F.softmax(out, dim=1)[0]
+        cls   = int(out.argmax(dim=1))
+        model.zero_grad()
+        out[0, cls].backward()
+    finally:
+        h1.remove(); h2.remove()
+
+    acts  = store["act"][0].detach()             # [C, h, w]
+    grads = store["grad"][0].detach()            # [C, h, w]
+    weights = grads.mean(dim=(1, 2))             # [C]
+    cam = F.relu((weights[:, None, None] * acts).sum(0))   # [h, w]
+    cam = cam.numpy().astype("float32")
+    cam -= cam.min()
+    cam /= (cam.max() + 1e-8)
+
+    # Colourise + overlay on the original image
+    import cv2
+    orig = np.array(pil)                          # H×W×3 RGB
+    H, W = orig.shape[:2]
+    cam_rs  = cv2.resize(cam, (W, H))
+    heat    = cv2.applyColorMap((cam_rs * 255).astype(np.uint8), cv2.COLORMAP_JET)  # BGR
+    heat_rgb = cv2.cvtColor(heat, cv2.COLOR_BGR2RGB)
+    overlay = (0.45 * heat_rgb + 0.55 * orig).clip(0, 255).astype(np.uint8)
+
+    def _b64(rgb):
+        ok, buf = cv2.imencode(".png", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+        return base64.b64encode(buf.tobytes()).decode()
+
+    preds = sorted(
+        [{"class_name": classes[i] if i < len(classes) else f"cls{i}",
+          "probability": round(float(probs[i]), 4)} for i in range(len(probs))],
+        key=lambda d: d["probability"], reverse=True,
+    )
+    return {
+        "overlay_b64":  _b64(overlay),
+        "heatmap_b64":  _b64(heat_rgb),
+        "original_b64": _b64(orig),
+        "class_name":   classes[cls] if cls < len(classes) else f"cls{cls}",
+        "probability":  round(float(probs[cls]), 4),
+        "predictions":  preds[:5],
+    }
 
 

@@ -1583,6 +1583,9 @@ export default function CustomModel() {
   const [inferPreview,  setInferPreview]  = useState<string | null>(null)
   const [inferRunning,  setInferRunning]  = useState(false)
   const [inferResult,   setInferResult]   = useState<{top1:{class_name:string;probability:number};top5:{class_name:string;probability:number}[]} | null>(null)
+  const [gradcam,       setGradcam]       = useState<{overlay_b64:string;heatmap_b64:string;class_name:string;probability:number} | null>(null)
+  const [gradcamRunning, setGradcamRunning] = useState(false)
+  const [gradcamErr,    setGradcamErr]    = useState('')
   const [onnxExporting, setOnnxExporting] = useState<number | null>(null)
   const [expandedRun,   setExpandedRun]   = useState<number | null>(null)
   const inferFileRef = useRef<HTMLInputElement>(null)
@@ -2024,7 +2027,7 @@ export default function CustomModel() {
 
   const runInference = async () => {
     if (!inferFile || !inferRunId) return
-    setInferRunning(true); setInferResult(null)
+    setInferRunning(true); setInferResult(null); setGradcam(null); setGradcamErr('')
     try {
       const fd = new FormData()
       fd.append('file', inferFile)
@@ -2034,6 +2037,22 @@ export default function CustomModel() {
       )
       setInferResult(res.data)
     } finally { setInferRunning(false) }
+  }
+
+  const runGradcam = async () => {
+    if (!inferFile || !inferRunId) return
+    setGradcamRunning(true); setGradcam(null); setGradcamErr('')
+    try {
+      const fd = new FormData()
+      fd.append('file', inferFile)
+      const res = await api.post(
+        `/projects/${projectId}/custom/runs/${inferRunId}/gradcam`, fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      )
+      setGradcam(res.data)
+    } catch (e: any) {
+      setGradcamErr(e?.response?.data?.detail ?? e?.message ?? 'Grad-CAM failed')
+    } finally { setGradcamRunning(false) }
   }
 
   const openSSE = (runId: number) => {
@@ -3066,11 +3085,18 @@ export default function CustomModel() {
                   <img src={inferPreview} alt="preview"
                     style={{ width: '100%', maxHeight: 100, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)' }} />
                 )}
-                <Btn variant="primary" size="sm" onClick={runInference}
-                  disabled={!inferFile || !inferRunId || inferRunning}
-                  style={{ justifyContent: 'center' }}>
-                  {inferRunning ? '⏳ Running…' : '▶ Classify'}
-                </Btn>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <Btn variant="primary" size="sm" onClick={runInference}
+                    disabled={!inferFile || !inferRunId || inferRunning}
+                    style={{ flex: 1, justifyContent: 'center' }}>
+                    {inferRunning ? '⏳ Running…' : '▶ Classify'}
+                  </Btn>
+                  <Btn variant="secondary" size="sm" onClick={runGradcam}
+                    disabled={!inferFile || !inferRunId || gradcamRunning}
+                    style={{ flex: 1, justifyContent: 'center' }}>
+                    {gradcamRunning ? '⏳…' : '🔥 Grad-CAM'}
+                  </Btn>
+                </div>
                 {inferResult && (
                   <div>
                     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 5, padding: '8px 10px', marginBottom: 6 }}>
@@ -3088,6 +3114,25 @@ export default function CustomModel() {
                         </span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* Grad-CAM heatmap */}
+                {gradcamErr && (
+                  <p style={{ fontSize: 11, color: '#f87171' }}>{gradcamErr}</p>
+                )}
+                {gradcam && (
+                  <div style={{ marginTop: 4 }}>
+                    <p style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>
+                      Where the model looked — red = most important
+                    </p>
+                    <img src={'data:image/png;base64,' + gradcam.overlay_b64} alt="grad-cam"
+                      style={{ width: '100%', borderRadius: 6, border: '1px solid var(--border)', display: 'block' }} />
+                    <p style={{ fontSize: 11, color: 'var(--text2)', marginTop: 5 }}>
+                      Predicted <strong style={{ color: 'var(--text)' }}>{gradcam.class_name}</strong>
+                      {' '}({(gradcam.probability * 100).toFixed(1)}%). The bright areas are the
+                      pixels that pushed the model toward this answer.
+                    </p>
                   </div>
                 )}
               </div>
