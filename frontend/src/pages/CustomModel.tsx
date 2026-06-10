@@ -2049,9 +2049,18 @@ export default function CustomModel() {
         `/projects/${projectId}/custom/runs/${inferRunId}/gradcam`, fd,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       )
-      setGradcam(res.data)
+      if (res.data && res.data.overlay_b64) {
+        setGradcam(res.data)
+      } else {
+        setGradcamErr('Grad-CAM endpoint not available — restart the backend, then try again.')
+      }
     } catch (e: any) {
-      setGradcamErr(e?.response?.data?.detail ?? e?.message ?? 'Grad-CAM failed')
+      const status = e?.response?.status
+      if (status === 405 || status === 404) {
+        setGradcamErr('Grad-CAM endpoint not available — restart the backend, then try again.')
+      } else {
+        setGradcamErr(e?.response?.data?.detail ?? e?.message ?? 'Grad-CAM failed')
+      }
     } finally { setGradcamRunning(false) }
   }
 
