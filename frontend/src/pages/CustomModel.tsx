@@ -2186,11 +2186,15 @@ export default function CustomModel() {
   }
 
   const sectionLabel = (text: string) => (
-    <p style={{
-      fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
-      textTransform: 'uppercase' as const, color: 'var(--text3)',
-      padding: '10px 12px 4px', flexShrink: 0,
-    }}>{text}</p>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 12px 6px', flexShrink: 0 }}>
+      <span style={{ width: 3, height: 12, borderRadius: 2,
+        background: 'linear-gradient(180deg, var(--accent), #a78bfa)',
+        boxShadow: '0 0 6px var(--accent)' }} />
+      <p className="font-tech" style={{
+        fontSize: 11, fontWeight: 700, letterSpacing: '0.12em',
+        textTransform: 'uppercase' as const, color: 'var(--text2)', margin: 0,
+      }}>{text}</p>
+    </div>
   )
 
   return (
@@ -2921,10 +2925,14 @@ export default function CustomModel() {
           )}
 
           {/* ── Run history ── */}
-          {allRuns.length > 0 && (
+          {allRuns.length > 0 && (() => {
+            const bestAcc = Math.max(
+              ...allRuns.map(r => (typeof (r.results as any)?.top1_acc === 'number'
+                ? (r.results as any).top1_acc : 0)), 0)
+            return (
             <div style={{ margin: '0 10px 10px', flexShrink: 0 }}>
               {sectionLabel('Run History')}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[...allRuns].reverse().map(run => {
                   const res      = run.results as Record<string, unknown>
                   const acc1     = typeof res?.top1_acc === 'number' ? res.top1_acc : null
@@ -2932,50 +2940,98 @@ export default function CustomModel() {
                     ? res.per_class as Record<string, Record<string, number>> : null
                   const cm       = Array.isArray(res?.confusion_matrix) ? res.confusion_matrix as number[][] : null
                   const isExp    = expandedRun === run.id
+                  const isBest   = acc1 !== null && acc1 === bestAcc && bestAcc > 0
+                  const isRunning = run.status === 'running' || run.status === 'pending'
+                  // accuracy → colour
+                  const accColor = acc1 === null ? 'var(--text3)'
+                    : acc1 >= 0.8 ? '#22c55e' : acc1 >= 0.6 ? '#eab308' : '#fb923c'
 
                   return (
-                    <div key={run.id} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', gap: 6 }}>
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                            <Badge color={statusColor(run.status)}>{run.status}</Badge>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>#{run.id}</span>
-                            <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
-                              {run.epochs}ep · lr{run.lr}
-                            </span>
-                          </div>
-                          {acc1 !== null && (
-                            <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>
-                              {(acc1 * 100).toFixed(1)}%
-                            </span>
+                    <div key={run.id}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)';
+                        e.currentTarget.style.borderColor = isBest ? '#22c55e88' : 'var(--border2)' }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = 'none';
+                        e.currentTarget.style.borderColor = isBest ? '#22c55e55' : 'var(--border)' }}
+                      style={{
+                        background: isBest
+                          ? 'linear-gradient(135deg, rgba(34,197,94,0.1), rgba(34,197,94,0.03))'
+                          : 'linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))',
+                        border: `1px solid ${isBest ? '#22c55e55' : 'var(--border)'}`,
+                        borderRadius: 10, overflow: 'hidden',
+                        transition: 'transform 0.15s, border-color 0.15s',
+                      }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}>
+
+                        {/* Accuracy badge (left) */}
+                        <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 52 }}>
+                          {acc1 !== null ? (
+                            <>
+                              <p className="font-display" style={{ fontSize: 18, fontWeight: 800,
+                                color: accColor, lineHeight: 1, margin: 0,
+                                textShadow: `0 0 12px ${accColor}55` }}>
+                                {(acc1 * 100).toFixed(0)}<span style={{ fontSize: 10 }}>%</span>
+                              </p>
+                              <p style={{ fontSize: 8, color: 'var(--text3)', textTransform: 'uppercase',
+                                letterSpacing: '0.08em', margin: '2px 0 0' }}>accuracy</p>
+                            </>
+                          ) : (
+                            <div style={{ width: 22, height: 22, margin: '0 auto',
+                              border: '2px solid var(--border2)',
+                              borderTopColor: isRunning ? 'var(--accent)' : 'transparent',
+                              borderRadius: '50%',
+                              animation: isRunning ? 'spin 0.8s linear infinite' : 'none' }} />
                           )}
                         </div>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+
+                        {/* Middle: id + config + accuracy bar */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <span className="font-display" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                              Run #{run.id}
+                            </span>
+                            {isBest && <span style={{ fontSize: 10, color: '#22c55e' }} title="Best run">★</span>}
+                            <Badge color={statusColor(run.status)}>{run.status}</Badge>
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 5 }}>
+                            {run.epochs} ep · lr {run.lr}
+                          </div>
+                          {/* accuracy bar */}
+                          {acc1 !== null && (
+                            <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${acc1 * 100}%`, borderRadius: 2,
+                                background: accColor, boxShadow: `0 0 6px ${accColor}` }} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Action row */}
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', padding: '0 12px 10px' }}>
                           {run.status === 'done' && (perClass || cm) && (
                             <Btn variant="ghost" size="sm" onClick={() => setExpandedRun(isExp ? null : run.id)}>
-                              {isExp ? '▲' : 'CM'}
+                              {isExp ? '▲ Hide' : '▦ Confusion'}
                             </Btn>
                           )}
                           {run.status === 'done' && run.model_path && (<>
                             <Btn variant="secondary" size="sm"
                               href={`/api/projects/${projectId}/custom/runs/${run.id}/download`}>
-                              ↓.pth
+                              ↓ .pth
                             </Btn>
                             <Btn variant="secondary" size="sm"
                               disabled={onnxExporting === run.id}
                               onClick={() => exportOnnx(run.id)}>
-                              {onnxExporting === run.id ? '…' : '↓.onnx'}
+                              {onnxExporting === run.id ? '…' : '↓ .onnx'}
                             </Btn>
                           </>)}
                           {run.status === 'running' && (
                             <Btn variant="ghost" size="sm" onClick={stopRun} style={{ color: 'var(--warn)' }}>■ Stop</Btn>
                           )}
+                          <span style={{ flex: 1 }} />
                           {run.status !== 'running' && (
                             <Btn variant="ghost" size="sm"
                               onClick={async () => { await api.delete(`/projects/${projectId}/custom/runs/${run.id}`); loadAllRuns() }}
                               style={{ color: 'var(--error,#f87171)' }}>🗑</Btn>
                           )}
-                        </div>
                       </div>
 
                       {/* Expanded: per-class metrics + confusion matrix */}
@@ -3050,7 +3106,7 @@ export default function CustomModel() {
                 })}
               </div>
             </div>
-          )}
+          )})()}
 
           {/* ── Inference ── */}
           {allRuns.filter(r => r.status === 'done').length > 0 && (
