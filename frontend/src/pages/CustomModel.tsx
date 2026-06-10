@@ -13,8 +13,11 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type LayerType =
-  | 'conv2d' | 'batchnorm2d' | 'maxpool2d' | 'avgpool2d'
-  | 'relu' | 'gelu' | 'sigmoid' | 'dropout' | 'flatten' | 'linear'
+  | 'conv2d' | 'conv1x1' | 'batchnorm2d' | 'groupnorm'
+  | 'maxpool2d' | 'avgpool2d' | 'gap'
+  | 'relu' | 'gelu' | 'leakyrelu' | 'silu' | 'mish' | 'hardswish' | 'elu' | 'tanh' | 'sigmoid'
+  | 'dropout' | 'flatten' | 'linear'
+  | 'conv_block' | 'residual_block' | 'dwsep_block' | 'se_block'
 
 interface Layer {
   id: string
@@ -47,50 +50,69 @@ interface CustomRun {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const LAYER_COLORS: Record<string, number> = {
-  input:       0x58586e,
-  conv2d:      0x7c6af7,
-  batchnorm2d: 0x4e9e8c,
-  maxpool2d:   0x5b8cd6,
-  avgpool2d:   0x5b8cd6,
-  relu:        0xd4865a,
-  gelu:        0xc47a6a,
-  sigmoid:     0xb87898,
-  dropout:     0x9e9c64,
-  flatten:     0x7a7a90,
-  linear:      0x8878b8,
+const LAYER_CSS: Record<string, string> = {
+  input:          '#6b7280',
+  conv2d:         '#8b5cf6',   // vivid purple
+  conv1x1:        '#a78bfa',   // light purple
+  batchnorm2d:    '#22d3ee',   // cyan
+  groupnorm:      '#06b6d4',   // teal-cyan
+  maxpool2d:      '#38bdf8',   // sky blue
+  avgpool2d:      '#0ea5e9',   // deeper blue
+  gap:            '#0284c7',   // deep blue
+  relu:           '#fb923c',   // orange
+  gelu:           '#f97316',   // deep orange
+  leakyrelu:      '#fdba74',   // light orange
+  silu:           '#fb7185',   // rose
+  mish:           '#f43f5e',   // red-rose
+  hardswish:      '#fca5a5',   // light red
+  elu:            '#fbbf24',   // amber-orange
+  tanh:           '#facc15',   // yellow
+  sigmoid:        '#ec4899',   // pink
+  dropout:        '#eab308',   // amber
+  flatten:        '#94a3b8',   // slate
+  linear:         '#6366f1',   // indigo
+  conv_block:     '#7c3aed',   // deep purple (blocks)
+  residual_block: '#2dd4bf',   // emerald-teal
+  dwsep_block:    '#14b8a6',   // teal
+  se_block:       '#f59e0b',   // amber (attention)
 }
 
-const LAYER_CSS: Record<string, string> = {
-  input:       '#6b7280',
-  conv2d:      '#8b5cf6',   // vivid purple
-  batchnorm2d: '#22d3ee',   // cyan
-  maxpool2d:   '#38bdf8',   // sky blue
-  avgpool2d:   '#0ea5e9',   // deeper blue
-  relu:        '#fb923c',   // orange
-  gelu:        '#f97316',   // deep orange
-  sigmoid:     '#ec4899',   // pink
-  dropout:     '#eab308',   // amber
-  flatten:     '#94a3b8',   // slate
-  linear:      '#6366f1',   // indigo
-}
+const LAYER_COLORS: Record<string, number> = Object.fromEntries(
+  Object.entries(LAYER_CSS).map(([k, v]) => [k, parseInt(v.slice(1), 16)])
+)
 
 const ALL_LAYER_TYPES: LayerType[] = [
-  'conv2d', 'batchnorm2d', 'maxpool2d', 'avgpool2d',
-  'relu', 'gelu', 'sigmoid', 'dropout', 'flatten', 'linear',
+  'conv2d', 'conv1x1', 'conv_block', 'residual_block', 'dwsep_block', 'se_block',
+  'batchnorm2d', 'groupnorm',
+  'maxpool2d', 'avgpool2d', 'gap',
+  'relu', 'leakyrelu', 'gelu', 'silu', 'mish', 'hardswish', 'elu', 'tanh', 'sigmoid',
+  'dropout', 'flatten', 'linear',
 ]
 
 const DEFAULT_PARAMS: Record<LayerType, Record<string, number>> = {
-  conv2d:      { filters: 16, kernel_size: 3, stride: 1, padding: 1 },
-  batchnorm2d: {},
-  maxpool2d:   { kernel_size: 2, stride: 2 },
-  avgpool2d:   { kernel_size: 2, stride: 2 },
-  relu:        {},
-  gelu:        {},
-  sigmoid:     {},
-  dropout:     { p: 0.5 },
-  flatten:     {},
-  linear:      { out_features: 128 },
+  conv2d:         { filters: 16, kernel_size: 3, stride: 1, padding: 1 },
+  conv1x1:        { filters: 32 },
+  batchnorm2d:    {},
+  groupnorm:      { groups: 8 },
+  maxpool2d:      { kernel_size: 2, stride: 2 },
+  avgpool2d:      { kernel_size: 2, stride: 2 },
+  gap:            {},
+  relu:           {},
+  gelu:           {},
+  leakyrelu:      {},
+  silu:           {},
+  mish:           {},
+  hardswish:      {},
+  elu:            {},
+  tanh:           {},
+  sigmoid:        {},
+  dropout:        { p: 0.5 },
+  flatten:        {},
+  linear:         { out_features: 128 },
+  conv_block:     { filters: 32, stride: 1 },
+  residual_block: { filters: 32, stride: 1 },
+  dwsep_block:    { filters: 64, stride: 1 },
+  se_block:       {},
 }
 
 // ── Architecture presets ──────────────────────────────────────────────────────
@@ -185,6 +207,33 @@ const PRESETS = [
       mkLayer('linear', { out_features: 64 }),
     ],
   },
+  {
+    name: 'ResNet-mini',
+    color: '#2dd4bf',
+    desc: 'Residual blocks + Global Avg Pool — modern, deep, trains well',
+    make: () => [
+      mkLayer('conv_block', { filters: 32 }),
+      mkLayer('residual_block', { filters: 32 }),
+      mkLayer('residual_block', { filters: 64, stride: 2 }),
+      mkLayer('residual_block', { filters: 128, stride: 2 }),
+      mkLayer('gap'),
+      mkLayer('linear', { out_features: 128 }),
+    ],
+  },
+  {
+    name: 'MobileNet-mini',
+    color: '#14b8a6',
+    desc: 'Depthwise-separable blocks — efficient, few parameters',
+    make: () => [
+      mkLayer('conv_block', { filters: 32, stride: 2 }),
+      mkLayer('dwsep_block', { filters: 64 }),
+      mkLayer('dwsep_block', { filters: 128, stride: 2 }),
+      mkLayer('se_block'),
+      mkLayer('dwsep_block', { filters: 128 }),
+      mkLayer('gap'),
+      mkLayer('linear', { out_features: 128 }),
+    ],
+  },
 ]
 
 const DEFAULT_LAYERS: Layer[] = [
@@ -213,17 +262,28 @@ function computeOutputShape(layer: Layer, shape: number[]): number[] {
         Math.floor((W + 2 * padding - kernel_size) / stride + 1),
       ]
     }
+    case 'conv1x1':
+      return [layer.params.filters ?? 32, H, W]
+    case 'conv_block':
+    case 'residual_block':
+    case 'dwsep_block': {
+      const filters = layer.params.filters ?? C
+      const s = layer.params.stride ?? 1
+      return [filters, Math.max(1, Math.floor(H / s)), Math.max(1, Math.floor(W / s))]
+    }
     case 'maxpool2d':
     case 'avgpool2d': {
       const { kernel_size = 2 } = layer.params
       const s = layer.params.stride ?? kernel_size
       return [C, Math.max(1, Math.floor(H / s)), Math.max(1, Math.floor(W / s))]
     }
+    case 'gap':
+      return [C]   // global average pool → flatten to [C]
     case 'flatten':
       return [shape.reduce((a, b) => a * b, 1)]
     case 'linear':
       return [layer.params.out_features ?? 128]
-    default:
+    default:   // norms, activations, dropout, se_block: shape unchanged
       return shape
   }
 }
@@ -279,29 +339,55 @@ function uid(): string {
 }
 
 const LAYER_DISPLAY: Record<string, string> = {
-  conv2d:      'Conv 2D',
-  batchnorm2d: 'Batch Norm',
-  maxpool2d:   'Max Pool',
-  avgpool2d:   'Avg Pool',
-  relu:        'ReLU',
-  gelu:        'GELU',
-  sigmoid:     'Sigmoid',
-  dropout:     'Dropout',
-  flatten:     'Flatten',
-  linear:      'Linear',
+  conv2d:         'Conv 2D',
+  conv1x1:        '1×1 Conv',
+  batchnorm2d:    'Batch Norm',
+  groupnorm:      'Group Norm',
+  maxpool2d:      'Max Pool',
+  avgpool2d:      'Avg Pool',
+  gap:            'Global Avg Pool',
+  relu:           'ReLU',
+  gelu:           'GELU',
+  leakyrelu:      'Leaky ReLU',
+  silu:           'SiLU',
+  mish:           'Mish',
+  hardswish:      'Hardswish',
+  elu:            'ELU',
+  tanh:           'Tanh',
+  sigmoid:        'Sigmoid',
+  dropout:        'Dropout',
+  flatten:        'Flatten',
+  linear:         'Linear',
+  conv_block:     'Conv Block',
+  residual_block: 'Residual Block',
+  dwsep_block:    'Depthwise Sep',
+  se_block:       'SE Attention',
 }
 
 const LAYER_CATEGORY: Record<string, string> = {
-  conv2d:      'CONV',
-  batchnorm2d: 'NORM',
-  maxpool2d:   'POOL',
-  avgpool2d:   'POOL',
-  relu:        'ACTIV',
-  gelu:        'ACTIV',
-  sigmoid:     'ACTIV',
-  dropout:     'REG',
-  flatten:     'SHAPE',
-  linear:      'DENSE',
+  conv2d:         'CONV',
+  conv1x1:        'CONV',
+  batchnorm2d:    'NORM',
+  groupnorm:      'NORM',
+  maxpool2d:      'POOL',
+  avgpool2d:      'POOL',
+  gap:            'POOL',
+  relu:           'ACTIV',
+  gelu:           'ACTIV',
+  leakyrelu:      'ACTIV',
+  silu:           'ACTIV',
+  mish:           'ACTIV',
+  hardswish:      'ACTIV',
+  elu:            'ACTIV',
+  tanh:           'ACTIV',
+  sigmoid:        'ACTIV',
+  dropout:        'REG',
+  flatten:        'SHAPE',
+  linear:         'DENSE',
+  conv_block:     'BLOCK',
+  residual_block: 'BLOCK',
+  dwsep_block:    'BLOCK',
+  se_block:       'BLOCK',
 }
 
 const LAYER_DESCRIPTIONS: Record<string, { label: string; what: string; why: string; analogy: string }> = {
@@ -1323,12 +1409,25 @@ function getParamsPreview(layer: Layer): string {
   const p = layer.params
   switch (layer.type) {
     case 'conv2d':      return `${p.filters ?? 32}f · k${p.kernel_size ?? 3} · s${p.stride ?? 1} · p${p.padding ?? 1}`
+    case 'conv1x1':     return `${p.filters ?? 32}f · 1×1 (channel mix)`
+    case 'conv_block':  return `${p.filters ?? 32}f · Conv→BN→ReLU${(p.stride ?? 1) > 1 ? ` · s${p.stride}` : ''}`
+    case 'residual_block': return `${p.filters ?? 32}f · skip connection${(p.stride ?? 1) > 1 ? ` · s${p.stride}` : ''}`
+    case 'dwsep_block': return `${p.filters ?? 64}f · depthwise + 1×1${(p.stride ?? 1) > 1 ? ` · s${p.stride}` : ''}`
+    case 'se_block':    return 'channel attention (keeps shape)'
     case 'maxpool2d':
     case 'avgpool2d':   return `kernel ${p.kernel_size ?? 2} · stride ${p.stride ?? 2}`
+    case 'gap':         return 'C×H×W → C (one value per channel)'
     case 'linear':      return `→ ${p.out_features ?? 128} units`
     case 'dropout':     return `p = ${(p.p ?? 0.5).toFixed(2)}`
+    case 'groupnorm':   return `${p.groups ?? 8} groups`
     case 'relu':        return 'max(0, x)'
+    case 'leakyrelu':   return 'max(0.01x, x)'
     case 'gelu':        return 'x · Φ(x)'
+    case 'silu':        return 'x · sigmoid(x)'
+    case 'mish':        return 'x · tanh(softplus(x))'
+    case 'hardswish':   return 'fast SiLU approximation'
+    case 'elu':         return 'smooth negative slope'
+    case 'tanh':        return 'squash to (-1, 1)'
     case 'sigmoid':     return '1 / (1 + e⁻ˣ)'
     case 'batchnorm2d': return 'µ=0 · σ=1 per channel'
     case 'flatten':     return 'C×H×W → flat vector'
@@ -1373,6 +1472,18 @@ function ParamEditor({
       {inp('stride',      'Stride',      1, 4)}
       {inp('padding',     'Padding',     0, 3)}
     </div>
+  )
+  if (layer.type === 'conv1x1') return (
+    <div>{inp('filters', 'Filters', 1, 512)}</div>
+  )
+  if (layer.type === 'conv_block' || layer.type === 'residual_block' || layer.type === 'dwsep_block') return (
+    <div>
+      {inp('filters', 'Filters', 1, 512)}
+      {inp('stride',  'Stride',  1, 2)}
+    </div>
+  )
+  if (layer.type === 'groupnorm') return (
+    <div>{inp('groups', 'Groups', 1, 32)}</div>
   )
   if (layer.type === 'maxpool2d' || layer.type === 'avgpool2d') return (
     <div>
@@ -1442,6 +1553,10 @@ export default function CustomModel() {
   const [stepGamma,   setStepGamma]   = useState(0.1)
   // Regularisation
   const [labelSmoothing, setLabelSmoothing] = useState(0.0)
+  // Quality
+  const [useAmp,       setUseAmp]       = useState(true)
+  const [gradClip,     setGradClip]     = useState(1.0)
+  const [classWeights, setClassWeights] = useState(false)
   // Augmentation
   const [showAug,    setShowAug]    = useState(false)
   const [fliplr,     setFliplr]     = useState(0.5)
@@ -1869,6 +1984,7 @@ export default function CustomModel() {
         optimizer, weight_decay: weightDecay, momentum, warmup_epochs: warmupEpochs,
         lr_scheduler: lrScheduler, step_size: stepSize, step_gamma: stepGamma,
         label_smoothing: labelSmoothing,
+        amp: useAmp, grad_clip: gradClip, class_weights: classWeights,
         fliplr, flipud, degrees, translate, scale,
         brightness, contrast, saturation, erasing, mixup,
       })
@@ -2573,6 +2689,7 @@ export default function CustomModel() {
                     style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)',
                       borderRadius: 4, color: 'var(--text)', padding: '3px 6px', fontSize: 11 }}>
                     <option value="cosine">Cosine</option>
+                    <option value="onecycle">One Cycle (best)</option>
                     <option value="step">Step LR</option>
                     <option value="none">None</option>
                   </select>
@@ -2584,6 +2701,27 @@ export default function CustomModel() {
 
                 {secHdr('Regularisation')}
                 {numInput('Label Smooth', labelSmoothing, setLabelSmoothing, 0, 0.3, 0.01)}
+
+                {secHdr('Quality')}
+                {[['Mixed precision', useAmp, setUseAmp, 'Faster training, less memory (GPU only)'],
+                  ['Class weighting', classWeights, setClassWeights, 'Balances uneven class sizes']].map(
+                  ([label, val, set, hint]) => (
+                  <label key={label as string} title={hint as string}
+                    style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer',
+                      userSelect: 'none', marginBottom: 6 }}>
+                    <div onClick={() => (set as any)((v: boolean) => !v)}
+                      style={{ width: 30, height: 17, borderRadius: 9, flexShrink: 0,
+                        background: val ? 'var(--accent)' : 'var(--surface3)',
+                        border: `1px solid ${val ? 'var(--accent)' : 'var(--border2)'}`,
+                        position: 'relative', transition: 'background 0.15s' }}>
+                      <div style={{ position: 'absolute', top: 2, left: val ? 13 : 2,
+                        width: 11, height: 11, borderRadius: '50%', background: '#fff',
+                        transition: 'left 0.15s' }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: 'var(--text2)' }}>{label as string}</span>
+                  </label>
+                ))}
+                {numInput('Grad Clip', gradClip, setGradClip, 0, 5, 0.5)}
 
                 {secHdr('Augmentation')}
                 <button onClick={() => setShowAug(v => !v)}

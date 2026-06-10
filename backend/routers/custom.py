@@ -43,11 +43,15 @@ class RunBody(BaseModel):
     momentum: float = 0.9
     warmup_epochs: int = 0
     # LR Scheduler
-    lr_scheduler: str = "cosine"  # cosine | step | none
+    lr_scheduler: str = "cosine"  # cosine | onecycle | step | none
     step_size: int = 10
     step_gamma: float = 0.1
     # Regularisation
     label_smoothing: float = 0.0
+    # Quality
+    amp: bool = True              # mixed precision (auto-used only on CUDA)
+    grad_clip: float = 1.0        # gradient clipping max-norm; 0 = off
+    class_weights: bool = False   # weight the loss by inverse class frequency
     # Augmentation
     fliplr: float = 0.5
     flipud: float = 0.0
@@ -228,76 +232,169 @@ def _build_custom_dataset(project_id: int, run_id: int, classes: list,
     return dataset_dir, total_skipped, reasons, placed
 
 
+# ── Macro blocks (composite nn.Modules with internal branches) ──────────────────
+
+def _make_blocks():
+    """Define the macro-block classes. Defined lazily so torch imports stay local."""
+    import torch.nn as nn
+
+    class ConvBlock(nn.Module):
+        """Conv → BatchNorm → ReLU, the most common building block."""
+        def __init__(self, in_c, out_c, k=3, stride=1):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Conv2d(in_c, out_c, k, stride, k // 2, bias=False),
+                nn.BatchNorm2d(out_c), nn.ReLU(inplace=True))
+        def forward(self, x): return self.net(x)
+
+    class ResidualBlock(nn.Module):
+        """ResNet basic block: out = ReLU(conv(x) + shortcut(x))."""
+        def __init__(self, in_c, out_c, stride=1):
+            super().__init__()
+            self.conv = nn.Sequential(
+                nn.Conv2d(in_c, out_c, 3, stride, 1, bias=False), nn.BatchNorm2d(out_c),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(out_c, out_c, 3, 1, 1, bias=False), nn.BatchNorm2d(out_c))
+            self.short = (nn.Identity() if (stride == 1 and in_c == out_c) else
+                          nn.Sequential(nn.Conv2d(in_c, out_c, 1, stride, bias=False),
+                                        nn.BatchNorm2d(out_c)))
+            self.act = nn.ReLU(inplace=True)
+        def forward(self, x): return self.act(self.conv(x) + self.short(x))
+
+    class DWSepBlock(nn.Module):
+        """Depthwise-separable block (MobileNet style): cheap conv."""
+        def __init__(self, in_c, out_c, stride=1):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Conv2d(in_c, in_c, 3, stride, 1, groups=in_c, bias=False),
+                nn.BatchNorm2d(in_c), nn.ReLU(inplace=True),
+                nn.Conv2d(in_c, out_c, 1, bias=False),
+                nn.BatchNorm2d(out_c), nn.ReLU(inplace=True))
+        def forward(self, x): return self.net(x)
+
+    class SEBlock(nn.Module):
+        """Squeeze-and-Excitation channel attention (keeps shape)."""
+        def __init__(self, c, r=16):
+            super().__init__()
+            h = max(1, c // r)
+            self.fc = nn.Sequential(
+                nn.AdaptiveAvgPool2d(1), nn.Flatten(),
+                nn.Linear(c, h), nn.ReLU(inplace=True),
+                nn.Linear(h, c), nn.Sigmoid())
+        def forward(self, x):
+            return x * self.fc(x).view(x.size(0), x.size(1), 1, 1)
+
+    return ConvBlock, ResidualBlock, DWSepBlock, SEBlock
+
+
 # ── PyTorch model builder ──────────────────────────────────────────────────────
 
 def _build_torch_model(layers: list, input_h: int, input_w: int, num_classes: int):
-    """Build nn.Sequential from layers_json, auto-wiring channels."""
+    """Build an nn.Sequential of primitive layers and macro blocks, auto-wiring
+    channels and tracking spatial size."""
     import torch.nn as nn
 
+    ConvBlock, ResidualBlock, DWSepBlock, SEBlock = _make_blocks()
+
+    # Simple activation factory for the extra activations
+    ACTIVATIONS = {
+        "relu": nn.ReLU, "gelu": nn.GELU, "sigmoid": nn.Sigmoid,
+        "leakyrelu": nn.LeakyReLU, "silu": nn.SiLU, "mish": nn.Mish,
+        "hardswish": nn.Hardswish, "elu": nn.ELU, "tanh": nn.Tanh,
+    }
+
     modules = []
-    in_channels = 3
     current_channels = 3
     spatial_h = input_h
     spatial_w = input_w
     flattened = False
     flat_size = None
 
+    def _check_spatial(name):
+        if spatial_h < 1 or spatial_w < 1:
+            raise ValueError(
+                f"The image has shrunk to nothing at the {name} layer. For a "
+                f"{input_h}×{input_w} input, remove some pooling/stride layers or "
+                "increase the input size.")
+
+    def _need_spatial(name):
+        if flattened:
+            raise ValueError(f"Cannot add {name} after Flatten. It must come before "
+                             "Flatten / Linear / Global Avg Pool.")
+
     for layer in layers:
         lt = layer.get("type", "")
         p  = layer.get("params", {})
 
-        if lt == "conv2d":
+        if lt == "conv2d" or lt == "conv1x1":
+            _need_spatial("a Conv layer")
             filters     = int(p.get("filters", 32))
-            kernel_size = int(p.get("kernel_size", 3))
-            stride      = int(p.get("stride", 1))
-            padding     = int(p.get("padding", 1))
-            if flattened:
-                raise ValueError("Cannot add a Conv layer after Flatten. "
-                                 "Convolution layers must come before Flatten / Linear.")
+            if lt == "conv1x1":
+                kernel_size, stride, padding = 1, 1, 0
+            else:
+                kernel_size = int(p.get("kernel_size", 3))
+                stride      = int(p.get("stride", 1))
+                padding     = int(p.get("padding", 1))
             modules.append(nn.Conv2d(current_channels, filters, kernel_size, stride, padding))
             current_channels = filters
             spatial_h = (spatial_h + 2 * padding - kernel_size) // stride + 1
             spatial_w = (spatial_w + 2 * padding - kernel_size) // stride + 1
-            if spatial_h < 1 or spatial_w < 1:
-                raise ValueError(
-                    "The image has shrunk to nothing before the end of the network. "
-                    "You have too many Conv/Pool layers (or kernels too large) for a "
-                    f"{input_h}×{input_w} input. Remove some pooling layers, increase the "
-                    "input size, or use padding.")
+            _check_spatial("Conv")
+
+        elif lt in ("conv_block", "residual_block", "dwsep_block"):
+            _need_spatial("a block")
+            filters = int(p.get("filters", current_channels))
+            stride  = int(p.get("stride", 1))
+            if lt == "conv_block":
+                modules.append(ConvBlock(current_channels, filters, 3, stride))
+            elif lt == "residual_block":
+                modules.append(ResidualBlock(current_channels, filters, stride))
+            else:
+                modules.append(DWSepBlock(current_channels, filters, stride))
+            current_channels = filters
+            spatial_h = spatial_h // stride
+            spatial_w = spatial_w // stride
+            _check_spatial(lt)
+
+        elif lt == "se_block":
+            _need_spatial("SE block")
+            modules.append(SEBlock(current_channels))   # keeps shape
 
         elif lt == "batchnorm2d":
-            if flattened:
-                raise ValueError("Cannot add Batch Norm after Flatten.")
+            _need_spatial("Batch Norm")
             modules.append(nn.BatchNorm2d(current_channels))
 
+        elif lt == "groupnorm":
+            _need_spatial("Group Norm")
+            groups = int(p.get("groups", 8))
+            # groups must divide channels; fall back to a valid divisor
+            while groups > 1 and current_channels % groups != 0:
+                groups -= 1
+            modules.append(nn.GroupNorm(max(1, groups), current_channels))
+
         elif lt in ("maxpool2d", "avgpool2d"):
-            if flattened:
-                disp = "Max Pool" if lt == "maxpool2d" else "Avg Pool"
-                raise ValueError(f"Cannot add {disp} after Flatten.")
+            _need_spatial("Max/Avg Pool")
             ks = int(p.get("kernel_size", 2))
             st = int(p.get("stride", ks))
             pool_cls = nn.MaxPool2d if lt == "maxpool2d" else nn.AvgPool2d
             modules.append(pool_cls(ks, st))
             spatial_h = spatial_h // st
             spatial_w = spatial_w // st
-            if spatial_h < 1 or spatial_w < 1:
-                raise ValueError(
-                    "The image has shrunk to nothing after too many pooling layers. "
-                    f"For a {input_h}×{input_w} input, remove some Max/Avg Pool layers "
-                    "or increase the input size.")
+            _check_spatial("Pool")
 
-        elif lt == "relu":
-            modules.append(nn.ReLU())
+        elif lt == "gap":
+            # Global Average Pooling: collapse HxW to 1x1, then flatten to [C].
+            _need_spatial("Global Avg Pool")
+            modules.append(nn.AdaptiveAvgPool2d(1))
+            modules.append(nn.Flatten())
+            flat_size = current_channels
+            flattened = True
 
-        elif lt == "gelu":
-            modules.append(nn.GELU())
-
-        elif lt == "sigmoid":
-            modules.append(nn.Sigmoid())
+        elif lt in ACTIVATIONS:
+            modules.append(ACTIVATIONS[lt]())
 
         elif lt == "dropout":
-            prob = float(p.get("p", 0.5))
-            modules.append(nn.Dropout(prob))
+            modules.append(nn.Dropout(float(p.get("p", 0.5))))
 
         elif lt == "flatten":
             modules.append(nn.Flatten())
@@ -307,14 +404,10 @@ def _build_torch_model(layers: list, input_h: int, input_w: int, num_classes: in
         elif lt == "linear":
             out_features = int(p.get("out_features", 128))
             if not flattened:
-                # Auto-flatten first
                 modules.append(nn.Flatten())
                 flat_size = current_channels * spatial_h * spatial_w
                 flattened = True
-                in_f = flat_size
-            else:
-                in_f = flat_size
-            modules.append(nn.Linear(in_f, out_features))
+            modules.append(nn.Linear(flat_size, out_features))
             flat_size = out_features
 
     # Classifier head
@@ -334,7 +427,8 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
     import torchvision.transforms as T
     import torchvision.datasets as D
     from torch.utils.data import DataLoader
-    from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR, StepLR
+    from torch.optim.lr_scheduler import (
+        CosineAnnealingLR, LinearLR, SequentialLR, StepLR, OneCycleLR)
     from sqlmodel import create_engine, Session as S
 
     epochs    = body.epochs
@@ -473,23 +567,47 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
         # ── LR scheduler ──────────────────────────────────────────────────
         wu = max(0, min(body.warmup_epochs, epochs - 1))
         sched_name = body.lr_scheduler.lower()
+        onecycle = False
 
-        if sched_name == "step":
-            base_sched = StepLR(optim, step_size=max(1, body.step_size), gamma=body.step_gamma)
-        elif sched_name == "none":
-            base_sched = None
-        else:  # cosine (default)
-            base_sched = CosineAnnealingLR(optim, T_max=max(1, epochs - wu), eta_min=lr * 0.01)
-
-        if wu > 0 and base_sched is not None:
-            warmup_sched = LinearLR(optim, start_factor=0.01, total_iters=wu)
-            scheduler    = SequentialLR(optim, schedulers=[warmup_sched, base_sched],
-                                        milestones=[wu])
+        if sched_name == "onecycle":
+            # Steps PER BATCH, not per epoch — handled separately in the loop.
+            scheduler = OneCycleLR(optim, max_lr=lr, epochs=epochs,
+                                   steps_per_epoch=max(1, len(train_dl)))
+            onecycle = True
         else:
-            scheduler = base_sched
+            if sched_name == "step":
+                base_sched = StepLR(optim, step_size=max(1, body.step_size), gamma=body.step_gamma)
+            elif sched_name == "none":
+                base_sched = None
+            else:  # cosine (default)
+                base_sched = CosineAnnealingLR(optim, T_max=max(1, epochs - wu), eta_min=lr * 0.01)
+
+            if wu > 0 and base_sched is not None:
+                warmup_sched = LinearLR(optim, start_factor=0.01, total_iters=wu)
+                scheduler    = SequentialLR(optim, schedulers=[warmup_sched, base_sched],
+                                            milestones=[wu])
+            else:
+                scheduler = base_sched
+
+        # ── Class weighting (helps imbalanced datasets) ───────────────────
+        weight_tensor = None
+        if body.class_weights:
+            counts = torch.zeros(n_classes)
+            for _, lbl in train_ds.samples:
+                counts[lbl] += 1
+            counts = counts.clamp(min=1)
+            weight_tensor = (counts.sum() / (counts * n_classes)).to(device)
+            push(f"Class weighting on — counts {[int(c) for c in counts]}")
 
         criterion = nn.CrossEntropyLoss(
+            weight=weight_tensor,
             label_smoothing=max(0.0, min(0.5, body.label_smoothing)))
+
+        # ── Mixed precision (only meaningful on CUDA) ─────────────────────
+        use_amp = bool(body.amp) and use_cuda
+        scaler  = torch.cuda.amp.GradScaler(enabled=use_amp)
+        clip    = max(0.0, float(body.grad_clip))
+
         run_dir   = os.path.join(RUNS_DIR, f"custom_train_{run_id}")
         os.makedirs(run_dir, exist_ok=True)
         best_acc  = 0.0
@@ -499,7 +617,10 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
         push(f"Training — {epochs} ep  {body.optimizer}  lr={lr}  "
              f"sched={body.lr_scheduler}  wd={body.weight_decay}  "
              f"smooth={body.label_smoothing:.2f}"
-             + (f"  warmup={wu} ep" if wu > 0 else "")
+             + (f"  warmup={wu} ep" if wu > 0 and not onecycle else "")
+             + ("  amp" if use_amp else "")
+             + (f"  clip={clip}" if clip > 0 else "")
+             + ("  class-weighted" if weight_tensor is not None else "")
              + (f"  early-stop patience={body.patience}" if body.patience > 0 else ""))
 
         for epoch in range(1, epochs + 1):
@@ -507,23 +628,33 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
             train_loss = 0.0
             for imgs, labels in train_dl:
                 imgs, labels = imgs.to(device), labels.to(device)
+                optim.zero_grad()
 
-                # Mixup
-                if body.mixup > 0 and torch.rand(1).item() < body.mixup:
-                    lam = float(torch.distributions.Beta(
-                        torch.tensor(0.4), torch.tensor(0.4)).sample())
-                    idx  = torch.randperm(imgs.size(0), device=device)
-                    imgs = lam * imgs + (1 - lam) * imgs[idx]
-                    loss = lam * criterion(model(imgs), labels) + \
-                           (1 - lam) * criterion(model(imgs), labels[idx])
-                    optim.zero_grad(); loss.backward(); optim.step()
-                else:
-                    optim.zero_grad()
-                    loss = criterion(model(imgs), labels)
-                    loss.backward(); optim.step()
+                with torch.cuda.amp.autocast(enabled=use_amp):
+                    # Mixup
+                    if body.mixup > 0 and torch.rand(1).item() < body.mixup:
+                        lam = float(torch.distributions.Beta(
+                            torch.tensor(0.4), torch.tensor(0.4)).sample())
+                        idx  = torch.randperm(imgs.size(0), device=device)
+                        imgs = lam * imgs + (1 - lam) * imgs[idx]
+                        loss = lam * criterion(model(imgs), labels) + \
+                               (1 - lam) * criterion(model(imgs), labels[idx])
+                    else:
+                        loss = criterion(model(imgs), labels)
+
+                scaler.scale(loss).backward()
+                if clip > 0:
+                    scaler.unscale_(optim)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+                scaler.step(optim)
+                scaler.update()
+
+                # OneCycle steps every batch
+                if onecycle and scheduler is not None:
+                    scheduler.step()
                 train_loss += loss.item()
 
-            if scheduler is not None:
+            if scheduler is not None and not onecycle:
                 scheduler.step()
             current_lr = optim.param_groups[0]["lr"]
 
