@@ -143,10 +143,18 @@ export default function ProjectImages() {
   const deriveClasses = async () => {
     setDerivingClasses(true)
     try {
-      await api.post(`/projects/${projectId}/images/derive-classes`)
+      const res = await api.post(`/projects/${projectId}/images/derive-classes`)
       await load()
-    } catch {
-      // surfaced via reload; no-op
+      const n = res.data?.count ?? 0
+      window.alert(`Created ${n} class label${n === 1 ? '' : 's'} (class0…class${n - 1}). ` +
+        `Click "Edit" to rename them to your real class names.`)
+    } catch (e: any) {
+      const status = e?.response?.status
+      if (status === 404 || status === 405) {
+        window.alert('The backend needs to be restarted to enable this feature, then try again.')
+      } else {
+        window.alert(e?.response?.data?.detail ?? 'Could not derive classes — make sure images are annotated.')
+      }
     } finally { setDerivingClasses(false) }
   }
 

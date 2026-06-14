@@ -174,14 +174,15 @@ def derive_classes(project_id: int, session: Session = Depends(get_session)):
     if not project:
         raise HTTPException(404, "Project not found")
 
-    img_ids = [i.id for i in session.exec(
-        select(Image).where(Image.project_id == project_id)).all()]
-    max_cls_id = -1
-    if img_ids:
-        for ann in session.exec(select(Annotation).where(Annotation.image_id.in_(img_ids))).all():
-            if ann.class_id is not None and ann.class_id > max_cls_id:
-                max_cls_id = ann.class_id
-    if max_cls_id < 0:
+    from sqlalchemy import func
+    # Join annotations to images by project and take the highest class id in one
+    # query (avoids SQLite's ~999-variable IN limit on large datasets).
+    max_cls_id = session.exec(
+        select(func.max(Annotation.class_id))
+        .join(Image, Annotation.image_id == Image.id)
+        .where(Image.project_id == project_id)
+    ).one()
+    if max_cls_id is None:
         raise HTTPException(400, "No annotations found to derive classes from")
 
     existing = list(project.classes)
