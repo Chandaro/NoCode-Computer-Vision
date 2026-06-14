@@ -19,9 +19,13 @@ interface Props {
 export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
   const mountRef  = useRef<HTMLDivElement>(null)
   const rendRef   = useRef<any>(null)
+  const edlRef    = useRef(true)              // read inside the render loop
+  const [edl,     setEdl]      = useState(true)
   const [loading, setLoading]  = useState(true)
   const [count,   setCount]    = useState(0)
   const [error,   setError]    = useState('')
+
+  useEffect(() => { edlRef.current = edl }, [edl])
 
   const resetCamera = () => {
     const r = rendRef.current
@@ -116,12 +120,82 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
         scene.add(new THREE.Points(geo, mat))
         scene.add(new THREE.AxesHelper(radius * 0.3))
 
+        // ── Eye-Dome Lighting post-process ────────────────────────────────
+        // Render the cloud to an offscreen target that also captures depth,
+        // then darken pixels that sit farther than their screen neighbours.
+        // This adds the crisp, shape-defining shading pro viewers use.
+        const dbSize = renderer.getDrawingBufferSize(new THREE.Vector2())
+        const depthTexture = new THREE.DepthTexture(dbSize.x, dbSize.y)
+        depthTexture.type = THREE.UnsignedIntType
+        const rt = new THREE.WebGLRenderTarget(dbSize.x, dbSize.y, {
+          depthTexture, depthBuffer: true,
+          minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+        })
+
+        const edlMat = new THREE.ShaderMaterial({
+          uniforms: {
+            tDiffuse:   { value: rt.texture },
+            tDepth:     { value: depthTexture },
+            uTexel:     { value: new THREE.Vector2(1 / dbSize.x, 1 / dbSize.y) },
+            uNear:      { value: camera.near },
+            uFar:       { value: camera.far },
+            uStrength:  { value: 18.0 },
+            uRadius:    { value: 1.3 },
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+          `,
+          fragmentShader: `
+            varying vec2 vUv;
+            uniform sampler2D tDiffuse;
+            uniform sampler2D tDepth;
+            uniform vec2  uTexel;
+            uniform float uNear, uFar, uStrength, uRadius;
+            // Window-space depth [0,1] -> scale-invariant log2 of eye-space depth.
+            float logEye(float d) {
+              float z = d * 2.0 - 1.0;
+              float eye = (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));
+              return log2(eye);
+            }
+            void main() {
+              vec4 color = texture2D(tDiffuse, vUv);
+              float c = logEye(texture2D(tDepth, vUv).x);
+              vec2 offs[4];
+              offs[0] = vec2( 1.0, 0.0); offs[1] = vec2(-1.0, 0.0);
+              offs[2] = vec2( 0.0, 1.0); offs[3] = vec2( 0.0,-1.0);
+              float resp = 0.0;
+              for (int i = 0; i < 4; i++) {
+                float n = logEye(texture2D(tDepth, vUv + offs[i] * uTexel * uRadius).x);
+                resp += max(0.0, c - n);
+              }
+              resp *= 0.25;
+              float shade = exp(-resp * uStrength);
+              gl_FragColor = vec4(color.rgb * shade, color.a);
+            }
+          `,
+        })
+        const postScene  = new THREE.Scene()
+        const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+        postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), edlMat))
+
         // ── Animation ─────────────────────────────────────────────────────
         let animId = 0
         const animate = () => {
           animId = requestAnimationFrame(animate)
           controls.update()
-          renderer.render(scene, camera)
+          if (edlRef.current) {
+            edlMat.uniforms.uNear.value = camera.near
+            edlMat.uniforms.uFar.value  = camera.far
+            renderer.setRenderTarget(rt)
+            renderer.clear()
+            renderer.render(scene, camera)
+            renderer.setRenderTarget(null)
+            renderer.render(postScene, postCamera)
+          } else {
+            renderer.setRenderTarget(null)
+            renderer.render(scene, camera)
+          }
         }
         animate()
 
@@ -130,6 +204,9 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
           camera.aspect = w / h
           camera.updateProjectionMatrix()
           renderer.setSize(w, h)
+          const db = renderer.getDrawingBufferSize(new THREE.Vector2())
+          rt.setSize(db.x, db.y)
+          edlMat.uniforms.uTexel.value.set(1 / db.x, 1 / db.y)
         }
         window.addEventListener('resize', onResize)
 
@@ -140,6 +217,7 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
           cancelAnimationFrame(animId)
           window.removeEventListener('resize', onResize)
           controls.dispose(); renderer.dispose(); geo.dispose(); mat.dispose()
+          rt.dispose(); depthTexture.dispose(); edlMat.dispose()
           if (container.contains(renderer.domElement))
             container.removeChild(renderer.domElement)
         }
@@ -193,14 +271,24 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
             fontFamily: 'JetBrains Mono, monospace', pointerEvents: 'none' }}>
             {(count ?? 0).toLocaleString()} pts
           </div>
-          <button onClick={resetCamera} title="Reset camera"
-            style={{ position: 'absolute', top: 10, right: 10,
-              padding: '5px 9px', border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 5, background: 'rgba(0,0,0,0.55)',
-              color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
-              fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <RotateCcw size={11} /> Reset
-          </button>
+          <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+            <button onClick={() => setEdl(v => !v)}
+              title="Eye-Dome Lighting — depth shading for sharper shapes"
+              style={{ padding: '5px 9px',
+                border: `1px solid ${edl ? 'rgba(94,106,210,0.8)' : 'rgba(255,255,255,0.15)'}`,
+                borderRadius: 5, background: edl ? 'rgba(94,106,210,0.25)' : 'rgba(0,0,0,0.55)',
+                color: edl ? '#fff' : 'rgba(255,255,255,0.7)', cursor: 'pointer',
+                fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+              ◐ EDL
+            </button>
+            <button onClick={resetCamera} title="Reset camera"
+              style={{ padding: '5px 9px', border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 5, background: 'rgba(0,0,0,0.55)',
+                color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
+                fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <RotateCcw size={11} /> Reset
+            </button>
+          </div>
           <div style={{ position: 'absolute', bottom: 10, left: 12,
             fontSize: 10, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>
             🖱 Left drag: rotate · Scroll: zoom · Right drag: pan
