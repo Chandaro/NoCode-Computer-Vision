@@ -69,6 +69,9 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
         const renderer = new THREE.WebGLRenderer({ antialias: true })
         renderer.setSize(W, H)
         renderer.setPixelRatio(window.devicePixelRatio)
+        // Render the stored RGB values 1:1 (like CloudCompare/MeshLab) instead of
+        // sRGB-encoding them, which washes the colours out.
+        renderer.outputColorSpace = THREE.LinearSRGBColorSpace
         container.appendChild(renderer.domElement)
 
         const controls = new OrbitControls(camera, renderer.domElement)
@@ -100,6 +103,16 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
           vertexColors: true,
           sizeAttenuation: true,
         })
+        // Render round points (discard the square corners) so the cloud reads as
+        // a smooth surface like professional viewers, not a grid of tiles.
+        mat.onBeforeCompile = (shader: any) => {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <clipping_planes_fragment>',
+            `#include <clipping_planes_fragment>
+             vec2 cxy = 2.0 * gl_PointCoord - 1.0;
+             if (dot(cxy, cxy) > 1.0) discard;`
+          )
+        }
         scene.add(new THREE.Points(geo, mat))
         scene.add(new THREE.AxesHelper(radius * 0.3))
 
