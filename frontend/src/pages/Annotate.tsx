@@ -133,6 +133,7 @@ export default function Annotate() {
   const [autoMsg,        setAutoMsg]        = useState<{text:string;ok:boolean}|null>(null)
   const [externalModels, setExternalModels] = useState<ExternalModel[]>([])
   const [importing,      setImporting]      = useState(false)
+  const [hfRepo,         setHfRepo]         = useState('')
 
   // ─── Load project + image list ────────��─────────────────────────────────
   useEffect(() => {
@@ -591,6 +592,27 @@ export default function Annotate() {
     }
   }
 
+  // Download a model straight from the HuggingFace Hub by repo id
+  const importHfHub = async () => {
+    const repo = hfRepo.trim()
+    if (!repo) return
+    setImporting(true)
+    setAutoMsg({ text: `Downloading ${repo}… (first time can take a few minutes)`, ok: true })
+    try {
+      const form = new FormData()
+      form.append('repo_id', repo)
+      const res = await api.post('/models/external/hf-hub', form)
+      setExternalModels(prev => [...prev, res.data])
+      setAutoRunId(`ext:${res.data.id}`)
+      setHfRepo('')
+      setAutoMsg({ text: `Imported ${res.data.name} (${res.data.task})`, ok: true })
+    } catch (e: any) {
+      setAutoMsg({ text: e?.response?.data?.detail ?? 'Download failed — check the repo id and your connection', ok: false })
+    } finally {
+      setImporting(false)
+    }
+  }
+
   // ─── Auto-annotate ────────────────────────────────────────────────────────
   const autoAnnotate = async () => {
     if (!currentImage || !autoRunId) return
@@ -915,6 +937,22 @@ export default function Annotate() {
                       {importing ? '…' : '+ HF folder'}
                     </span>
                   </label>
+                </div>
+                {/* Import directly from the HuggingFace Hub by repo id */}
+                <div style={{ display: 'flex', gap: 5 }}>
+                  <input value={hfRepo} onChange={e => setHfRepo(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !importing) importHfHub() }}
+                    placeholder="owner/model-name (HF Hub)" disabled={importing}
+                    style={{ flex: 1, minWidth: 0, padding: '5px 8px', background: 'var(--surface2)',
+                      border: '1px solid var(--border)', borderRadius: 5, fontSize: 10,
+                      color: 'var(--text)', outline: 'none' }} />
+                  <button onClick={importHfHub} disabled={importing || !hfRepo.trim()}
+                    style={{ padding: '5px 10px', background: 'var(--surface2)',
+                      border: '1px solid var(--border)', borderRadius: 5, fontSize: 10,
+                      color: 'var(--text2)', cursor: importing || !hfRepo.trim() ? 'default' : 'pointer',
+                      opacity: importing || !hfRepo.trim() ? 0.5 : 1 }}>
+                    ↓ Get
+                  </button>
                 </div>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>

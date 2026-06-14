@@ -129,6 +129,54 @@ async def upload_hf_model(
     return out
 
 
+@router.post("/hf-hub")
+def download_hf_model(
+    repo_id: str = Form(...),
+    name: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    """Download a model straight from the HuggingFace Hub by repo id, e.g.
+    'Heem2/bone-fracture-detection-using-xray'. Needs internet for this call;
+    the model is cached locally afterwards."""
+    repo_id = (repo_id or "").strip().rstrip("/")
+    # Accept a full URL too
+    if "huggingface.co/" in repo_id:
+        repo_id = repo_id.split("huggingface.co/", 1)[1].split("/tree/")[0].strip("/")
+    if not repo_id or repo_id.count("/") < 1:
+        raise HTTPException(400, "Enter a repo id like 'owner/model-name'")
+
+    safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in (name or repo_id.split("/")[-1]))
+    dest_dir = os.path.join(MODELS_DIR, safe_name or "hf_model")
+    base, counter = dest_dir, 1
+    while os.path.exists(dest_dir):
+        dest_dir = f"{base}_{counter}"; counter += 1
+
+    try:
+        from huggingface_hub import snapshot_download
+        snapshot_download(
+            repo_id=repo_id, local_dir=dest_dir,
+            allow_patterns=["*.json", "*.safetensors", "*.bin", "*.txt", "*.model"],
+        )
+    except Exception as exc:
+        shutil.rmtree(dest_dir, ignore_errors=True)
+        raise HTTPException(400, f"Download failed: {exc}")
+
+    info = describe_model(dest_dir)
+    if info["task"] == "unknown":
+        shutil.rmtree(dest_dir, ignore_errors=True)
+        raise HTTPException(400, "Unsupported model: not an image classification or "
+                                 "object-detection model")
+
+    record = ExternalModel(
+        name=name or repo_id,
+        model_path=os.path.abspath(dest_dir),
+        created_at=datetime.now().isoformat(timespec="seconds"),
+    )
+    session.add(record); session.commit(); session.refresh(record)
+    out = record.model_dump(); out.update(info)
+    return out
+
+
 @router.delete("/{model_id}")
 def delete_model(model_id: int, session: Session = Depends(get_session)):
     record = session.get(ExternalModel, model_id)
