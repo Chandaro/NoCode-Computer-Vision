@@ -134,6 +134,9 @@ export default function Annotate() {
   const [externalModels, setExternalModels] = useState<ExternalModel[]>([])
   const [importing,      setImporting]      = useState(false)
   const [hfRepo,         setHfRepo]         = useState('')
+  const [batchOnlyUnann, setBatchOnlyUnann] = useState(true)
+  const [batchProgress,  setBatchProgress]  = useState<{done:number;total:number;labeled:number}|null>(null)
+  const batchCancelRef = useRef(false)
 
   // ─── Load project + image list ────────��─────────────────────────────────
   useEffect(() => {
@@ -645,6 +648,58 @@ export default function Annotate() {
     }
   }
 
+  // ─── Auto-annotate every image (saves directly) ──────────────────────────
+  const autoAnnotateAll = async () => {
+    if (!autoRunId) return
+    const targets = batchOnlyUnann ? images.filter(i => !i.annotated) : images
+    if (targets.length === 0) {
+      setAutoMsg({ text: 'Nothing to do — all images are already annotated', ok: false })
+      return
+    }
+    if (!window.confirm(
+      `Run the model on ${targets.length} image${targets.length > 1 ? 's' : ''} and save the results?` +
+      (batchOnlyUnann ? '' : '\n\nThis OVERWRITES existing annotations on every image.'))) return
+
+    await save()   // don't lose edits on the current image
+    batchCancelRef.current = false
+    setBatchProgress({ done: 0, total: targets.length, labeled: 0 })
+    const [kind, rawId] = autoRunId.split(':')
+    const params: Record<string, unknown> = { conf: autoConf }
+    if (kind === 'run') params.run_id = rawId; else params.external_model_id = rawId
+
+    let labeled = 0
+    const annotatedIds = new Set<number>()
+    for (let i = 0; i < targets.length; i++) {
+      if (batchCancelRef.current) break
+      const img = targets[i]
+      try {
+        const res = await api.post(`/projects/${projectId}/images/${img.id}/auto-annotate`, null, { params })
+        const anns = res.data.annotations as AnnData[]
+        if (anns.length > 0) {
+          const apiAnns = anns.map(apiToShape).map(shapeToApi)
+          await api.post(`/projects/${projectId}/images/${img.id}/annotations`, apiAnns)
+          labeled++; annotatedIds.add(img.id)
+        }
+      } catch { /* skip failed image, keep going */ }
+      setBatchProgress({ done: i + 1, total: targets.length, labeled })
+    }
+    // Reflect new annotated flags in the list
+    if (annotatedIds.size > 0) {
+      setImages(prev => prev.map(im => annotatedIds.has(im.id) ? { ...im, annotated: true } : im))
+    }
+    // Refresh the current image's shapes from the server (it may have been labeled)
+    if (currentImage) {
+      try {
+        const r = await api.get(`/projects/${projectId}/images/${currentImage.id}/annotations`)
+        const fresh = (r.data as AnnData[]).map(apiToShape)
+        setShapes(fresh); snapshotHistory(fresh)
+      } catch { /* ignore */ }
+    }
+    const cancelled = batchCancelRef.current
+    setBatchProgress(null)
+    setAutoMsg({ text: `${cancelled ? 'Stopped' : 'Done'} — labeled ${labeled} of ${targets.length} image${targets.length > 1 ? 's' : ''}`, ok: true })
+  }
+
   const copyFromPrev = async () => {
     if (currentIdx === 0) return
     const prevImg = images[currentIdx - 1]
@@ -965,14 +1020,58 @@ export default function Annotate() {
                     onChange={e => setAutoConf(Number(e.target.value))}
                     style={{ width: '100%', cursor: 'pointer' }} />
                 </div>
-                <button onClick={autoAnnotate} disabled={autoLoading || !autoRunId || (trainingRuns.length === 0 && externalModels.length === 0)}
-                  style={{ padding: '6px 0', background: 'var(--accent)',
-                    border: '1px solid var(--accent)', borderRadius: 5,
-                    color: '#fff', fontSize: 11, fontFamily: 'inherit',
-                    cursor: autoLoading ? 'wait' : 'pointer',
-                    opacity: autoLoading ? 0.6 : 1 }}>
-                  {autoLoading ? 'Running…' : '⚡ Auto-Annotate'}
-                </button>
+                {(() => {
+                  const noModel = trainingRuns.length === 0 && externalModels.length === 0
+                  const busy = autoLoading || batchProgress !== null
+                  const targetCount = batchOnlyUnann ? images.filter(i => !i.annotated).length : images.length
+                  return (
+                    <>
+                      <div style={{ display: 'flex', gap: 5 }}>
+                        <button onClick={autoAnnotate} disabled={busy || !autoRunId || noModel}
+                          title="Suggest annotations on this image (review before saving)"
+                          style={{ flex: 1, padding: '6px 0', background: 'var(--accent)',
+                            border: '1px solid var(--accent)', borderRadius: 5, color: '#fff',
+                            fontSize: 11, fontFamily: 'inherit',
+                            cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+                          {autoLoading ? 'Running…' : '⚡ This image'}
+                        </button>
+                        <button onClick={autoAnnotateAll} disabled={busy || !autoRunId || noModel}
+                          title="Run the model on every image and save the results"
+                          style={{ flex: 1, padding: '6px 0', background: 'var(--surface2)',
+                            border: '1px solid var(--accent)', borderRadius: 5, color: 'var(--accent)',
+                            fontSize: 11, fontFamily: 'inherit',
+                            cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+                          ⚡ All {targetCount}
+                        </button>
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 5,
+                        fontSize: 10, color: 'var(--text2)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={batchOnlyUnann}
+                          disabled={busy}
+                          onChange={e => setBatchOnlyUnann(e.target.checked)} />
+                        Skip already-annotated images
+                      </label>
+                      {batchProgress && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{ background: 'var(--surface2)', borderRadius: 5, height: 6, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', background: 'var(--accent)',
+                              width: `${Math.round(batchProgress.done / batchProgress.total * 100)}%`,
+                              transition: 'width 0.2s' }} />
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 10, color: 'var(--text2)' }}>
+                              {batchProgress.done}/{batchProgress.total} · {batchProgress.labeled} labeled
+                            </span>
+                            <button onClick={() => { batchCancelRef.current = true }}
+                              style={{ fontSize: 10, padding: '2px 8px', background: 'transparent',
+                                border: '1px solid var(--border)', borderRadius: 4,
+                                color: 'var(--text2)', cursor: 'pointer' }}>Stop</button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 {autoMsg && (
                   <p style={{ fontSize: 10, margin: 0, lineHeight: 1.4,
                     color: autoMsg.ok ? '#22c55e' : '#f97316' }}>
