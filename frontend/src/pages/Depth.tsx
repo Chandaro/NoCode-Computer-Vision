@@ -62,6 +62,7 @@ export default function Depth() {
   const [reconMsg,      setReconMsg]      = useState('')
   const [reconError,    setReconError]    = useState('')
   const [reconShow3D,   setReconShow3D]   = useState(false)
+  const [reconShowAll,  setReconShowAll]  = useState(false)  // viewer: all pts (no 200k cap)
   const [reconNiter,    setReconNiter]    = useState(300)
   const [reconDetail,   setReconDetail]   = useState(1.5)   // conf_thr: lower=more detail
   const [reconCleanup,  setReconCleanup]  = useState(true)  // remove noise points
@@ -695,10 +696,20 @@ export default function Depth() {
                     onClick={() => window.open(`/api/reconstruct3d/${reconJobId}/download`, '_blank')}>
                     <Download size={12} /> Download PLY
                   </Btn>
+                  {reconShow3D && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto',
+                      fontSize: 12, color: 'var(--text2)', cursor: 'pointer', userSelect: 'none' }}>
+                      <input type="checkbox" checked={reconShowAll}
+                        onChange={e => setReconShowAll(e.target.checked)} />
+                      Show all points
+                      <span style={{ fontSize: 11, color: 'var(--text3)' }}>(no cap, slower)</span>
+                    </label>
+                  )}
                 </div>
                 {reconShow3D && (
                   <PointCloudViewer
-                    fetchUrl={`/reconstruct3d/${reconJobId}/result`}
+                    key={reconShowAll ? 'full' : 'view'}
+                    fetchUrl={`/reconstruct3d/${reconJobId}/result${reconShowAll ? '?full=1' : ''}`}
                     pointSize={pointSize}
                   />
                 )}

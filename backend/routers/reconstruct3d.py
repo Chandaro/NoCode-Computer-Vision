@@ -458,14 +458,31 @@ def recon_status(job_id: str):
 
 
 @router.get("/reconstruct3d/{job_id}/result")
-def recon_result(job_id: str):
-    """Return {n, pos, col} JSON for the Three.js point cloud viewer."""
+def recon_result(job_id: str, full: bool = False):
+    """Return {n, pos, col} JSON for the Three.js point cloud viewer.
+
+    full=False (default) → display-optimised subsample (~200k pts, fast).
+    full=True            → every stored point with no cap. Combined with the
+                           'Remove noise' toggle being off, this shows the
+                           entire raw cloud including noise (heavy: can be 1M+).
+    """
     job = _recon_jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     if job["status"] != "done":
         raise HTTPException(400, f"Job not ready yet: {job['status']}")
-    return job["result"]
+    if not full:
+        return job["result"]
+
+    xyz = job.get("xyz")
+    rgb = job.get("rgb")
+    if xyz is None:
+        return job["result"]
+    return {
+        "n":   int(len(xyz)),
+        "pos": [round(float(v), 5) for v in xyz.flatten()],
+        "col": [round(float(v), 4) for v in rgb.flatten()],
+    }
 
 
 @router.get("/reconstruct3d/{job_id}/download")
