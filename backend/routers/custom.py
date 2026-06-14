@@ -287,12 +287,75 @@ def _make_blocks():
     return ConvBlock, ResidualBlock, DWSepBlock, SEBlock
 
 
+# ── Pretrained backbones (transfer learning) ────────────────────────────────────
+#
+# Industry-standard workflow: start from an ImageNet-pretrained backbone and
+# train a small custom head. On small datasets this routinely beats a
+# from-scratch CNN by 20–40 accuracy points.
+#
+# Encoded as a single layers_json entry: {"type": "pretrained",
+#   "params": {"model": 0|1|2, "freeze": 0|1}}
+#   model:  0 = ResNet18 · 1 = MobileNetV3-Small · 2 = EfficientNet-B0
+#   freeze: 0 = linear probe (freeze backbone, train head only — fast)
+#           1 = fine-tune (train everything — slower, best accuracy)
+
+BACKBONES = ["resnet18", "mobilenet_v3_small", "efficientnet_b0"]
+
+
+def _build_pretrained(model_idx: int, freeze_idx: int, num_classes: int,
+                      load_imagenet: bool):
+    """Build a torchvision backbone with a fresh classification head.
+
+    load_imagenet=True downloads/uses ImageNet weights (training time).
+    load_imagenet=False builds the bare architecture (inference/export reload,
+    where the trained state dict supplies all weights)."""
+    import torch.nn as nn
+    import torchvision.models as M
+
+    name = BACKBONES[max(0, min(model_idx, len(BACKBONES) - 1))]
+    weights = "DEFAULT" if load_imagenet else None
+
+    if name == "resnet18":
+        net = M.resnet18(weights=weights)
+        in_f = net.fc.in_features
+        head = nn.Linear(in_f, num_classes)
+        net.fc = head
+    elif name == "mobilenet_v3_small":
+        net = M.mobilenet_v3_small(weights=weights)
+        in_f = net.classifier[-1].in_features
+        head = nn.Linear(in_f, num_classes)
+        net.classifier[-1] = head
+    else:  # efficientnet_b0
+        net = M.efficientnet_b0(weights=weights)
+        in_f = net.classifier[-1].in_features
+        head = nn.Linear(in_f, num_classes)
+        net.classifier[-1] = head
+
+    # Linear probe: freeze everything except the new head
+    if freeze_idx == 0:
+        for p in net.parameters():
+            p.requires_grad = False
+        for p in head.parameters():
+            p.requires_grad = True
+
+    return net, name
+
+
 # ── PyTorch model builder ──────────────────────────────────────────────────────
 
-def _build_torch_model(layers: list, input_h: int, input_w: int, num_classes: int):
+def _build_torch_model(layers: list, input_h: int, input_w: int, num_classes: int,
+                       load_imagenet: bool = False):
     """Build an nn.Sequential of primitive layers and macro blocks, auto-wiring
-    channels and tracking spatial size."""
+    channels and tracking spatial size. A single 'pretrained' entry instead
+    builds a torchvision backbone with a custom head (transfer learning)."""
     import torch.nn as nn
+
+    # Transfer-learning mode: the whole model IS the backbone + head
+    if layers and layers[0].get("type") == "pretrained":
+        p = layers[0].get("params", {})
+        net, _ = _build_pretrained(int(p.get("model", 0)), int(p.get("freeze", 0)),
+                                   num_classes, load_imagenet)
+        return net
 
     ConvBlock, ResidualBlock, DWSepBlock, SEBlock = _make_blocks()
 
@@ -543,13 +606,26 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
         val_dl   = DataLoader(val_ds,   batch_size=batch, shuffle=False, num_workers=0)
 
         # Build model
-        push("Building custom CNN…")
-        model = _build_torch_model(layers, input_h, input_w, len(classes))
+        is_pretrained = bool(layers) and layers[0].get("type") == "pretrained"
+        if is_pretrained:
+            bp = layers[0].get("params", {})
+            bb_name = BACKBONES[max(0, min(int(bp.get("model", 0)), len(BACKBONES) - 1))]
+            mode = "linear probe (backbone frozen)" if int(bp.get("freeze", 0)) == 0 else "full fine-tune"
+            push(f"Transfer learning — {bb_name} pretrained on ImageNet · {mode}")
+            push("Downloading pretrained weights on first use (cached afterwards)…")
+        else:
+            push("Building custom CNN…")
+        model = _build_torch_model(layers, input_h, input_w, len(classes),
+                                   load_imagenet=is_pretrained)
         model = model.to(device)
 
         # Count params
         n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        push(f"Model built — {n_params:,} trainable parameters")
+        n_total  = sum(p.numel() for p in model.parameters())
+        if is_pretrained and n_params < n_total:
+            push(f"Model built — {n_params:,} trainable of {n_total:,} total parameters")
+        else:
+            push(f"Model built — {n_params:,} trainable parameters")
 
         # ── Optimizer ─────────────────────────────────────────────────────
         opt_name = body.optimizer.lower()

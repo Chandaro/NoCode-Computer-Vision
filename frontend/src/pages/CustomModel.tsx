@@ -18,6 +18,7 @@ type LayerType =
   | 'relu' | 'gelu' | 'leakyrelu' | 'silu' | 'mish' | 'hardswish' | 'elu' | 'tanh' | 'sigmoid'
   | 'dropout' | 'flatten' | 'linear'
   | 'conv_block' | 'residual_block' | 'dwsep_block' | 'se_block'
+  | 'pretrained'
 
 interface Layer {
   id: string
@@ -113,6 +114,7 @@ const DEFAULT_PARAMS: Record<LayerType, Record<string, number>> = {
   residual_block: { filters: 32, stride: 1 },
   dwsep_block:    { filters: 64, stride: 1 },
   se_block:       {},
+  pretrained:     { model: 0, freeze: 0 },
 }
 
 // ── Architecture presets ──────────────────────────────────────────────────────
@@ -1527,6 +1529,12 @@ export default function CustomModel() {
   const [layers,   setLayers]   = useState<Layer[]>(DEFAULT_LAYERS)
   const [inputH,   setInputH]   = useState(64)
   const [inputW,   setInputW]   = useState(64)
+  // Transfer learning ('pretrained' layers[0]) vs from-scratch ('custom')
+  const archMode: 'custom' | 'pretrained' =
+    layers[0]?.type === 'pretrained' ? 'pretrained' : 'custom'
+  const backbone = layers[0]?.type === 'pretrained' ? (layers[0].params.model ?? 0) : 0
+  const freeze   = layers[0]?.type === 'pretrained' ? (layers[0].params.freeze ?? 0) : 0
+  const customLayersRef = useRef<Layer[]>(DEFAULT_LAYERS)
   const [modelName, setModelName] = useState('My Model')
   const [savedConfig, setSavedConfig] = useState<CustomConfig | null>(null)
   const [loading, setLoading] = useState(false)
@@ -2118,6 +2126,23 @@ export default function CustomModel() {
     setShowAddMenu(false)
   }
 
+  // ── Transfer learning helpers ────────────────────────────────────────────────
+  const switchArchMode = (mode: 'custom' | 'pretrained') => {
+    setSelectedId(null)
+    if (mode === 'pretrained') {
+      customLayersRef.current = layers          // stash the from-scratch layers
+      setLayers([{ id: uid(), type: 'pretrained', params: { model: backbone, freeze } }])
+      // Pretrained backbones expect a larger input than the tiny default
+      if (inputH < 96) { setInputH(224); setInputW(224) }
+    } else {
+      setLayers(customLayersRef.current.length ? customLayersRef.current : DEFAULT_LAYERS)
+    }
+  }
+  const setBackbone = (m: number) =>
+    setLayers([{ id: layers[0]?.id ?? uid(), type: 'pretrained', params: { model: m, freeze } }])
+  const setFreeze = (f: number) =>
+    setLayers([{ id: layers[0]?.id ?? uid(), type: 'pretrained', params: { model: backbone, freeze: f } }])
+
   const deleteLayer = (layerId: string) => {
     setLayers(prev => prev.filter(l => l.id !== layerId))
     setSelectedId(prev => prev === layerId ? null : prev)
@@ -2272,7 +2297,107 @@ export default function CustomModel() {
             </div>
           </div>
 
-          {/* ── Presets ─────────────────────────────────────────────────────── */}
+          {/* ── Architecture mode toggle ─────────────────────────────────────── */}
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden',
+              border: '1px solid var(--border)' }}>
+              {([
+                { key: 'custom' as const, label: '🧱 Build Your Own' },
+                { key: 'pretrained' as const, label: '⚡ Transfer Learning' },
+              ]).map(({ key, label }) => (
+                <button key={key} onClick={() => switchArchMode(key)}
+                  className="font-tech"
+                  style={{
+                    flex: 1, padding: '7px 4px', border: 'none', cursor: 'pointer',
+                    fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
+                    background: archMode === key ? 'var(--accent)' : 'transparent',
+                    color: archMode === key ? '#fff' : 'var(--text3)',
+                    transition: 'all 0.15s',
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Pretrained backbone config ───────────────────────────────────── */}
+          {archMode === 'pretrained' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 11px' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(99,102,241,0.03))',
+                border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, padding: 14, marginBottom: 12,
+              }}>
+                <p className="font-display" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)',
+                  marginBottom: 4 }}>Pretrained Backbone</p>
+                <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.6 }}>
+                  Start from a model already trained on millions of images. It learns your
+                  classes far faster and more accurately than training from scratch, especially
+                  with few images per class.
+                </p>
+              </div>
+
+              {/* Backbone picker */}
+              <p className="font-tech" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 7 }}>Backbone</p>
+              {([
+                { i: 0, name: 'ResNet-18', desc: 'Balanced. Strong all-round baseline.', params: '11.7M' },
+                { i: 1, name: 'MobileNet V3', desc: 'Tiny & fast. Best for edge / mobile.', params: '2.5M' },
+                { i: 2, name: 'EfficientNet-B0', desc: 'Highest accuracy for its size.', params: '5.3M' },
+              ]).map(b => (
+                <button key={b.i} onClick={() => setBackbone(b.i)}
+                  style={{
+                    width: '100%', textAlign: 'left', padding: '9px 11px', marginBottom: 6,
+                    borderRadius: 9, cursor: 'pointer',
+                    background: backbone === b.i ? 'rgba(99,102,241,0.14)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${backbone === b.i ? 'rgba(99,102,241,0.5)' : 'var(--border)'}`,
+                    transition: 'all 0.12s',
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
+                      border: `2px solid ${backbone === b.i ? 'var(--accent)' : 'var(--border2)'}`,
+                      background: backbone === b.i ? 'var(--accent)' : 'transparent' }} />
+                    <span className="font-tech" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', flex: 1 }}>{b.name}</span>
+                    <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>{b.params}</span>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--text3)', margin: '3px 0 0 20px', lineHeight: 1.4 }}>{b.desc}</p>
+                </button>
+              ))}
+
+              {/* Freeze strategy */}
+              <p className="font-tech" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', color: 'var(--text3)', margin: '12px 0 7px' }}>Training mode</p>
+              {([
+                { i: 0, name: 'Linear Probe', desc: 'Freeze the backbone, train only the new head. Fastest, great for small datasets.' },
+                { i: 1, name: 'Fine-tune', desc: 'Train the whole network at a low rate. Slower, best accuracy with more data.' },
+              ]).map(f => (
+                <button key={f.i} onClick={() => setFreeze(f.i)}
+                  style={{
+                    width: '100%', textAlign: 'left', padding: '9px 11px', marginBottom: 6,
+                    borderRadius: 9, cursor: 'pointer',
+                    background: freeze === f.i ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${freeze === f.i ? 'rgba(34,197,94,0.45)' : 'var(--border)'}`,
+                    transition: 'all 0.12s',
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
+                      border: `2px solid ${freeze === f.i ? '#22c55e' : 'var(--border2)'}`,
+                      background: freeze === f.i ? '#22c55e' : 'transparent' }} />
+                    <span className="font-tech" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{f.name}</span>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--text3)', margin: '3px 0 0 20px', lineHeight: 1.4 }}>{f.desc}</p>
+                </button>
+              ))}
+
+              <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5, marginTop: 10,
+                padding: '8px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
+                Input auto-set to 224×224 (what these models expect). First run downloads the
+                pretrained weights, then they are cached.
+              </p>
+            </div>
+          )}
+
+          {/* ── Presets (custom mode only) ───────────────────────────────────── */}
+          {archMode === 'custom' && (<>
           <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
             <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(100,100,125,0.6)', marginBottom: 7 }}>
               Presets
@@ -2566,10 +2691,53 @@ export default function CustomModel() {
               </div>
             )}
           </div>
+          </>)}
         </div>
 
         {/* ── Center: Canvas (3D or 2D) ───────────────────────────────────── */}
         <div style={{ flex: 1, position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: '#0d0d0f' }}>
+          {archMode === 'pretrained' ? (
+            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 22, padding: 24 }}>
+              {/* Backbone flow diagram */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {[
+                  { label: 'Your Image', sub: `3×${inputH}×${inputW}`, c: '#6b7280' },
+                  { label: ['ResNet-18','MobileNet V3','EfficientNet-B0'][backbone],
+                    sub: freeze === 0 ? 'frozen · pretrained' : 'fine-tuning', c: '#6366f1', big: true },
+                  { label: 'New Head', sub: `${numClasses} classes`, c: '#22c55e' },
+                ].map((s, i, arr) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        width: (s as any).big ? 150 : 100, height: (s as any).big ? 150 : 100,
+                        borderRadius: 14, display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center', gap: 5,
+                        background: `linear-gradient(135deg, ${s.c}26, ${s.c}0a)`,
+                        border: `2px solid ${s.c}`, boxShadow: `0 0 28px ${s.c}44`,
+                      }}>
+                        <span className="font-display" style={{ fontSize: (s as any).big ? 13 : 11,
+                          fontWeight: 700, color: s.c, textAlign: 'center', padding: '0 8px' }}>{s.label}</span>
+                      </div>
+                      <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6,
+                        fontFamily: 'JetBrains Mono, monospace' }}>{s.sub}</p>
+                    </div>
+                    {i < arr.length - 1 && (
+                      <span style={{ fontSize: 26, color: 'var(--text3)' }}>→</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text2)', maxWidth: 460, textAlign: 'center', lineHeight: 1.7 }}>
+                The <strong style={{ color: 'var(--text)' }}>backbone</strong> already knows how to
+                see edges, textures, and shapes from millions of images.
+                {freeze === 0
+                  ? ' Only the small new head learns your classes, so training is fast.'
+                  : ' The whole network adjusts gently to your data for the best accuracy.'}
+                {' '}Set epochs and learning rate on the right, then press Train.
+              </p>
+            </div>
+          ) : (<>
           <div ref={canvasRef} style={{ width: '100%', height: '100%', cursor: 'grab', display: viewDim === '3d' ? 'block' : 'none' }} />
           <canvas ref={canvas2DRef} style={{ width: '100%', height: '100%', display: viewDim === '2d' ? 'block' : 'none' }} />
 
@@ -2666,6 +2834,7 @@ export default function CustomModel() {
               : flyMode ? 'WASD move · mouse look · Q/E up/down · scroll speed · Esc exit'
               : 'Drag to orbit · Scroll to zoom · ✈ Fly Mode to move freely'}
           </div>
+          </>)}
         </div>
 
         {/* ── Right panel: Training ───────────────────────────────────────── */}
