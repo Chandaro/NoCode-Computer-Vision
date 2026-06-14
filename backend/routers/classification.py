@@ -520,6 +520,54 @@ def cls_dataset_sample(project_id: int, session: Session = Depends(get_session))
     return FileResponse(random.choice(candidates))
 
 
+@router.get("/dataset/images")
+def cls_dataset_images(project_id: int, session: Session = Depends(get_session)):
+    """List every classification-dataset image, grouped flat with its class.
+
+    Returns a list of {class_name, filename} so the gallery can render thumbnails
+    and filter by class. File bytes are fetched via /dataset/file/...
+    """
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    proj_dir = os.path.join(CLS_DATA_DIR, str(project_id))
+    out: list[dict] = []
+    if os.path.isdir(proj_dir):
+        for cls in sorted(os.listdir(proj_dir)):
+            cls_dir = os.path.join(proj_dir, cls)
+            if not os.path.isdir(cls_dir):
+                continue
+            for f in sorted(os.listdir(cls_dir)):
+                if os.path.splitext(f)[1].lower() in IMG_EXTS:
+                    out.append({"class_name": cls, "filename": f})
+    return out
+
+
+@router.get("/dataset/file/{class_name}/{filename}")
+def cls_dataset_file(project_id: int, class_name: str, filename: str,
+                     session: Session = Depends(get_session)):
+    """Serve one image from the classification dataset."""
+    # Guard against path traversal
+    if "/" in filename or "\\" in filename or ".." in filename or ".." in class_name:
+        raise HTTPException(400, "Invalid path")
+    path = os.path.join(CLS_DATA_DIR, str(project_id), class_name, filename)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "Image not found")
+    return FileResponse(path)
+
+
+@router.delete("/dataset/file/{class_name}/{filename}")
+def cls_dataset_delete_one(project_id: int, class_name: str, filename: str,
+                           session: Session = Depends(get_session)):
+    """Delete a single image from the classification dataset."""
+    if "/" in filename or "\\" in filename or ".." in filename or ".." in class_name:
+        raise HTTPException(400, "Invalid path")
+    path = os.path.join(CLS_DATA_DIR, str(project_id), class_name, filename)
+    if os.path.isfile(path):
+        os.remove(path)
+    return {"ok": True}
+
+
 @router.post("/dataset/upload/{class_name}")
 async def cls_dataset_upload(project_id: int, class_name: str,
                               files: list[UploadFile] = File(...),

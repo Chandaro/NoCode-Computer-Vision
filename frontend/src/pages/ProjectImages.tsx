@@ -90,6 +90,10 @@ export default function ProjectImages() {
   const [clsImporting,   setClsImporting]   = useState(false)
   const [showClsGuide,   setShowClsGuide]   = useState(false)
   const [newClassName,   setNewClassName]   = useState('')
+  // ── Classification image gallery ──
+  const [clsImages,      setClsImages]      = useState<{ class_name: string; filename: string }[]>([])
+  const [clsFilter,      setClsFilter]      = useState<string>('all')   // 'all' or a class name
+  const [clsDeleting,    setClsDeleting]    = useState<string | null>(null)
   const fileRef        = useRef<HTMLInputElement>(null)
   const importRef      = useRef<HTMLInputElement>(null)
   const importFolderRef = useRef<HTMLInputElement>(null)
@@ -271,12 +275,29 @@ export default function ProjectImages() {
     } catch { setDatasetStats({}) }
   }
 
+  const loadClsImages = async () => {
+    try {
+      const res = await api.get(`/projects/${projectId}/classification/dataset/images`)
+      setClsImages(res.data)
+    } catch { setClsImages([]) }
+  }
+
   useEffect(() => {
-    if (datasetMode === 'classification') loadDatasetStats()
+    if (datasetMode === 'classification') { loadDatasetStats(); loadClsImages() }
   }, [datasetMode, projectId])
 
   const _refreshAfterImport = async () => {
-    await Promise.all([load(), loadDatasetStats()])
+    await Promise.all([load(), loadDatasetStats(), loadClsImages()])
+  }
+
+  const deleteClsImage = async (cls: string, filename: string) => {
+    const key = `${cls}/${filename}`
+    setClsDeleting(key)
+    try {
+      await api.delete(`/projects/${projectId}/classification/dataset/file/${encodeURIComponent(cls)}/${encodeURIComponent(filename)}`)
+      setClsImages(prev => prev.filter(i => !(i.class_name === cls && i.filename === filename)))
+      loadDatasetStats()
+    } finally { setClsDeleting(null) }
   }
 
   const uploadToClass = async (cls: string, files: FileList) => {
@@ -649,6 +670,89 @@ export default function ProjectImages() {
               <span style={{ fontSize: 11, color: 'var(--text3)' }}>Enter class name then pick images</span>
             </div>
           </div>
+
+          {/* ── Image gallery (all classification images, filterable by class) ── */}
+          {clsImages.length > 0 && (() => {
+            const shown = clsFilter === 'all'
+              ? clsImages
+              : clsImages.filter(i => i.class_name === clsFilter)
+            return (
+              <div style={{ marginTop: 22 }}>
+                {/* Class filter chips */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+                  <button onClick={() => setClsFilter('all')}
+                    style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                      border: `1px solid ${clsFilter === 'all' ? 'var(--accent)' : 'var(--border)'}`,
+                      background: clsFilter === 'all' ? 'rgba(88,101,242,0.12)' : 'transparent',
+                      color: clsFilter === 'all' ? 'var(--accent)' : 'var(--text2)',
+                      fontWeight: clsFilter === 'all' ? 500 : 400, transition: 'all 0.12s' }}>
+                    All <span style={{ marginLeft: 5, color: 'var(--text3)' }}>{clsImages.length}</span>
+                  </button>
+                  {(project?.classes ?? []).map(cls => {
+                    const count = datasetStats[cls] ?? 0
+                    if (count === 0) return null
+                    return (
+                      <button key={cls} onClick={() => setClsFilter(cls)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6,
+                          padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                          border: `1px solid ${clsFilter === cls ? 'var(--accent)' : 'var(--border)'}`,
+                          background: clsFilter === cls ? 'rgba(88,101,242,0.12)' : 'transparent',
+                          color: clsFilter === cls ? 'var(--accent)' : 'var(--text2)',
+                          fontWeight: clsFilter === cls ? 500 : 400, transition: 'all 0.12s',
+                          fontFamily: 'monospace' }}>
+                        {cls} <span style={{ color: 'var(--text3)' }}>{count}</span>
+                      </button>
+                    )
+                  })}
+                  <div style={{ flex: 1 }} />
+                  <span style={{ fontSize: 12, color: 'var(--text3)' }}>
+                    {shown.length} image{shown.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                {/* Thumbnail grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
+                  {shown.map(img => {
+                    const key = `${img.class_name}/${img.filename}`
+                    return (
+                      <div key={key}
+                        style={{ background: 'var(--surface)', borderRadius: 8, overflow: 'hidden',
+                          position: 'relative', border: '1px solid var(--border)' }}
+                        onMouseEnter={e => { e.currentTarget.querySelector<HTMLDivElement>('.cls-overlay')!.style.opacity = '1' }}
+                        onMouseLeave={e => { e.currentTarget.querySelector<HTMLDivElement>('.cls-overlay')!.style.opacity = '0' }}>
+                        <img
+                          src={`/api/projects/${projectId}/classification/dataset/file/${encodeURIComponent(img.class_name)}/${encodeURIComponent(img.filename)}`}
+                          alt={img.filename} loading="lazy"
+                          style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
+
+                        {/* Class label chip */}
+                        <div style={{ position: 'absolute', top: 7, left: 7,
+                          fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                          background: 'rgba(0,0,0,0.65)', color: '#fff',
+                          fontFamily: 'monospace', maxWidth: 'calc(100% - 14px)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {img.class_name}
+                        </div>
+
+                        {/* Hover overlay — delete */}
+                        <div className="cls-overlay" style={{ position: 'absolute', inset: 0,
+                          background: 'rgba(0,0,0,0.6)', opacity: 0, transition: 'opacity 0.15s',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <button onClick={() => deleteClsImage(img.class_name, img.filename)}
+                            disabled={clsDeleting === key}
+                            style={{ padding: '7px 7px', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6,
+                              background: 'rgba(248,113,113,0.12)', color: 'var(--danger)',
+                              cursor: clsDeleting === key ? 'wait' : 'pointer' }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 
