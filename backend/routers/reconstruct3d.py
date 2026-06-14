@@ -304,15 +304,24 @@ def _run_reconstruction(job_id: str, image_bytes_list: list, niter: int,
 
         n_full = len(xyz)
 
-        # ── Voxel downsample for the viewer (uniform density, not [::step]) ─
+        # ── Downsample for the viewer ────────────────────────────────────
+        # A reconstruction is a thin surface (often almost 1-D), NOT a filled
+        # volume, so a volume-based voxel size (cbrt) collapses the whole cloud
+        # into a handful of cells. Use a surface-based estimate (sqrt) and, if
+        # the cloud is so thin that voxel binning still under-fills the budget,
+        # fall back to a uniform stride so we always show a dense set of points.
+        target = min(n_full, MAX_VIEWER_PTS)
         if n_full > MAX_VIEWER_PTS:
             push("Optimising for display…")
-            # Pick a voxel size that lands near the target point budget.
-            # Coordinates are normalised to roughly [-1, 1] → span ~2.
-            voxel = 2.0 / (MAX_VIEWER_PTS ** (1 / 3)) * 1.1
+            span = float((xyz.max(axis=0) - xyz.min(axis=0)).max()) or 2.0
+            voxel = span / (MAX_VIEWER_PTS ** 0.5)
             xyz_view, rgb_view = _voxel_downsample(xyz, rgb, voxel)
-            # If still too many, fall back to a uniform stride.
-            if len(xyz_view) > MAX_VIEWER_PTS:
+            if len(xyz_view) < target * 0.6:
+                # Thin / streak-like cloud — voxel binning lost too many points.
+                step = max(1, n_full // target)
+                xyz_view = xyz[::step]
+                rgb_view = rgb[::step]
+            elif len(xyz_view) > MAX_VIEWER_PTS:
                 step = len(xyz_view) // MAX_VIEWER_PTS
                 xyz_view = xyz_view[::step]
                 rgb_view = rgb_view[::step]
