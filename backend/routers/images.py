@@ -148,6 +148,50 @@ def delete_image(project_id: int, image_id: int, session: Session = Depends(get_
     return {"ok": True}
 
 
+def _yaml_class_names(raw: str) -> list[str] | None:
+    """Extract class names from a Roboflow/Ultralytics data.yaml `names:` field.
+    Handles both list form (names: ['a','b']) and dict form (names: {0: a, 1: b})."""
+    try:
+        import yaml
+        data = yaml.safe_load(raw) or {}
+        names = data.get("names")
+        if isinstance(names, dict):
+            return [str(names[k]) for k in sorted(names, key=lambda x: int(x))]
+        if isinstance(names, list):
+            return [str(n) for n in names]
+    except Exception:
+        pass
+    return None
+
+
+@router.post("/derive-classes")
+def derive_classes(project_id: int, session: Session = Depends(get_session)):
+    """Populate class labels from existing annotations when none are defined.
+
+    Scans all annotations for the highest class id and fills any missing names
+    with placeholders (class0, class1, …), preserving names already set."""
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    img_ids = [i.id for i in session.exec(
+        select(Image).where(Image.project_id == project_id)).all()]
+    max_cls_id = -1
+    if img_ids:
+        for ann in session.exec(select(Annotation).where(Annotation.image_id.in_(img_ids))).all():
+            if ann.class_id is not None and ann.class_id > max_cls_id:
+                max_cls_id = ann.class_id
+    if max_cls_id < 0:
+        raise HTTPException(400, "No annotations found to derive classes from")
+
+    existing = list(project.classes)
+    names = [existing[i] if i < len(existing) else f"class{i}" for i in range(max_cls_id + 1)]
+    project.classes_json = json.dumps(names)
+    session.add(project)
+    session.commit()
+    return {"classes": names, "count": len(names)}
+
+
 @router.post("/import-yolo")
 async def import_yolo_dataset(
     project_id: int,
@@ -168,6 +212,8 @@ async def import_yolo_dataset(
     image_files: dict[str, UploadFile] = {}
     label_files: dict[str, str] = {}
     classes_list: list[str] | None = None
+    yaml_raw: str | None = None
+    names_raw: str | None = None
 
     for file in files:
         # Strip subdirectory prefix (e.g. "images/dog.jpg" → "dog.jpg")
@@ -177,6 +223,10 @@ async def import_yolo_dataset(
 
         if ext in (".jpg", ".jpeg", ".png", ".bmp", ".webp"):
             image_files[stem] = file
+        elif ext in (".yaml", ".yml"):
+            yaml_raw = (await file.read()).decode("utf-8", errors="replace")
+        elif ext == ".names" or name.lower() == "obj.names":
+            names_raw = (await file.read()).decode("utf-8", errors="replace")
         elif ext == ".txt":
             raw = (await file.read()).decode("utf-8", errors="replace")
             if stem == "classes":
@@ -184,8 +234,13 @@ async def import_yolo_dataset(
             else:
                 label_files[stem] = raw
 
-    # Auto-populate class names from classes.txt if provided
-    if classes_list is not None:
+    # Resolve class names: classes.txt > data.yaml (Roboflow) > obj.names
+    if classes_list is None and yaml_raw:
+        classes_list = _yaml_class_names(yaml_raw)
+    if classes_list is None and names_raw:
+        classes_list = [l.strip() for l in names_raw.splitlines() if l.strip()]
+
+    if classes_list:
         project.classes_json = json.dumps(classes_list)
         session.add(project)
         session.commit()
@@ -193,6 +248,7 @@ async def import_yolo_dataset(
     imported = 0
     annotated_count = 0
     skipped = 0
+    max_cls_id = -1
 
     for stem, img_file in image_files.items():
         ext = os.path.splitext(img_file.filename or "")[1].lower()
@@ -238,6 +294,8 @@ async def import_yolo_dataset(
                     continue
                 try:
                     cls_id = int(parts[0])
+                    if cls_id > max_cls_id:
+                        max_cls_id = cls_id
                     coords = [float(v) for v in parts[1:]]
 
                     if len(coords) == 4:
@@ -278,11 +336,20 @@ async def import_yolo_dataset(
                 annotated_count += 1
             session.commit()
 
+    # Fallback: no names file but annotations exist → derive placeholder names
+    # from the highest class id seen, so the labels are defined and trainable.
+    derived = False
+    if not project.classes and max_cls_id >= 0:
+        project.classes_json = json.dumps([f"class{i}" for i in range(max_cls_id + 1)])
+        session.add(project)
+        session.commit()
+        derived = True
+
     return {
         "imported": imported,
         "annotated": annotated_count,
         "skipped_duplicates": skipped,
-        "classes_updated": classes_list is not None,
+        "classes_updated": bool(classes_list) or derived,
     }
 
 

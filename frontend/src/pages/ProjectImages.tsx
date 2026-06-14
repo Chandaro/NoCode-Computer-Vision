@@ -139,6 +139,17 @@ export default function ProjectImages() {
     }
   }
 
+  const [derivingClasses, setDerivingClasses] = useState(false)
+  const deriveClasses = async () => {
+    setDerivingClasses(true)
+    try {
+      await api.post(`/projects/${projectId}/images/derive-classes`)
+      await load()
+    } catch {
+      // surfaced via reload; no-op
+    } finally { setDerivingClasses(false) }
+  }
+
   const saveClasses = async (newClasses: string[]) => {
     if (!project) return
     setSavingClasses(true)
@@ -177,6 +188,7 @@ export default function ProjectImages() {
       const imageMap = new Map<string, File>()  // matchKey → file
       const labelMap = new Map<string, File>()  // matchKey → file
       let classesFile: File | null = null
+      const metaFiles: File[] = []              // data.yaml / obj.names (class names)
 
       const matchKey = (f: File): string => {
         // Use webkitRelativePath when available (folder upload)
@@ -211,6 +223,9 @@ export default function ProjectImages() {
         } else if (ext === 'txt') {
           if (stem === 'classes') classesFile = f
           else labelMap.set(key, f)
+        } else if (ext === 'yaml' || ext === 'yml' || ext === 'names') {
+          // Roboflow data.yaml / Darknet obj.names — carries the class names
+          metaFiles.push(f)
         }
       }
 
@@ -229,6 +244,7 @@ export default function ProjectImages() {
         const chunk = pairs.slice(i, i + BATCH)
         const fd = new FormData()
         if (i === 0 && classesFile) fd.append('files', classesFile, 'classes.txt')
+        if (i === 0) metaFiles.forEach(m => fd.append('files', m, m.name))
         for (const { img, label } of chunk) {
           fd.append('files', img, img.name)
           if (label) fd.append('files', label, label.name)
@@ -474,6 +490,14 @@ export default function ProjectImages() {
             {project?.classes.length ? `${project.classes.length} defined` : 'none defined'}
           </span>
           <div style={{ flex: 1 }} />
+          {(project?.classes.length ?? 0) === 0 && annotated > 0 && (
+            <button onClick={deriveClasses} disabled={derivingClasses}
+              style={{ fontSize: 11, color: '#fff', background: 'var(--accent)', border: 'none',
+                cursor: derivingClasses ? 'wait' : 'pointer', padding: '3px 10px', borderRadius: 5,
+                marginRight: 6 }}>
+              {derivingClasses ? 'Deriving…' : '⚡ Derive from annotations'}
+            </button>
+          )}
           <button onClick={() => setEditingClasses(v => !v)}
             style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none',
               cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}>
@@ -905,7 +929,7 @@ export default function ProjectImages() {
           </>
         )}
         <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleUpload} />
-        <input ref={importRef} type="file" multiple accept="image/*,.txt" style={{ display: 'none' }} onChange={handleImportYolo} />
+        <input ref={importRef} type="file" multiple accept="image/*,.txt,.yaml,.yml,.names" style={{ display: 'none' }} onChange={handleImportYolo} />
         {/* @ts-ignore */}
         <input ref={importFolderRef} type="file" multiple webkitdirectory="" style={{ display: 'none' }} onChange={handleImportYolo} />
       </div>
