@@ -104,7 +104,7 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
         controls.maxDistance = radius * 12
 
         const mat = new THREE.PointsMaterial({
-          size: pointSize * 0.0015,
+          size: pointSize * 0.0026,
           vertexColors: true,
           sizeAttenuation: true,
         })
@@ -313,7 +313,7 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
   // Live point size update
   useEffect(() => {
     if (rendRef.current?.mat)
-      rendRef.current.mat.size = pointSize * 0.0015
+      rendRef.current.mat.size = pointSize * 0.0026
   }, [pointSize])
 
   return (

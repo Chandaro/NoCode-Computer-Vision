@@ -87,7 +87,7 @@ export default function Depth() {
   const [imgRunning,   setImgRunning]   = useState(false)
   const [imgError,       setImgError]       = useState('')
   const [showPointCloud, setShowPointCloud] = useState(false)
-  const [pointSize,      setPointSize]      = useState(2)
+  const [pointSize,      setPointSize]      = useState(3)
   // ── Click-to-measure (metric models only) ──
   const [showMeasure,   setShowMeasure]   = useState(false)
   const [measurePts,    setMeasurePts]    = useState<{ x: number; y: number }[]>([])
@@ -555,7 +555,7 @@ export default function Depth() {
 
               {reconShow3D && (
                 <Slider label="Point size" value={pointSize} onChange={setPointSize}
-                  min={1} max={6} step={0.5} format={v => String(v)} />
+                  min={1} max={12} step={0.5} format={v => String(v)} />
               )}
             </Card>
             <Card style={{ padding: 12, background: 'rgba(94,106,210,0.06)',
@@ -1288,7 +1288,7 @@ export default function Depth() {
                       {showPointCloud && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
                           <span style={{ fontSize: 11, color: 'var(--text3)' }}>Point size</span>
-                          <input type="range" min={1} max={6} step={0.5} value={pointSize}
+                          <input type="range" min={1} max={12} step={0.5} value={pointSize}
                             onChange={e => setPointSize(Number(e.target.value))}
                             style={{ width: 80, accentColor: 'var(--accent)' }} />
                           <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'monospace' }}>
