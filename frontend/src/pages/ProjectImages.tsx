@@ -75,6 +75,7 @@ export default function ProjectImages() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null)
+  const [uploadLabel, setUploadLabel] = useState<string | null>(null)  // generic upload progress label
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
   const [editingClasses, setEditingClasses] = useState(false)
@@ -115,13 +116,27 @@ export default function ProjectImages() {
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return
+    const files = Array.from(e.target.files)
+    e.target.value = ''
     setLoading(true)
+    // Upload in batches: a single request with >1000 files trips Starlette's
+    // form-parser limit, and large batches can time out. 200 per request is safe.
+    const BATCH = 200
+    const total = files.length
+    if (total > BATCH) { setUploadLabel('Uploading images…'); setImportProgress({ current: 0, total }) }
     try {
-      const fd = new FormData()
-      Array.from(e.target.files).forEach(f => fd.append('files', f))
-      await api.post(`/projects/${projectId}/images`, fd)
+      for (let i = 0; i < total; i += BATCH) {
+        const fd = new FormData()
+        files.slice(i, i + BATCH).forEach(f => fd.append('files', f))
+        await api.post(`/projects/${projectId}/images`, fd)
+        if (total > BATCH) setImportProgress({ current: Math.min(i + BATCH, total), total })
+      }
       await load()
-    } finally { setLoading(false); e.target.value = '' }
+    } finally {
+      setLoading(false)
+      setImportProgress(null)
+      setUploadLabel(null)
+    }
   }
 
   const saveClasses = async (newClasses: string[]) => {
@@ -302,10 +317,14 @@ export default function ProjectImages() {
 
   const uploadToClass = async (cls: string, files: FileList) => {
     setUploadingCls(cls)
+    const arr = Array.from(files)
+    const BATCH = 200   // stay under Starlette's 1000-file form limit
     try {
-      const fd = new FormData()
-      Array.from(files).forEach(f => fd.append('files', f))
-      await api.post(`/projects/${projectId}/classification/dataset/upload/${encodeURIComponent(cls)}`, fd)
+      for (let i = 0; i < arr.length; i += BATCH) {
+        const fd = new FormData()
+        arr.slice(i, i + BATCH).forEach(f => fd.append('files', f))
+        await api.post(`/projects/${projectId}/classification/dataset/upload/${encodeURIComponent(cls)}`, fd)
+      }
       await _refreshAfterImport()
     } finally { setUploadingCls(null) }
   }
@@ -344,16 +363,26 @@ export default function ProjectImages() {
     if (!allFiles.length) return
     e.target.value = ''
     setClsImporting(true)
+    const BATCH = 200   // a single request with >1000 files trips Starlette's limit
+    const total = allFiles.length
+    if (total > BATCH) { setUploadLabel('Importing folder…'); setImportProgress({ current: 0, total }) }
     try {
-      const fd = new FormData()
-      for (const f of allFiles) {
-        // Send webkitRelativePath as filename so the backend can parse class structure
-        const relPath = (f as any).webkitRelativePath || f.name
-        fd.append('files', f, relPath)
+      for (let i = 0; i < total; i += BATCH) {
+        const fd = new FormData()
+        for (const f of allFiles.slice(i, i + BATCH)) {
+          // Send webkitRelativePath as filename so the backend can parse class structure
+          const relPath = (f as any).webkitRelativePath || f.name
+          fd.append('files', f, relPath)
+        }
+        await api.post(`/projects/${projectId}/classification/dataset/import-folder`, fd)
+        if (total > BATCH) setImportProgress({ current: Math.min(i + BATCH, total), total })
       }
-      await api.post(`/projects/${projectId}/classification/dataset/import-folder`, fd)
       await _refreshAfterImport()
-    } finally { setClsImporting(false) }
+    } finally {
+      setClsImporting(false)
+      setImportProgress(null)
+      setUploadLabel(null)
+    }
   }
 
   const [filter, setFilter] = useState<'all'|'annotated'|'unannotated'|'corrupt'>('all')
@@ -374,13 +403,13 @@ export default function ProjectImages() {
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
-      {/* Import progress overlay */}
-      {importing && importProgress && (
+      {/* Import / upload progress overlay */}
+      {(importing || uploadLabel) && importProgress && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200,
           display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
             padding: 32, width: 380, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Importing YOLO Dataset…</p>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{uploadLabel ?? 'Importing YOLO Dataset…'}</p>
             <div style={{ background: 'var(--surface2)', borderRadius: 6, height: 8, overflow: 'hidden' }}>
               <div style={{
                 height: '100%', borderRadius: 6, background: 'var(--accent)',
