@@ -220,6 +220,33 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
 
         model.add_callback("on_train_epoch_end", on_epoch_end)
 
+        # ── Within-epoch (batch) progress, so the UI isn't frozen at 0/N during
+        #    the slow first epoch (which also caches the dataset) ──────────────
+        _bstate = {"epoch": -1, "i": 0, "nb": 0, "last": 0.0}
+
+        def on_train_start(trainer):
+            push(f"Caching dataset & starting epoch 1/{trainer.epochs} "
+                 f"(the first epoch is the slowest — it builds the image cache)…")
+
+        def on_batch_end(trainer):
+            ep = int(getattr(trainer, "epoch", 0))
+            if ep != _bstate["epoch"]:
+                _bstate["epoch"] = ep
+                _bstate["i"] = 0
+                try:
+                    _bstate["nb"] = len(trainer.train_loader)
+                except Exception:
+                    _bstate["nb"] = 0
+            _bstate["i"] += 1
+            now = time.time()
+            if _bstate["nb"] and now - _bstate["last"] >= 2.0:
+                _bstate["last"] = now
+                frac = min(1.0, _bstate["i"] / _bstate["nb"])
+                push(f"__BATCH__:{ep + 1}/{trainer.epochs}:{frac:.3f}")
+
+        model.add_callback("on_train_start", on_train_start)
+        model.add_callback("on_train_batch_end", on_batch_end)
+
         output_dir = os.path.join(RUNS_DIR, f"train_{run_id}")
         os.makedirs(output_dir, exist_ok=True)
 

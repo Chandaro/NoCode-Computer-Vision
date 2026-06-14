@@ -177,6 +177,7 @@ export default function Train() {
   const [streaming, setStreaming]   = useState(false)
   const [logs, setLogs]             = useState<string[]>([])
   const [progress, setProgress]     = useState<Progress | null>(null)
+  const [batchFrac, setBatchFrac]   = useState<{ epoch: number; total: number; frac: number } | null>(null)
   const [chartData, setChartData]   = useState<MetricPoint[]>([])
   const [onnxStatus,     setOnnxStatus]     = useState<Record<number, string>>({})
   const [tfliteStatus,   setTfliteStatus]   = useState<Record<number, string>>({})
@@ -236,7 +237,7 @@ export default function Train() {
 
   const startTraining = async () => {
     esRef.current?.close()
-    setLogs([]); setChartData([]); setProgress(null)
+    setLogs([]); setChartData([]); setProgress(null); setBatchFrac(null)
     let res
     try {
       res = await api.post(`/projects/${projectId}/training/start`, {
@@ -268,6 +269,12 @@ export default function Train() {
         const mAP50Val = Number(m50), precVal = Number(prec), recVal = Number(rec)
         setProgress({ epoch: epochNum, total: totalNum, mAP50: mAP50Val, precision: precVal, recall: recVal })
         setChartData(prev => [...prev, { epoch: epochNum, mAP50: mAP50Val, precision: precVal, recall: recVal }])
+        setBatchFrac(null)
+        return
+      }
+      if (msg.startsWith('__BATCH__:')) {
+        const [, ep, frac] = msg.split(':')
+        setBatchFrac({ epoch: Number(ep.split('/')[0]), total: Number(ep.split('/')[1]), frac: Number(frac) })
         return
       }
       if (msg.startsWith('__DONE__:') || msg === '__FAILED__') { setStreaming(false); loadRuns() }
@@ -659,8 +666,17 @@ export default function Train() {
                   ? <Badge color="yellow"><Loader size={10} className="animate-spin" /> Running</Badge>
                   : <Badge color="green">Complete</Badge>}
               </div>
-              <ProgressBar value={progress?.epoch ?? 0} max={progress?.total ?? epochs}
-                label={`Epoch ${progress?.epoch ?? 0} of ${progress?.total ?? epochs}`} />
+              {(() => {
+                const doneEp = progress?.epoch ?? 0
+                const total  = progress?.total ?? batchFrac?.total ?? epochs
+                // Show within-epoch fill only while the current epoch is still running
+                const showBatch = batchFrac && batchFrac.epoch > doneEp
+                const value = showBatch ? doneEp + batchFrac!.frac : doneEp
+                const label = showBatch
+                  ? `Epoch ${batchFrac!.epoch} of ${total} — ${Math.round(batchFrac!.frac * 100)}%`
+                  : `Epoch ${doneEp} of ${total}`
+                return <ProgressBar value={value} max={total} label={label} />
+              })()}
               {progress && progress.mAP50 > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginTop: 12 }}>
                   <S label="mAP50"     value={`${(progress.mAP50 * 100).toFixed(1)}%`}     clr="var(--accent)" />
