@@ -63,6 +63,7 @@ export default function Depth() {
   const [reconError,    setReconError]    = useState('')
   const [reconShow3D,   setReconShow3D]   = useState(false)
   const [reconShowAll,  setReconShowAll]  = useState(false)  // viewer: all pts (no 200k cap)
+  const [previewIdx,    setPreviewIdx]    = useState<number | null>(null)  // upload image lightbox
   const [reconNiter,    setReconNiter]    = useState(300)
   const [reconDetail,   setReconDetail]   = useState(1.5)   // conf_thr: lower=more detail
   const [reconCleanup,  setReconCleanup]  = useState(true)  // remove noise points
@@ -132,6 +133,18 @@ export default function Depth() {
   useEffect(() => {
     api.get(`/projects/${projectId}`).then(r => setProject(r.data))
   }, [projectId])
+
+  // Keyboard nav for the upload preview lightbox
+  useEffect(() => {
+    if (previewIdx === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewIdx(null)
+      else if (e.key === 'ArrowLeft')  setPreviewIdx(p => (p! - 1 + reconFiles.length) % reconFiles.length)
+      else if (e.key === 'ArrowRight') setPreviewIdx(p => (p! + 1) % reconFiles.length)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [previewIdx, reconFiles.length])
 
   // Check DUSt3R model readiness whenever the user opens 3D Reconstruction
   useEffect(() => {
@@ -629,7 +642,10 @@ export default function Depth() {
                     <div key={i} style={{ position: 'relative', borderRadius: 6, overflow: 'hidden',
                       border: '1px solid var(--border)', aspectRatio: '1' }}>
                       <img src={reconPreviews[i]} alt={f.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        onClick={e => { e.stopPropagation(); setPreviewIdx(i) }}
+                        title="Click to preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                          cursor: 'zoom-in' }} />
                       <button onClick={e => { e.stopPropagation(); removeReconFile(i) }}
                         style={{ position: 'absolute', top: 3, right: 3, width: 16, height: 16,
                           borderRadius: '50%', background: 'rgba(0,0,0,0.65)', border: 'none',
@@ -657,6 +673,54 @@ export default function Depth() {
                 )}
               </div>
             </Card>
+
+            {/* ── Upload image preview lightbox ── */}
+            {previewIdx !== null && reconPreviews[previewIdx] && (
+              <div
+                onClick={() => setPreviewIdx(null)}
+                style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.85)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backdropFilter: 'blur(4px)' }}>
+                {/* Close */}
+                <button onClick={() => setPreviewIdx(null)}
+                  style={{ position: 'absolute', top: 18, right: 22, width: 36, height: 36,
+                    borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: 'none',
+                    color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center' }}>
+                  <X size={18} />
+                </button>
+
+                {/* Prev */}
+                {reconFiles.length > 1 && (
+                  <button onClick={e => { e.stopPropagation();
+                    setPreviewIdx(p => (p! - 1 + reconFiles.length) % reconFiles.length) }}
+                    style={{ position: 'absolute', left: 22, top: '50%', transform: 'translateY(-50%)',
+                      width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.12)',
+                      border: 'none', color: '#fff', cursor: 'pointer', fontSize: 22 }}>‹</button>
+                )}
+
+                {/* Image + caption */}
+                <div onClick={e => e.stopPropagation()}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                    maxWidth: '88vw', maxHeight: '88vh' }}>
+                  <img src={reconPreviews[previewIdx]} alt={reconFiles[previewIdx]?.name}
+                    style={{ maxWidth: '88vw', maxHeight: '80vh', objectFit: 'contain',
+                      borderRadius: 8, boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }} />
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace' }}>
+                    {previewIdx + 1} / {reconFiles.length} · {reconFiles[previewIdx]?.name}
+                  </span>
+                </div>
+
+                {/* Next */}
+                {reconFiles.length > 1 && (
+                  <button onClick={e => { e.stopPropagation();
+                    setPreviewIdx(p => (p! + 1) % reconFiles.length) }}
+                    style={{ position: 'absolute', right: 22, top: '50%', transform: 'translateY(-50%)',
+                      width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.12)',
+                      border: 'none', color: '#fff', cursor: 'pointer', fontSize: 22 }}>›</button>
+                )}
+              </div>
+            )}
 
             {/* Status */}
             {reconStatus !== 'idle' && (
