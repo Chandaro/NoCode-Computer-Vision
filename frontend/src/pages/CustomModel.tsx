@@ -1781,8 +1781,15 @@ export default function CustomModel() {
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement)
       }
+      // Clear refs so scene-build effects skip while in pretrained mode
+      rendererRef.current = null
+      sceneRef.current    = null
+      cameraRef.current   = null
     }
-  }, [])
+    // Re-run when switching between custom (3D canvas mounted) and pretrained
+    // (canvas unmounted): tears down the WebGL loop in pretrained mode and
+    // rebuilds it when returning to Build Your Own.
+  }, [archMode])
 
   // Load a random sample image from the project dataset for the input layer.
   // Callable on demand (Shuffle button) and on mount. Cache-busts so each call
@@ -1808,6 +1815,15 @@ export default function CustomModel() {
     sampleInputImage = null
     loadSampleImage()
   }, [projectId, loadSampleImage])
+
+  // Pretrained backbones expect ≥96px input. If we land in pretrained mode from a
+  // saved small-custom config, bump the input up so training does not crash.
+  useEffect(() => {
+    if (archMode === 'pretrained' && (inputH < 96 || inputW < 96)) {
+      setInputH(224); setInputW(224)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archMode])
 
   // Rebuild scene when layers / input size / sample image change
   useEffect(() => {
