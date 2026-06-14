@@ -564,6 +564,33 @@ export default function Annotate() {
     }
   }
 
+  // Import a HuggingFace model folder (config.json + weights + preprocessor)
+  const importHfModel = async (files: FileList) => {
+    const arr = Array.from(files)
+    if (!arr.some(f => (f.name === 'config.json'))) {
+      setAutoMsg({ text: 'Pick the model folder containing config.json', ok: false })
+      return
+    }
+    setImporting(true)
+    setAutoMsg({ text: 'Uploading model… (large files may take a while)', ok: true })
+    try {
+      const form = new FormData()
+      // Folder name (from the first file's relative path) as the model name
+      const rel = (arr[0] as any).webkitRelativePath as string || ''
+      const folderName = rel.split('/')[0] || 'hf-model'
+      form.append('name', folderName)
+      arr.forEach(f => form.append('files', f, f.name))
+      const res = await api.post('/models/external/hf', form)
+      setExternalModels(prev => [...prev, res.data])
+      setAutoRunId(`ext:${res.data.id}`)
+      setAutoMsg({ text: `Imported ${res.data.name} (${res.data.task})`, ok: true })
+    } catch (e: any) {
+      setAutoMsg({ text: e?.response?.data?.detail ?? 'Import failed — must be an image classification or detection model', ok: false })
+    } finally {
+      setImporting(false)
+    }
+  }
+
   // ─── Auto-annotate ────────────────────────────────────────────────────────
   const autoAnnotate = async () => {
     if (!currentImage || !autoRunId) return
@@ -859,21 +886,36 @@ export default function Annotate() {
                   {externalModels.length > 0 && (
                     <optgroup label="Imported models">
                       {externalModels.map(m => (
-                        <option key={m.id} value={`ext:${m.id}`}>{m.name}</option>
+                        <option key={m.id} value={`ext:${m.id}`}>
+                          {m.name}{(m as any).kind === 'hf' ? ` · HF ${(m as any).task ?? ''}` : ' · YOLO'}
+                        </option>
                       ))}
                     </optgroup>
                   )}
                 </select>
-                {/* Import external model */}
-                <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: importing ? 'wait' : 'pointer' }}>
-                  <input type="file" accept=".pt" style={{ display: 'none' }}
-                    onChange={e => { const f = e.target.files?.[0]; if (f) importModel(f); e.target.value = '' }} />
-                  <span style={{ flex: 1, padding: '5px 8px', background: 'var(--surface2)',
-                    border: '1px solid var(--border)', borderRadius: 5, fontSize: 10,
-                    color: 'var(--text2)', textAlign: 'center' }}>
-                    {importing ? 'Importing…' : '+ Import .pt model'}
-                  </span>
-                </label>
+                {/* Import external model — YOLO .pt or HuggingFace folder */}
+                <div style={{ display: 'flex', gap: 5 }}>
+                  <label style={{ flex: 1, cursor: importing ? 'wait' : 'pointer' }}>
+                    <input type="file" accept=".pt" style={{ display: 'none' }}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) importModel(f); e.target.value = '' }} />
+                    <span style={{ display: 'block', padding: '5px 8px', background: 'var(--surface2)',
+                      border: '1px solid var(--border)', borderRadius: 5, fontSize: 10,
+                      color: 'var(--text2)', textAlign: 'center' }}>
+                      {importing ? '…' : '+ .pt (YOLO)'}
+                    </span>
+                  </label>
+                  <label style={{ flex: 1, cursor: importing ? 'wait' : 'pointer' }}>
+                    {/* webkitdirectory must be set via ref so the folder picker opens */}
+                    <input type="file" style={{ display: 'none' }}
+                      ref={el => { if (el) { el.setAttribute('webkitdirectory', ''); el.setAttribute('directory', '') } }}
+                      onChange={e => { if (e.target.files?.length) importHfModel(e.target.files); e.target.value = '' }} />
+                    <span style={{ display: 'block', padding: '5px 8px', background: 'var(--surface2)',
+                      border: '1px solid var(--border)', borderRadius: 5, fontSize: 10,
+                      color: 'var(--text2)', textAlign: 'center' }}>
+                      {importing ? '…' : '+ HF folder'}
+                    </span>
+                  </label>
+                </div>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                     <span style={{ fontSize: 10, color: 'var(--text2)' }}>Conf</span>

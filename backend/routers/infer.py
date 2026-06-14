@@ -457,6 +457,93 @@ async def custom_cnn_infer(
 
 
 # ─── Auto-annotate ────────────────────────────────────────────────────────────
+_hf_cache: dict = {}   # model_dir → (processor, model, task)
+
+
+def _load_hf(model_dir: str):
+    """Load and cache a HuggingFace image model (detection or classification)."""
+    if model_dir in _hf_cache:
+        return _hf_cache[model_dir]
+    import json as _json, torch
+    from transformers import (AutoImageProcessor, AutoModelForObjectDetection,
+                              AutoModelForImageClassification)
+    with open(os.path.join(model_dir, "config.json"), "r", encoding="utf-8") as f:
+        archs = " ".join(_json.load(f).get("architectures", []) or []).lower()
+    proc = AutoImageProcessor.from_pretrained(model_dir)
+    if "objectdetection" in archs:
+        task = "detection"
+        model = AutoModelForObjectDetection.from_pretrained(model_dir)
+    else:
+        task = "classification"
+        model = AutoModelForImageClassification.from_pretrained(model_dir)
+    model.eval()
+    if torch.cuda.is_available():
+        model = model.to("cuda")
+    _hf_cache[model_dir] = (proc, model, task)
+    return _hf_cache[model_dir]
+
+
+def _hf_auto_annotate(model_dir: str, img_path: str, conf: float,
+                      project_classes: list) -> list:
+    """Run a HuggingFace model on an image and return suggested annotations.
+
+    Detection models yield real boxes; classification models yield one
+    whole-image box labelled with the top-1 class.
+    """
+    import torch
+    from PIL import Image as PILImage
+    proc, model, task = _load_hf(model_dir)
+    pil = PILImage.open(img_path).convert("RGB")
+    inputs = proc(images=pil, return_tensors="pt")
+    if torch.cuda.is_available():
+        inputs = {k: v.to("cuda") for k, v in inputs.items()}
+
+    def _match_class(label_name: str, fallback_id: int):
+        for i, c in enumerate(project_classes):
+            if c.lower() == str(label_name).lower():
+                return i
+        return fallback_id
+
+    annotations = []
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    if task == "detection":
+        target_sizes = torch.tensor([pil.size[::-1]])  # (h, w)
+        results = proc.post_process_object_detection(
+            outputs, threshold=conf, target_sizes=target_sizes)[0]
+        W, H = pil.size
+        for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
+            x1, y1, x2, y2 = [float(v) for v in box.tolist()]
+            x1n, x2n = max(0, x1) / W, min(W, x2) / W
+            y1n, y2n = max(0, y1) / H, min(H, y2) / H
+            label_name = model.config.id2label.get(int(label), f"cls{int(label)}")
+            annotations.append({
+                "class_id": _match_class(label_name, int(label)),
+                "class_name": label_name,
+                "shape_type": "bbox",
+                "x_center": round((x1n + x2n) / 2, 6),
+                "y_center": round((y1n + y2n) / 2, 6),
+                "width":    round(x2n - x1n, 6),
+                "height":   round(y2n - y1n, 6),
+                "points":   [],
+                "conf":     round(float(score), 4),
+            })
+    else:  # classification → one whole-image box for the top-1 class
+        probs = outputs.logits.softmax(-1)[0]
+        top_p, top_i = float(probs.max()), int(probs.argmax())
+        if top_p >= conf:
+            label_name = model.config.id2label.get(top_i, f"cls{top_i}")
+            annotations.append({
+                "class_id": _match_class(label_name, top_i),
+                "class_name": label_name,
+                "shape_type": "bbox",
+                "x_center": 0.5, "y_center": 0.5, "width": 1.0, "height": 1.0,
+                "points": [], "conf": round(top_p, 4),
+            })
+    return annotations
+
+
 @router.post("/projects/{project_id}/images/{image_id}/auto-annotate")
 async def auto_annotate(
     project_id: int,
@@ -495,6 +582,18 @@ async def auto_annotate(
     img_path = os.path.join(UPLOAD_DIR, img_rec.filename)
     if not os.path.exists(img_path):
         raise HTTPException(404, "Image file not found")
+
+    # Project classes — used to map predicted label names back to class indices.
+    proj = session.get(Project, project_id)
+    project_classes: list = proj.classes if proj else []
+
+    # HuggingFace model (stored as a directory) → transformers inference.
+    if os.path.isdir(model_path):
+        try:
+            annotations = _hf_auto_annotate(model_path, img_path, conf, project_classes)
+        except Exception as exc:
+            raise HTTPException(500, f"HuggingFace inference failed: {exc}")
+        return {"annotations": annotations, "count": len(annotations)}
 
     import torch
     from ultralytics import YOLO
