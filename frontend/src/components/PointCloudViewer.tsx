@@ -21,6 +21,7 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
   const rendRef   = useRef<any>(null)
   const edlRef    = useRef(true)              // read inside the render loop
   const [edl,     setEdl]      = useState(true)
+  const [fly,     setFly]      = useState(false)
   const [loading, setLoading]  = useState(true)
   const [count,   setCount]    = useState(0)
   const [error,   setError]    = useState('')
@@ -118,7 +119,6 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
           )
         }
         scene.add(new THREE.Points(geo, mat))
-        scene.add(new THREE.AxesHelper(radius * 0.3))
 
         // ── Eye-Dome Lighting post-process ────────────────────────────────
         // Render the cloud to an offscreen target that also captures depth,
@@ -179,11 +179,80 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
         const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
         postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), edlMat))
 
+        // ── Free-fly camera (WASD + mouse look), like the Conv Builder ─────
+        const canvasEl = renderer.domElement
+        const up = new THREE.Vector3(0, 1, 0)
+        const flySt = { on: false, keys: new Set<string>(), yaw: 0, pitch: 0,
+                        speed: radius * 0.012 }
+
+        const syncFlyFromCamera = () => {
+          const dir = new THREE.Vector3()
+          camera.getWorldDirection(dir)
+          flySt.yaw   = Math.atan2(dir.x, dir.z)
+          flySt.pitch = Math.asin(Math.max(-1, Math.min(1, dir.y)))
+        }
+        const enterFly = () => {
+          flySt.on = true; controls.enabled = false
+          syncFlyFromCamera(); flySt.keys.clear()
+          canvasEl.requestPointerLock?.()
+          setFly(true)
+        }
+        const exitFly = () => {
+          flySt.on = false; controls.enabled = true; flySt.keys.clear()
+          if (document.pointerLockElement) document.exitPointerLock()
+          const dir = new THREE.Vector3(); camera.getWorldDirection(dir)
+          controls.target.copy(camera.position).addScaledVector(dir, radius)
+          controls.update()
+          setFly(false)
+        }
+        const toggleFly = () => (flySt.on ? exitFly() : enterFly())
+
+        const onKeyDown = (e: KeyboardEvent) => {
+          if (!flySt.on) return
+          flySt.keys.add(e.key.toLowerCase())
+          if (e.key === 'Escape') exitFly()
+          if (['w','a','s','d','q','e'].includes(e.key.toLowerCase())) e.preventDefault()
+        }
+        const onKeyUp = (e: KeyboardEvent) => flySt.keys.delete(e.key.toLowerCase())
+        const onMouseMove = (e: MouseEvent) => {
+          if (!flySt.on || document.pointerLockElement !== canvasEl) return
+          flySt.yaw  -= e.movementX * 0.002
+          flySt.pitch = Math.max(-Math.PI/2 + 0.05,
+            Math.min(Math.PI/2 - 0.05, flySt.pitch - e.movementY * 0.002))
+        }
+        const onPLChange = () => { if (flySt.on && !document.pointerLockElement) exitFly() }
+        const onWheelFly = (e: WheelEvent) => {
+          if (!flySt.on) return
+          e.preventDefault()
+          flySt.speed = Math.max(radius * 0.001,
+            Math.min(radius * 0.1, flySt.speed * (e.deltaY > 0 ? 1.15 : 0.87)))
+        }
+        window.addEventListener('keydown', onKeyDown)
+        window.addEventListener('keyup', onKeyUp)
+        window.addEventListener('mousemove', onMouseMove)
+        document.addEventListener('pointerlockchange', onPLChange)
+        canvasEl.addEventListener('wheel', onWheelFly, { passive: false })
+
         // ── Animation ─────────────────────────────────────────────────────
         let animId = 0
         const animate = () => {
           animId = requestAnimationFrame(animate)
-          controls.update()
+          if (flySt.on) {
+            const cp = Math.cos(flySt.pitch), sp = Math.sin(flySt.pitch)
+            const forward = new THREE.Vector3(Math.sin(flySt.yaw) * cp, sp,
+                                              Math.cos(flySt.yaw) * cp)
+            const right = new THREE.Vector3().crossVectors(forward, up).normalize()
+            const k = flySt.keys, s = flySt.speed
+            if (k.has('w')) camera.position.addScaledVector(forward,  s)
+            if (k.has('s')) camera.position.addScaledVector(forward, -s)
+            if (k.has('d')) camera.position.addScaledVector(right,    s)
+            if (k.has('a')) camera.position.addScaledVector(right,   -s)
+            if (k.has('e')) camera.position.y += s
+            if (k.has('q')) camera.position.y -= s
+            camera.lookAt(camera.position.clone().add(forward))
+          } else {
+            controls.update()
+          }
           if (edlRef.current) {
             edlMat.uniforms.uNear.value = camera.near
             edlMat.uniforms.uFar.value  = camera.far
@@ -210,12 +279,18 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
         }
         window.addEventListener('resize', onResize)
 
-        rendRef.current = { camera, controls, mat, renderer, animId }
+        rendRef.current = { camera, controls, mat, renderer, animId, toggleFly }
         setLoading(false)
 
         cleanup = () => {
           cancelAnimationFrame(animId)
           window.removeEventListener('resize', onResize)
+          window.removeEventListener('keydown', onKeyDown)
+          window.removeEventListener('keyup', onKeyUp)
+          window.removeEventListener('mousemove', onMouseMove)
+          document.removeEventListener('pointerlockchange', onPLChange)
+          canvasEl.removeEventListener('wheel', onWheelFly)
+          if (document.pointerLockElement) document.exitPointerLock()
           controls.dispose(); renderer.dispose(); geo.dispose(); mat.dispose()
           rt.dispose(); depthTexture.dispose(); edlMat.dispose()
           if (container.contains(renderer.domElement))
@@ -272,6 +347,15 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
             {(count ?? 0).toLocaleString()} pts
           </div>
           <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+            <button onClick={() => rendRef.current?.toggleFly?.()}
+              title="Fly mode — WASD move · mouse look · Q/E up/down · Esc exit"
+              style={{ padding: '5px 9px',
+                border: `1px solid ${fly ? 'rgba(34,197,94,0.8)' : 'rgba(255,255,255,0.15)'}`,
+                borderRadius: 5, background: fly ? 'rgba(34,197,94,0.25)' : 'rgba(0,0,0,0.55)',
+                color: fly ? '#fff' : 'rgba(255,255,255,0.7)', cursor: 'pointer',
+                fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+              ✈ {fly ? 'Exit Fly' : 'Fly'}
+            </button>
             <button onClick={() => setEdl(v => !v)}
               title="Eye-Dome Lighting — depth shading for sharper shapes"
               style={{ padding: '5px 9px',
@@ -291,7 +375,9 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
           </div>
           <div style={{ position: 'absolute', bottom: 10, left: 12,
             fontSize: 10, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>
-            🖱 Left drag: rotate · Scroll: zoom · Right drag: pan
+            {fly
+              ? '✈ WASD: move · Mouse: look · Q/E: up/down · Scroll: speed · Esc: exit'
+              : '🖱 Left drag: rotate · Scroll: zoom · Right drag: pan · ✈ Fly to move freely'}
           </div>
         </>
       )}
