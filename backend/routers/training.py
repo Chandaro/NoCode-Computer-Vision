@@ -392,6 +392,78 @@ def start_training(project_id: int, config: TrainConfig, session: Session = Depe
     return _run_to_out(run)
 
 
+@router.get("/estimate")
+def estimate_resources(project_id: int, model_base: str = "yolo11n.pt",
+                       imgsz: int = 640, batch: int = 16, freeze: int = 0,
+                       session: Session = Depends(get_session)):
+    """Estimate the GPU VRAM and system RAM a training run will use, and compare
+    it to what's available, BEFORE the user starts. Heuristic (not exact) — based
+    on the model size, image size, batch and known YOLO training footprints."""
+    import os as _os
+    # (overhead_gb, per_image_gb at 640px training) by model size
+    PROFILES = {
+        "nano":   (0.7, 0.14), "small":  (0.9, 0.27),
+        "medium": (1.2, 0.46), "large":  (1.6, 0.70), "xlarge": (2.0, 1.02),
+    }
+    stem = model_base.replace(".pt", "").replace("-seg", "")
+    size_char = next((c for c in reversed(stem) if c.isalpha()), "n")
+    size = {"n": "nano", "t": "nano", "s": "small", "m": "medium",
+            "l": "large", "c": "large", "b": "large",
+            "x": "xlarge", "e": "xlarge"}.get(size_char, "small")
+    overhead, per_img = PROFILES[size]
+
+    scale     = (max(64, imgsz) / 640.0) ** 2
+    seg_mult  = 1.25 if "-seg" in model_base else 1.0
+    free_mult = 0.7 if freeze and freeze > 0 else 1.0      # frozen backbone = less grad memory
+    per_eff   = per_img * scale * seg_mult * free_mult
+    est_vram  = round(overhead + per_eff * max(1, batch), 2)
+
+    # Data-loader workers are 0 on Windows (main-process loading), else 8
+    workers   = 0 if _os.name == "nt" else 8
+    est_ram   = round(2.5 + workers * 0.8 + 0.6, 2)        # torch/CUDA runtime + workers + buffers
+
+    result: dict = {
+        "model_size": size, "imgsz": imgsz, "batch": batch,
+        "freeze": int(freeze or 0), "est_vram_gb": est_vram,
+        "ram": {"est_gb": est_ram},
+        "note": "Estimate only — real usage varies with augmentation and caching.",
+    }
+
+    import torch
+    if torch.cuda.is_available():
+        free, total = torch.cuda.mem_get_info()
+        free_gb, total_gb = round(free / 1e9, 2), round(total / 1e9, 2)
+        if est_vram <= free_gb * 0.85:
+            verdict = "fits"
+        elif est_vram <= free_gb:
+            verdict = "tight"
+        else:
+            verdict = "over"
+        suggested = None
+        if verdict == "over":
+            budget = max(0.2, free_gb * 0.8 - overhead)
+            suggested = max(1, int(budget / max(per_eff, 1e-6)))
+        result["device"] = "GPU"
+        result["gpu"] = {
+            "name": torch.cuda.get_device_name(0),
+            "total_gb": total_gb, "free_gb": free_gb,
+            "verdict": verdict, "suggested_batch": suggested,
+        }
+    else:
+        result["device"] = "CPU"
+        result["gpu"] = None
+        result["note"] = "Training on CPU — no GPU detected. Expect slow epochs."
+
+    try:
+        import psutil
+        vm = psutil.virtual_memory()
+        result["ram"]["total_gb"]     = round(vm.total / 1e9, 2)
+        result["ram"]["available_gb"] = round(vm.available / 1e9, 2)
+    except Exception:
+        pass
+    return result
+
+
 @router.get("/runs", response_model=list[TrainingRunOut])
 def list_runs(project_id: int, session: Session = Depends(get_session)):
     runs = session.exec(select(TrainingRun).where(TrainingRun.project_id == project_id)).all()
