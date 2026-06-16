@@ -92,6 +92,7 @@ def _build_dataset(project_id: int, val_split: float, session: Session,
     n_val   = min(n_val, len(shuffled) - 1)
     val_ids = {img.id for img in shuffled[:n_val]}
 
+    max_class_id = -1
     for img in images:
         split = "val" if img.id in val_ids else "train"
         src = os.path.join(UPLOAD_DIR, img.filename)
@@ -103,6 +104,8 @@ def _build_dataset(project_id: int, val_split: float, session: Session,
                                   os.path.splitext(img.filename)[0] + ".txt")
         with open(label_path, "w") as f:
             for ann in anns:
+                if ann.class_id is not None and ann.class_id > max_class_id:
+                    max_class_id = ann.class_id
                 if ann.shape_type == "polygon":
                     pts = json.loads(ann.points_json or "[]")
                     if len(pts) >= 3:
@@ -128,7 +131,13 @@ def _build_dataset(project_id: int, val_split: float, session: Session,
                     else:
                         f.write(f"{ann.class_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n")
 
-    classes   = project.classes
+    # Ensure nc covers every class id actually used in the labels — otherwise
+    # YOLO aborts with "Label class N exceeds dataset class count". Pad missing
+    # names with placeholders so training can proceed.
+    classes = list(project.classes)
+    while len(classes) <= max_class_id:
+        classes.append(f"class{len(classes)}")
+
     yaml_path = os.path.join(dataset_dir, f"{project.name.replace(' ','_')}.yaml")
     with open(yaml_path, "w") as f:
         f.write(f"path: {dataset_dir}\ntrain: images/train\nval: images/val\n\n")
