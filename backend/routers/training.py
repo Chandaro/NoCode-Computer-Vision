@@ -270,13 +270,19 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
         else:
             push("Transfer learning — fine-tuning all layers from COCO-pretrained weights")
 
+        # DataLoader workers: on Windows the multiprocessing workers are flaky
+        # and can die mid-training with "SystemError in DataLoader worker
+        # process N". Load in the main process there for stability.
+        workers = 0 if os.name == "nt" else 8
+
         push(f"Training started — {config.epochs} epochs  imgsz={config.imgsz}  "
              f"batch={config.batch}  optimizer={config.optimizer}  lr0={config.lr0}"
-             + (f"  freeze={freeze_n}" if freeze_n > 0 else ""))
+             + (f"  freeze={freeze_n}" if freeze_n > 0 else "")
+             + (f"  workers={workers}" if workers == 0 else ""))
         results = model.train(
             data=yaml_path, epochs=config.epochs, imgsz=config.imgsz,
             batch=config.batch, project=output_dir, name="weights",
-            exist_ok=True, verbose=False, device=device,
+            exist_ok=True, verbose=False, device=device, workers=workers,
             freeze=(freeze_n or None),
             # Optimizer
             optimizer=config.optimizer, lr0=config.lr0, lrf=config.lrf,

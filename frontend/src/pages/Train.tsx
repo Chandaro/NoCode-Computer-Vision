@@ -179,6 +179,7 @@ export default function Train() {
   const [logs, setLogs]             = useState<string[]>([])
   const [progress, setProgress]     = useState<Progress | null>(null)
   const [batchFrac, setBatchFrac]   = useState<{ epoch: number; total: number; frac: number } | null>(null)
+  const [failed,    setFailed]      = useState(false)
   const [chartData, setChartData]   = useState<MetricPoint[]>([])
   const [onnxStatus,     setOnnxStatus]     = useState<Record<number, string>>({})
   const [tfliteStatus,   setTfliteStatus]   = useState<Record<number, string>>({})
@@ -238,7 +239,7 @@ export default function Train() {
 
   const startTraining = async () => {
     esRef.current?.close()
-    setLogs([]); setChartData([]); setProgress(null); setBatchFrac(null)
+    setLogs([]); setChartData([]); setProgress(null); setBatchFrac(null); setFailed(false)
     let res
     try {
       res = await api.post(`/projects/${projectId}/training/start`, {
@@ -278,7 +279,9 @@ export default function Train() {
         setBatchFrac({ epoch: Number(ep.split('/')[0]), total: Number(ep.split('/')[1]), frac: Number(frac) })
         return
       }
-      if (msg.startsWith('__DONE__:') || msg === '__FAILED__') { setStreaming(false); loadRuns() }
+      if (msg.startsWith('__DONE__:')) { setStreaming(false); setFailed(false); loadRuns() }
+      if (msg === '__FAILED__' || msg.startsWith('[ERROR]')) { setFailed(true) }
+      if (msg === '__FAILED__') { setStreaming(false); loadRuns() }
       setLogs(prev => [...prev, msg])
     }
     es.onerror = () => { es.close(); esRef.current = null; setStreaming(false); loadRuns(); setLogs(prev => [...prev, '[WARN] Connection lost']) }
@@ -686,6 +689,8 @@ export default function Train() {
                 <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.01em' }}>Training Progress</p>
                 {streaming
                   ? <Badge color="yellow"><Loader size={10} className="animate-spin" /> Running</Badge>
+                  : failed
+                  ? <Badge color="red">Failed</Badge>
                   : <Badge color="green">Complete</Badge>}
               </div>
               {(() => {
