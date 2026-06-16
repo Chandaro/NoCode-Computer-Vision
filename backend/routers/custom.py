@@ -214,6 +214,12 @@ def _build_custom_dataset(project_id: int, run_id: int, classes: list,
                 if os.path.splitext(f)[1].lower() in IMG_EXTS]
         random.shuffle(imgs)
         n_val = max(1, int(len(imgs) * val_split))
+        # Cache at a resolution >= the model input (never below) so the on-the-fly
+        # Resize keeps detail and augmentation (affine/scale/erasing) has real
+        # pixels to work with. Big originals are capped at 256 to bound disk; we
+        # never upscale small originals beyond their own size (but keep >= input).
+        need = max(input_h, input_w)
+        cap  = max(256, need)
         for i, fname in enumerate(imgs):
             split = "val" if i < n_val else "train"
             src   = os.path.join(cls_dir, fname)
@@ -222,8 +228,13 @@ def _build_custom_dataset(project_id: int, run_id: int, classes: list,
                 continue
             try:
                 pil = PILImage.open(src).convert("RGB")
-                pil = pil.resize((input_w, input_h), PILImage.BILINEAR)
-                pil.save(os.path.join(dataset_dir, split, safe, fname + ".jpg"), "JPEG")
+                long_side = max(pil.size)
+                side = max(need, min(cap, long_side))
+                if (side, side) != pil.size:
+                    pil = pil.resize((side, side), PILImage.BILINEAR)
+                # Quality 95 (not the default 75) to avoid stacking JPEG artifacts.
+                pil.save(os.path.join(dataset_dir, split, safe, fname + ".jpg"),
+                         "JPEG", quality=95)
                 placed += 1
             except Exception:
                 reasons["corrupt"] += 1
@@ -554,7 +565,10 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
         push(f"Device: {device}  |  Classes: {len(classes)}  |  Input: {input_h}x{input_w}")
 
         # ── Augmentation transforms ────────────────────────────────────────
-        aug = [T.Resize((input_h, input_w))]
+        # Geometric/colour augmentation runs FIRST, on the cached full-resolution
+        # image, then we resize to the model input last. Augmenting before the
+        # downscale keeps edges clean instead of warping a tiny 64px image.
+        aug: list = []
         if body.fliplr > 0:
             aug.append(T.RandomHorizontalFlip(p=body.fliplr))
         if body.flipud > 0:
@@ -576,6 +590,7 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
                 saturation=body.saturation,
             ))
         aug.extend([
+            T.Resize((input_h, input_w)),
             T.ToTensor(),
             T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])

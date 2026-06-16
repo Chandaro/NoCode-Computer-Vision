@@ -1527,8 +1527,8 @@ export default function CustomModel() {
 
   // Config state
   const [layers,   setLayers]   = useState<Layer[]>(DEFAULT_LAYERS)
-  const [inputH,   setInputH]   = useState(64)
-  const [inputW,   setInputW]   = useState(64)
+  const [inputH,   setInputH]   = useState(96)
+  const [inputW,   setInputW]   = useState(96)
   // Transfer learning ('pretrained' layers[0]) vs from-scratch ('custom')
   const archMode: 'custom' | 'pretrained' =
     layers[0]?.type === 'pretrained' ? 'pretrained' : 'custom'
