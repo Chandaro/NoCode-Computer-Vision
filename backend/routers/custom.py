@@ -1078,6 +1078,11 @@ async def custom_gradcam(project_id: int, run_id: int,
     model = _build_torch_model(layers, input_h, input_w, len(classes))
     model.load_state_dict(torch.load(run.model_path, map_location="cpu", weights_only=False))
     model.eval()
+    # Linear-probe (frozen-backbone) runs save params with requires_grad=False, so
+    # no gradients would reach the conv layer. Re-enable grad on this throwaway
+    # inference copy so Grad-CAM has gradients to work with.
+    for p in model.parameters():
+        p.requires_grad_(True)
 
     # Target = the LAST convolutional layer (standard Grad-CAM choice)
     target = None
@@ -1102,12 +1107,15 @@ async def custom_gradcam(project_id: int, run_id: int,
     ])
     x = tf(pil).unsqueeze(0)
 
-    # Hooks to capture activations + gradients of the target layer
+    # Capture the target layer's activation and its gradient. A tensor hook on
+    # the activation is more reliable than register_full_backward_hook, which
+    # silently fails to fire on some module layouts (e.g. MobileNet's last conv).
     store = {}
-    def fwd(_m, _i, o): store["act"] = o
-    def bwd(_m, _gi, go): store["grad"] = go[0]
+    def fwd(_m, _i, o):
+        store["act"] = o
+        if o.requires_grad:
+            o.register_hook(lambda g: store.__setitem__("grad", g))
     h1 = target.register_forward_hook(fwd)
-    h2 = target.register_full_backward_hook(bwd)
 
     try:
         out   = model(x)                         # [1, n_classes]
@@ -1116,7 +1124,12 @@ async def custom_gradcam(project_id: int, run_id: int,
         model.zero_grad()
         out[0, cls].backward()
     finally:
-        h1.remove(); h2.remove()
+        h1.remove()
+
+    if "act" not in store or "grad" not in store:
+        raise HTTPException(400,
+            "Could not capture gradients for this model — Grad-CAM needs a "
+            "convolutional feature map with gradient flow.")
 
     acts  = store["act"][0].detach()             # [C, h, w]
     grads = store["grad"][0].detach()            # [C, h, w]
