@@ -24,6 +24,8 @@ class TrainConfig(BaseModel):
     batch: int = 16
     model_base: str = "yolo11n.pt"
     val_split: float = 0.2
+    freeze: int = 0               # transfer learning: 0 = fine-tune all,
+                                  # 10 = freeze COCO backbone (train head only)
     # Optimizer
     optimizer: str = "auto"       # auto | SGD | Adam | AdamW | NAdam | RAdam | RMSProp
     lr0: float = 0.01
@@ -259,12 +261,23 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
         output_dir = os.path.join(RUNS_DIR, f"train_{run_id}")
         os.makedirs(output_dir, exist_ok=True)
 
+        # Transfer-learning freeze: >0 freezes the first N (backbone) layers so
+        # only the detection head trains — faster and better on small datasets.
+        freeze_n = int(getattr(config, "freeze", 0) or 0)
+        if freeze_n > 0:
+            push(f"Transfer learning — freezing first {freeze_n} layers "
+                 f"(COCO backbone frozen, training detection head only)")
+        else:
+            push("Transfer learning — fine-tuning all layers from COCO-pretrained weights")
+
         push(f"Training started — {config.epochs} epochs  imgsz={config.imgsz}  "
-             f"batch={config.batch}  optimizer={config.optimizer}  lr0={config.lr0}")
+             f"batch={config.batch}  optimizer={config.optimizer}  lr0={config.lr0}"
+             + (f"  freeze={freeze_n}" if freeze_n > 0 else ""))
         results = model.train(
             data=yaml_path, epochs=config.epochs, imgsz=config.imgsz,
             batch=config.batch, project=output_dir, name="weights",
             exist_ok=True, verbose=False, device=device,
+            freeze=(freeze_n or None),
             # Optimizer
             optimizer=config.optimizer, lr0=config.lr0, lrf=config.lrf,
             momentum=config.momentum, weight_decay=config.weight_decay,

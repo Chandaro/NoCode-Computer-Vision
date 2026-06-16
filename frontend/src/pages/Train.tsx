@@ -145,6 +145,7 @@ export default function Train() {
   const [imgsz, setImgsz]         = useState(640)
   const [batch, setBatch]         = useState(16)
   const [modelBase, setModelBase] = useState('yolo11n.pt')
+  const [freeze, setFreeze]       = useState(0)   // 0 = fine-tune all, 10 = freeze backbone
   const [valSplit, setValSplit]   = useState(0.2)
   const [showAug, setShowAug]     = useState(false)
 
@@ -241,7 +242,7 @@ export default function Train() {
     let res
     try {
       res = await api.post(`/projects/${projectId}/training/start`, {
-        epochs, imgsz, batch, model_base: modelBase, val_split: valSplit,
+        epochs, imgsz, batch, model_base: modelBase, val_split: valSplit, freeze,
         optimizer, lr0, lrf, momentum, weight_decay: weightDecay,
         warmup_epochs: warmupEpochs, patience,
         fliplr, flipud, degrees, translate, scale, shear, perspective,
@@ -552,6 +553,27 @@ export default function Train() {
                 </optgroup>
               </Select>
             </Field>
+
+            <Field label={
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                Training Mode
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                  padding: '2px 6px', borderRadius: 3,
+                  background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
+                  TRANSFER
+                </span>
+              </span>
+            }>
+              <Select value={String(freeze)} onChange={v => setFreeze(Number(v))}>
+                <option value="0">Fine-tune all layers (recommended)</option>
+                <option value="10">Freeze backbone — train head only</option>
+              </Select>
+            </Field>
+            <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5, margin: '-4px 0 4px' }}>
+              {freeze === 0
+                ? 'Adjusts the whole COCO-pretrained network to your data — best accuracy.'
+                : 'Keeps the COCO backbone fixed and trains only the detection head — faster and steadier on small datasets.'}
+            </p>
 
             <Slider label="Epochs" value={epochs} onChange={setEpochs} min={1} max={300} step={1} />
             <Field label="Image Size">
