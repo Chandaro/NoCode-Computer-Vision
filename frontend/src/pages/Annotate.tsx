@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ChevronLeft, ChevronRight, Save, Trash2, RotateCcw,
-  MousePointer2, Square, Hexagon, Crosshair,
+  MousePointer2, Square, Hexagon, Crosshair, Sparkles,
   ZoomIn, ZoomOut, Maximize2, Copy
 } from 'lucide-react'
 import api, { type AnnData, type ImageItem, type Project, type ExternalModel } from '../api'
@@ -14,7 +14,7 @@ const SNAP_PX = 14 // polygon close-snap distance in screen px
 const DOT_PX  = 8  // point dot radius in screen px
 
 // ─── Shape types ────────────────────────────────���──────────────────────────���─
-type Tool = 'select' | 'bbox' | 'polygon' | 'point'
+type Tool = 'select' | 'bbox' | 'polygon' | 'point' | 'sam'
 
 interface BBoxShape   { type: 'bbox';    class_id: number; x: number; y: number; w: number; h: number }
 interface PolygonShape{ type: 'polygon'; class_id: number; pts: [number,number][] }
@@ -67,6 +67,8 @@ export default function Annotate() {
   const [shapes, setShapes]     = useState<Shape[]>([])
   const [selected, setSelected] = useState<number | null>(null)
   const [tool, setTool]         = useState<Tool>('bbox')
+  const [samLoading, setSamLoading] = useState(false)
+  const samBusyRef = useRef(false)
   const [activeClass, setActiveClass] = useState(0)
   const [zoom, setZoom]         = useState(1)
   const [pan, setPan]           = useState({ x: 0, y: 0 })
@@ -373,6 +375,27 @@ export default function Annotate() {
       return
     }
 
+    // ── SAM click-to-segment ──
+    if (currentTool === 'sam') {
+      if (samBusyRef.current || !currentImage) return
+      samBusyRef.current = true
+      setSamLoading(true)
+      api.post(`/projects/${projectId}/images/${currentImage.id}/sam-point`, null,
+        { params: { x: nx, y: ny } })
+        .then(r => {
+          const pts = r.data.points as [number, number][]
+          if (pts && pts.length >= 3) {
+            const newShapes = [...shapesRef.current,
+              { type: 'polygon' as const, class_id: activeClass, pts }]
+            setShapes(newShapes)
+            snapshotHistory(newShapes)
+          }
+        })
+        .catch(() => { /* no object found / model loading */ })
+        .finally(() => { samBusyRef.current = false; setSamLoading(false) })
+      return
+    }
+
     // ── BBox draw tool ──
     if (currentTool === 'bbox') {
       setSelected(null)
@@ -509,6 +532,7 @@ export default function Annotate() {
         if (e.key === 'r' || e.key === '2') { setTool('bbox');    setPolyPts([]) }
         if (e.key === 'p' || e.key === '3') { setTool('polygon'); setPolyPts([]) }
         if (e.key === 'd' || e.key === '4') { setTool('point');   setPolyPts([]) }
+        if (e.key === 's' || e.key === '5') { setTool('sam');     setPolyPts([]) }
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo() }
       if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo() }
@@ -534,6 +558,7 @@ export default function Annotate() {
   // ─── Cursor ─────────────────────────��────────────────────────────────────
   const computeCursor = (_e: React.MouseEvent<HTMLCanvasElement>, nx: number, ny: number) => {
     if (spaceHeld.current || drag.current.kind === 'pan') return 'grab'
+    if (tool === 'sam') return samLoading ? 'wait' : 'crosshair'
     if (tool === 'bbox' || tool === 'polygon' || tool === 'point') return 'crosshair'
     const sel = selected
     if (sel !== null) {
@@ -1087,7 +1112,17 @@ export default function Annotate() {
         {/* ── Canvas area ── */}
         <div ref={containerRef} style={{ flex: 1, background: 'var(--surface)',
           border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden',
-          display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+          {tool === 'sam' && (
+            <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
+              zIndex: 5, padding: '5px 12px', borderRadius: 6, fontSize: 12,
+              background: samLoading ? 'rgba(168,85,247,0.9)' : 'rgba(20,20,26,0.85)',
+              color: '#fff', border: '1px solid rgba(168,85,247,0.6)',
+              display: 'flex', alignItems: 'center', gap: 7, pointerEvents: 'none' }}>
+              <Sparkles size={13} />
+              {samLoading ? 'Segmenting…' : 'Click an object to segment it'}
+            </div>
+          )}
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center',
             justifyContent: 'center', background: '#07070a', minHeight: 0 }}>
             <canvas ref={canvasRef} style={{ display: 'block' }}
@@ -1104,7 +1139,7 @@ export default function Annotate() {
           <div style={{ flexShrink: 0, padding: '7px 14px', borderTop: '1px solid var(--border)',
             display: 'flex', flexWrap: 'wrap', gap: '4px 16px',
             fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
-            {[['1','Select'],['2','Rect'],['3','Polygon'],['4','Point'],['Del','Delete'],['Ctrl+D','Dupe'],['Esc','Cancel']].map(([k,v]) => (
+            {[['1','Select'],['2','Rect'],['3','Polygon'],['4','Point'],['5','✨ SAM click'],['Del','Delete'],['Ctrl+D','Dupe'],['Esc','Cancel']].map(([k,v]) => (
               <span key={k}><kbd style={{ background: 'var(--surface3)', border: '1px solid var(--border2)',
                 borderRadius: 3, padding: '1px 4px', fontSize: 9 }}>{k}</kbd> {v}</span>
             ))}
@@ -1123,6 +1158,7 @@ const TOOLS: { id: Tool; label: string; hint?: string; icon: React.ReactNode }[]
   { id: 'bbox',    label: 'Rect',     hint: '2', icon: <Square size={16}/> },
   { id: 'polygon', label: 'Polygon',  hint: '3', icon: <Hexagon size={16}/> },
   { id: 'point',   label: 'Point',    hint: '4', icon: <Crosshair size={16}/> },
+  { id: 'sam',     label: '✨ SAM',   hint: '5', icon: <Sparkles size={16}/> },
 ]
 
 const HANDLE_CURSORS: Record<string, string> = {

@@ -544,6 +544,69 @@ def _hf_auto_annotate(model_dir: str, img_path: str, conf: float,
     return annotations
 
 
+_sam_cache: dict = {}
+
+
+def _get_sam():
+    """Lazily load and cache MobileSAM (~40 MB) for click-to-segment."""
+    if "m" not in _sam_cache:
+        from ultralytics import SAM
+        _sam_cache["m"] = SAM("mobile_sam.pt")
+    return _sam_cache["m"]
+
+
+def _poly_area(p) -> float:
+    a = 0.0
+    n = len(p)
+    for i in range(n):
+        x1, y1 = p[i]; x2, y2 = p[(i + 1) % n]
+        a += x1 * y2 - x2 * y1
+    return abs(a) / 2
+
+
+@router.post("/projects/{project_id}/images/{image_id}/sam-point")
+async def sam_point(
+    project_id: int, image_id: int, x: float, y: float,
+    session: Session = Depends(get_session),
+):
+    """Click-to-segment: given a normalized point (x, y) on a stored image, run
+    MobileSAM and return the segmented object's polygon (normalized) — ready to
+    drop in as a polygon annotation."""
+    img_rec = session.get(ImageModel, image_id)
+    if not img_rec or img_rec.project_id != project_id:
+        raise HTTPException(404, "Image not found")
+    img_path = os.path.join(UPLOAD_DIR, img_rec.filename)
+    if not os.path.exists(img_path):
+        raise HTTPException(404, "Image file not found")
+
+    import torch, numpy as np
+    from PIL import Image as PILImage
+    pil = PILImage.open(img_path).convert("RGB")
+    W, H = pil.size
+    px = int(min(max(x, 0.0), 1.0) * W)
+    py = int(min(max(y, 0.0), 1.0) * H)
+
+    model  = _get_sam()
+    device = "0" if torch.cuda.is_available() else "cpu"
+    try:
+        res = model.predict(np.array(pil), points=[[px, py]], labels=[1],
+                            verbose=False, device=device)[0]
+    except (RuntimeError, Exception):
+        res = model.predict(np.array(pil), points=[[px, py]], labels=[1],
+                            verbose=False, device="cpu")[0]
+
+    if res.masks is None or len(res.masks.xyn) == 0:
+        raise HTTPException(404, "No object found at that point — try clicking its centre")
+
+    best = max(res.masks.xyn, key=_poly_area)
+    # Downsample very dense polygons so they stay editable in the annotator
+    if len(best) > 80:
+        step = len(best) // 80
+        best = best[::step]
+    pts = [[round(float(a), 5), round(float(b), 5)] for a, b in best]
+    return {"points": pts, "count": len(pts)}
+
+
 @router.post("/projects/{project_id}/images/{image_id}/auto-annotate")
 async def auto_annotate(
     project_id: int,
