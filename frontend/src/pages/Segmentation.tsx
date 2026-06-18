@@ -20,8 +20,8 @@ interface Detection {
 }
 
 // ── SVG mask polygon overlay ──────────────────────────────────────────────────
-function MaskOverlay({ detections, width, height }: {
-  detections: Detection[]; width: number; height: number
+function MaskOverlay({ detections, width, height, opacity = 0.3, instanceColors = false }: {
+  detections: Detection[]; width: number; height: number; opacity?: number; instanceColors?: boolean
 }) {
   return (
     <svg
@@ -31,17 +31,27 @@ function MaskOverlay({ detections, width, height }: {
     >
       {detections.map((d, i) => {
         if (!d.mask || d.mask.length === 0) return null
-        const color = getClsColor(d.class_id)
+        const color = getClsColor(instanceColors ? i : d.class_id)
         const pts = d.mask.map(([x, y]) => `${x * width},${y * height}`).join(' ')
         return (
           <g key={i}>
-            <polygon points={pts} fill={color} fillOpacity={0.3}
+            <polygon points={pts} fill={color} fillOpacity={opacity}
               stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
           </g>
         )
       })}
     </svg>
   )
+}
+
+// Polygon area (normalized 0-1 coords) via the shoelace formula
+function polyArea(pts: [number, number][]): number {
+  let a = 0
+  for (let i = 0; i < pts.length; i++) {
+    const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length]
+    a += x1 * y2 - x2 * y1
+  }
+  return Math.abs(a) / 2
 }
 
 type Mode = 'image' | 'video' | 'webcam'
@@ -62,12 +72,16 @@ export default function Segmentation() {
   const [uploadedName, setUploadedName] = useState('')
   const [uploading,    setUploading]    = useState(false)
   const [conf,         setConf]         = useState(0.25)
+  const [maskOpacity,  setMaskOpacity]  = useState(0.35)
   const customPtRef = useRef<HTMLInputElement>(null)
 
   // Resolve the actual model identifier to send to backend
   const activeModel = modelSource === 'pretrained'
     ? modelName
     : uploadedPath || customRuns.find(r => String(r.id) === selectedRunId)?.model_path || ''
+
+  // FastSAM segments everything class-agnostically → colour per instance
+  const isFastSAM = modelSource === 'pretrained' && /fastsam/i.test(modelName)
 
   // ── Image mode ───────────────────────────────────────────────────────────────
   const [imgInputMode, setImgInputMode] = useState<'file'|'url'>('file')
@@ -294,6 +308,9 @@ export default function Segmentation() {
   const classCounts = activeDets.reduce((acc, d) => {
     acc[d.class_name] = (acc[d.class_name] || 0) + 1; return acc
   }, {} as Record<string, number>)
+  // Fraction of the image covered by masks (approx — overlapping masks may double-count)
+  const coverage = Math.min(1, activeDets.reduce((s, d) =>
+    s + (d.mask && d.mask.length >= 3 ? polyArea(d.mask as [number, number][]) : 0), 0))
 
   const MODES: { key: Mode; label: string; icon: React.ReactNode }[] = [
     { key: 'image',  label: 'Image',  icon: <ImageIcon size={13} /> },
@@ -352,6 +369,9 @@ export default function Segmentation() {
             {modelSource === 'pretrained' ? (
               <Field label="Model">
                 <Select value={modelName} onChange={setModelName}>
+                  <optgroup label="✨ Segment Anything (no training)">
+                    <option value="FastSAM-s.pt">FastSAM · segment everything</option>
+                  </optgroup>
                   <optgroup label="YOLO11 Seg (recommended)">
                     <option value="yolo11n-seg.pt">YOLO11 Nano  · fastest</option>
                     <option value="yolo11s-seg.pt">YOLO11 Small</option>
@@ -424,14 +444,28 @@ export default function Segmentation() {
 
             <Slider label="Confidence" value={conf} onChange={setConf}
               min={0.1} max={0.9} step={0.05} format={v => `${Math.round(v * 100)}%`} />
+            <Slider label="Mask Opacity" value={maskOpacity} onChange={setMaskOpacity}
+              min={0} max={0.9} step={0.05} format={v => `${Math.round(v * 100)}%`} />
+            {isFastSAM && (
+              <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5, marginTop: 6 }}>
+                ✨ FastSAM segments <strong>every</strong> object in the image with no training and
+                no class labels — each region is coloured separately. Great for exploring a scene or
+                pre-masking before annotation.
+              </p>
+            )}
           </Card>
 
           {/* Class breakdown */}
           {Object.keys(classCounts).length > 0 && (
             <Card style={{ padding: 14 }}>
-              <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
-                {mode === 'webcam' ? 'Live Objects' : 'Detected'}
-              </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                  {mode === 'webcam' ? 'Live Objects' : 'Detected'}
+                </p>
+                <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'monospace' }}>
+                  {activeDets.length} · {Math.round(coverage * 100)}% covered
+                </span>
+              </div>
               {Object.entries(classCounts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([cls, cnt], i) => {
                 const clsId = activeDets.find(d => d.class_name === cls)?.class_id ?? i
                 return (
@@ -523,7 +557,8 @@ export default function Segmentation() {
                       border: '1px solid var(--border)' }}
                   />
                   {imgDets.length > 0 && (
-                    <MaskOverlay detections={imgDets} width={imgRendered.w} height={imgRendered.h} />
+                    <MaskOverlay detections={imgDets} width={imgRendered.w} height={imgRendered.h}
+                      opacity={maskOpacity} instanceColors={isFastSAM} />
                   )}
                   {/* Bounding box labels */}
                   {imgDets.map((d, i) => (
@@ -704,7 +739,8 @@ export default function Segmentation() {
 
                 {camActive && camDets.length > 0 && (
                   <>
-                    <MaskOverlay detections={camDets} width={camRendered.w} height={camRendered.h} />
+                    <MaskOverlay detections={camDets} width={camRendered.w} height={camRendered.h}
+                      opacity={maskOpacity} instanceColors={isFastSAM} />
                     {camDets.map((d, i) => (
                       <div key={i} style={{
                         position: 'absolute',

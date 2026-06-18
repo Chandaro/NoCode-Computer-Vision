@@ -13,11 +13,30 @@ _seg_jobs:  dict = {}
 _seg_cache: dict = {}   # model_name → YOLO instance
 
 
+def _is_fastsam(model_name: str) -> bool:
+    """FastSAM 'Segment Everything' model (class-agnostic, no training needed)."""
+    return "fastsam" in os.path.basename(str(model_name)).lower()
+
+
 def _get_seg_model(model_name: str):
     if model_name not in _seg_cache:
-        from ultralytics import YOLO
-        _seg_cache[model_name] = YOLO(model_name)
+        if _is_fastsam(model_name):
+            from ultralytics import FastSAM
+            _seg_cache[model_name] = FastSAM(model_name)
+        else:
+            from ultralytics import YOLO
+            _seg_cache[model_name] = YOLO(model_name)
     return _seg_cache[model_name]
+
+
+def _seg_predict(model, model_name, arr, conf, device):
+    """Run prediction with model-appropriate args. FastSAM gets full-resolution
+    (retina) masks for crisp 'segment everything' output."""
+    extra = {"retina_masks": True} if _is_fastsam(model_name) else {}
+    try:
+        return model.predict(arr, conf=conf, verbose=False, device=device, **extra)
+    except RuntimeError:
+        return model.predict(arr, conf=conf, verbose=False, device="cpu", **extra)
 
 
 def _extract_segments(results):
@@ -73,10 +92,7 @@ async def segment_image_infer(
 
     device = "0" if torch.cuda.is_available() else "cpu"
     model  = _get_seg_model(model_name)
-    try:
-        results = model.predict(arr, conf=conf, verbose=False, device=device)
-    except RuntimeError:
-        results = model.predict(arr, conf=conf, verbose=False, device="cpu")
+    results = _seg_predict(model, model_name, arr, conf, device)
 
     detections, iw, ih = _extract_segments(results)
     return {"detections": detections, "count": len(detections),
@@ -109,10 +125,7 @@ async def segment_image_infer_url(
 
     device = "0" if torch.cuda.is_available() else "cpu"
     model  = _get_seg_model(model_name)
-    try:
-        results = model.predict(arr, conf=conf, verbose=False, device=device)
-    except RuntimeError:
-        results = model.predict(arr, conf=conf, verbose=False, device="cpu")
+    results = _seg_predict(model, model_name, arr, conf, device)
 
     detections, iw, ih = _extract_segments(results)
     return {"detections": detections, "count": len(detections),
