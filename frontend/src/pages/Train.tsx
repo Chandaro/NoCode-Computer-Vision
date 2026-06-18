@@ -146,6 +146,7 @@ export default function Train() {
   const [batch, setBatch]         = useState(16)
   const [modelBase, setModelBase] = useState('yolo11n.pt')
   const [freeze, setFreeze]       = useState(0)   // 0 = fine-tune all, 10 = freeze backbone
+  const [seed, setSeed]           = useState(0)   // reproducible split + training
   const [estimate, setEstimate]   = useState<any | null>(null)
   const [valSplit, setValSplit]   = useState(0.2)
   const [showAug, setShowAug]     = useState(false)
@@ -254,7 +255,7 @@ export default function Train() {
     let res
     try {
       res = await api.post(`/projects/${projectId}/training/start`, {
-        epochs, imgsz, batch, model_base: modelBase, val_split: valSplit, freeze,
+        epochs, imgsz, batch, model_base: modelBase, val_split: valSplit, freeze, seed,
         optimizer, lr0, lrf, momentum, weight_decay: weightDecay,
         warmup_epochs: warmupEpochs, patience,
         fliplr, flipud, degrees, translate, scale, shear, perspective,
@@ -600,6 +601,17 @@ export default function Train() {
               format={v => `${Math.round(v * 100)}%`} />
             <Slider label="Early Stop Patience" value={patience} onChange={setPatience} min={0} max={100} step={1}
               format={v => v === 0 ? 'Off' : `${v} ep`} />
+            <Field label="Random Seed">
+              <input type="number" value={seed} min={0}
+                onChange={e => setSeed(Math.max(0, Number(e.target.value) || 0))}
+                style={{ width: '100%', padding: '6px 9px', fontSize: 13, borderRadius: 6,
+                  background: 'var(--surface2)', border: '1px solid var(--border)',
+                  color: 'var(--text)', outline: 'none' }} />
+            </Field>
+            <p style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.5, margin: '-4px 0 4px' }}>
+              Fixes the train/val split and training RNG, so the same seed reproduces the same result —
+              matching a hand-coded Ultralytics run with the same seed.
+            </p>
 
             <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginTop: 4 }}>Optimizer</p>
             <Field label="Algorithm">

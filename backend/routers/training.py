@@ -24,6 +24,8 @@ class TrainConfig(BaseModel):
     batch: int = 16
     model_base: str = "yolo11n.pt"
     val_split: float = 0.2
+    seed: int = 0                 # reproducible split + training (matches a
+                                  # hand-coded Ultralytics run with the same seed)
     freeze: int = 0               # transfer learning: 0 = fine-tune all,
                                   # 10 = freeze COCO backbone (train head only)
     # Optimizer
@@ -65,7 +67,7 @@ class TrainingRunOut(BaseModel):
 
 # ─── Dataset builder ─────────────────────────────────────────────────────────
 def _build_dataset(project_id: int, val_split: float, session: Session,
-                   task: str = "detect") -> str:
+                   task: str = "detect", seed: int = 0) -> str:
     """Build a YOLO dataset directory.
 
     task='detect'  → labels use  <cls> cx cy w h
@@ -88,7 +90,7 @@ def _build_dataset(project_id: int, val_split: float, session: Session,
         raise ValueError(f"Need at least 2 annotated non-corrupt images (found {len(images)})")
 
     shuffled = list(images)
-    random.shuffle(shuffled)
+    random.Random(seed).shuffle(shuffled)   # deterministic split for reproducibility
     n_val   = max(1, int(len(shuffled) * val_split))
     # Ensure train set is never empty
     n_val   = min(n_val, len(shuffled) - 1)
@@ -168,7 +170,8 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
         task = "segment" if "seg" in config.model_base else "detect"
         with S(engine) as session:
             push("Building dataset…")
-            yaml_path = _build_dataset(project_id, config.val_split, session, task=task)
+            yaml_path = _build_dataset(project_id, config.val_split, session,
+                                       task=task, seed=config.seed)
             dataset_dir = os.path.dirname(yaml_path)
             push(f"Dataset ready — {yaml_path}")
             run = session.get(TrainingRun, run_id)
@@ -283,7 +286,7 @@ def _run_training(run_id: int, project_id: int, config: TrainConfig):
             data=yaml_path, epochs=config.epochs, imgsz=config.imgsz,
             batch=config.batch, project=output_dir, name="weights",
             exist_ok=True, verbose=False, device=device, workers=workers,
-            freeze=(freeze_n or None),
+            seed=config.seed, freeze=(freeze_n or None),
             # Optimizer
             optimizer=config.optimizer, lr0=config.lr0, lrf=config.lrf,
             momentum=config.momentum, weight_decay=config.weight_decay,
