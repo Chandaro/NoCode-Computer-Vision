@@ -8,6 +8,7 @@ import {
   Card, Label, PageHeader, Btn, Field, Select, Slider,
   LogTerminal, ProgressBar, Badge,
 } from '../components/ui'
+import EstimateCard from '../components/EstimateCard'
 
 interface Progress   { epoch: number; total: number; accuracy: number }
 interface ChartPoint { epoch: number; accuracy: number; trainLoss: number; valLoss: number }
@@ -76,6 +77,9 @@ export default function Classification() {
   const [streaming, setStreaming]  = useState(false)
   const [logs,      setLogs]       = useState<string[]>([])
   const [progress,  setProgress]   = useState<Progress | null>(null)
+  const [batchFrac, setBatchFrac]  = useState<{ epoch: number; total: number; frac: number } | null>(null)
+  const [failed,    setFailed]     = useState(false)
+  const [estimate,  setEstimate]   = useState<any | null>(null)
   const [chartData, setChartData]  = useState<ChartPoint[]>([])
 
   // ── Inference ──────────────────────────────────────────────────────────────
@@ -111,9 +115,19 @@ export default function Classification() {
 
   useEffect(() => () => { esRef.current?.close() }, [])
 
+  // Pre-flight resource estimate (debounced)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api.get(`/projects/${projectId}/classification/estimate`, {
+        params: { base_model: baseModel, imgsz, batch, freeze_backbone: freeze },
+      }).then(r => setEstimate(r.data)).catch(() => setEstimate(null))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [projectId, baseModel, imgsz, batch, freeze])
+
   const startTraining = async () => {
     esRef.current?.close()
-    setLogs([]); setChartData([]); setProgress(null)
+    setLogs([]); setChartData([]); setProgress(null); setBatchFrac(null); setFailed(false)
     const res = await api.post(`/projects/${projectId}/classification/start`, {
       epochs, imgsz, batch, base_model: baseModel,
       lr: Number(lr), freeze_backbone: freeze,
@@ -148,8 +162,15 @@ export default function Classification() {
         const vloss    = Number(vlossStr)
         setProgress({ epoch: epochNum, total: totalNum, accuracy: accVal })
         setChartData(prev => [...prev, { epoch: epochNum, accuracy: accVal, trainLoss: tloss, valLoss: vloss }])
+        setBatchFrac(null)
         return
       }
+      if (msg.startsWith('__BATCH__:')) {
+        const [, ep, frac] = msg.split(':')
+        setBatchFrac({ epoch: Number(ep.split('/')[0]), total: Number(ep.split('/')[1]), frac: Number(frac) })
+        return
+      }
+      if (msg === '__FAILED__' || msg.startsWith('[ERROR]')) setFailed(true)
       if (msg.startsWith('__DONE__:') || msg === '__FAILED__') {
         setStreaming(false); loadRuns()
       }
@@ -195,7 +216,6 @@ export default function Classification() {
     }
   }
 
-  const pct = progress ? Math.round((progress.epoch / progress.total) * 100) : 0
 
   const statusBadge = (s: string) => {
     if (s === 'done')    return <Badge color="green"><CheckCircle size={11} /> done</Badge>
@@ -350,6 +370,8 @@ export default function Classification() {
           )}
         </Card>
 
+        {estimate && <EstimateCard estimate={estimate} onUseBatch={setBatch} />}
+
         <Btn variant="primary" onClick={startTraining} disabled={streaming}
           style={{ width: '100%', justifyContent: 'center', padding: '9px 14px' }}>
           {streaming
@@ -372,14 +394,27 @@ export default function Classification() {
                       fontSize: 12, color: 'var(--warn)' }}>
                       <Loader size={12} className="animate-spin" /> Running
                     </span>
+                  : failed
+                  ? <span style={{ display: 'flex', alignItems: 'center', gap: 6,
+                      fontSize: 12, color: 'var(--danger)' }}>
+                      ✕ Failed
+                    </span>
                   : <span style={{ display: 'flex', alignItems: 'center', gap: 6,
                       fontSize: 12, color: 'var(--success)' }}>
                       <CheckCircle size={12} /> Done
                     </span>}
               </div>
-              <ProgressBar value={progress?.epoch ?? 0} max={progress?.total ?? epochs}
-                label={`Epoch ${progress?.epoch ?? 0} / ${progress?.total ?? epochs}`}
-                sublabel={`${pct}%`} />
+              {(() => {
+                const doneEp = progress?.epoch ?? 0
+                const total  = progress?.total ?? batchFrac?.total ?? epochs
+                const showBatch = batchFrac && batchFrac.epoch > doneEp
+                const value = showBatch ? doneEp + batchFrac!.frac : doneEp
+                const label = showBatch
+                  ? `Epoch ${batchFrac!.epoch} / ${total} — ${Math.round(batchFrac!.frac * 100)}%`
+                  : `Epoch ${doneEp} / ${total}`
+                return <ProgressBar value={value} max={total} label={label}
+                  sublabel={`${Math.round(value / Math.max(total, 1) * 100)}%`} />
+              })()}
               {progress && (
                 <div style={{ marginTop: 12, display: 'inline-block',
                   background: 'var(--surface2)', border: '1px solid var(--border)',

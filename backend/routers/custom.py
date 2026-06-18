@@ -174,6 +174,34 @@ def list_runs(project_id: int, session: Session = Depends(get_session)):
     return [_run_to_out(r) for r in runs]
 
 
+@router.get("/estimate")
+def custom_estimate(project_id: int, input_h: int = 96, input_w: int = 96,
+                    batch: int = 32, pretrained: bool = False, backbone: int = 0,
+                    freeze: bool = False, params: int = 0,
+                    session: Session = Depends(get_session)):
+    """Pre-flight GPU VRAM / RAM estimate for a Conv Builder training run.
+    Handles both transfer-learning backbones and from-scratch custom CNNs."""
+    from routers import hw_estimate as hw
+    import os as _os
+    side = max(input_h, input_w)
+    if pretrained:
+        bb = BACKBONES[max(0, min(backbone, len(BACKBONES) - 1))]
+        est_vram, overhead, per_eff = hw.estimate_classification(bb, side, batch, freeze=freeze)
+    else:
+        est_vram, overhead, per_eff = hw.estimate_custom_cnn(side, batch, params_m=params / 1e6)
+    workers = 0  # custom/classification loaders run with num_workers=0
+    result = hw.device_status()
+    result.update({"est_vram_gb": est_vram, "batch": batch, "imgsz": side,
+                   "ram": {**result.get("ram", {}), "est_gb": round(2.5 + workers * 0.8 + 0.4, 2)},
+                   "note": "Estimate only — real usage varies with architecture/augmentation."})
+    if result["gpu"]:
+        v, sug = hw.verdict(est_vram, result["gpu"]["free_gb"], overhead, per_eff)
+        result["gpu"].update({"verdict": v, "suggested_batch": sug})
+    else:
+        result["note"] = "Training on CPU — no GPU detected. Expect slow epochs."
+    return result
+
+
 @router.get("/runs/{run_id}", response_model=RunOut)
 def get_run(project_id: int, run_id: int, session: Session = Depends(get_session)):
     run = session.get(CustomTrainingRun, run_id)
@@ -714,10 +742,17 @@ def _run_custom_training(run_id: int, project_id: int, body: RunBody):
              + ("  class-weighted" if weight_tensor is not None else "")
              + (f"  early-stop patience={body.patience}" if body.patience > 0 else ""))
 
+        n_batches = max(1, len(train_dl))
+        last_batch_push = 0.0
         for epoch in range(1, epochs + 1):
             model.train()
             train_loss = 0.0
-            for imgs, labels in train_dl:
+            for bi, (imgs, labels) in enumerate(train_dl, 1):
+                # Within-epoch progress so the UI isn't frozen on long epochs
+                now = time.time()
+                if now - last_batch_push >= 2.0:
+                    last_batch_push = now
+                    push(f"__BATCH__:{epoch}/{epochs}:{min(1.0, bi / n_batches):.3f}")
                 imgs, labels = imgs.to(device), labels.to(device)
                 optim.zero_grad()
 

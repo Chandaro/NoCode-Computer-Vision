@@ -318,11 +318,17 @@ def _run_classification(run_id: int, project_id: int, config: ClsConfig):
              + (f"  warmup={wu} ep" if wu > 0 else "")
              + (f" | early-stop patience={config.patience}" if config.patience > 0 else ""))
 
+        n_batches = max(1, len(train_dl))
+        last_batch_push = 0.0
         for epoch in range(1, config.epochs + 1):
             # ── Train ──────────────────────────────────────────────────────
             model.train()
             train_loss = 0.0
-            for imgs, labels in train_dl:
+            for bi, (imgs, labels) in enumerate(train_dl, 1):
+                now = time.time()
+                if now - last_batch_push >= 2.0:
+                    last_batch_push = now
+                    push(f"__BATCH__:{epoch}/{config.epochs}:{min(1.0, bi / n_batches):.3f}")
                 imgs, labels = imgs.to(device), labels.to(device)
 
                 # Mixup
@@ -466,6 +472,28 @@ def _run_classification(run_id: int, project_id: int, config: ClsConfig):
 
 
 # ─── Classification dataset routes ────────────────────────────────────────────
+
+@router.get("/estimate")
+def cls_estimate(project_id: int, base_model: str = "resnet18", imgsz: int = 224,
+                 batch: int = 32, freeze_backbone: bool = True,
+                 session: Session = Depends(get_session)):
+    """Pre-flight GPU VRAM / RAM estimate for a classification training run."""
+    from routers import hw_estimate as hw
+    import os as _os
+    est_vram, overhead, per_eff = hw.estimate_classification(
+        base_model, imgsz, batch, freeze=freeze_backbone)
+    workers = 0 if _os.name == "nt" else 4
+    result = hw.device_status()
+    result.update({"est_vram_gb": est_vram, "batch": batch, "imgsz": imgsz,
+                   "ram": {**result.get("ram", {}), "est_gb": round(2.5 + workers * 0.8 + 0.5, 2)},
+                   "note": "Estimate only — real usage varies with augmentation/caching."})
+    if result["gpu"]:
+        v, sug = hw.verdict(est_vram, result["gpu"]["free_gb"], overhead, per_eff)
+        result["gpu"].update({"verdict": v, "suggested_batch": sug})
+    else:
+        result["note"] = "Training on CPU — no GPU detected. Expect slow epochs."
+    return result
+
 
 @router.get("/dataset/stats")
 def cls_dataset_stats(project_id: int, session: Session = Depends(get_session)):

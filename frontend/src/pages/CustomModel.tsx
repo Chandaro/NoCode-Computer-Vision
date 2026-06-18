@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import api from '../api'
 import { PageHeader, Btn, Badge } from '../components/ui'
 import ConvBuilderGuide from '../components/ConvBuilderGuide'
+import EstimateCard from '../components/EstimateCard'
 import { Cpu } from 'lucide-react'
 import {
   LineChart, Line, BarChart, Bar, Cell,
@@ -1584,6 +1585,7 @@ export default function CustomModel() {
 
   const [activeRun, setActiveRun] = useState<CustomRun | null>(null)
   const [logs,   setLogs]   = useState<string[]>([])
+  const [estimate, setEstimate] = useState<any | null>(null)
 
   // ── Inference ─────────────────────────────────────────────────────────────
   const [inferRunId,    setInferRunId]    = useState('')
@@ -1599,6 +1601,22 @@ export default function CustomModel() {
   const inferFileRef = useRef<HTMLInputElement>(null)
   const logRef  = useRef<HTMLDivElement>(null)
   const sseRef  = useRef<EventSource | null>(null)
+
+  // Pre-flight resource estimate (debounced) — for custom CNN or backbone
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api.get(`/projects/${projectId}/custom/estimate`, {
+        params: {
+          input_h: inputH, input_w: inputW, batch,
+          pretrained: archMode === 'pretrained',
+          backbone, freeze: archMode === 'pretrained' && freeze === 0,
+          params: estimateParams(layers, inputH, inputW),
+        },
+      }).then(r => setEstimate(r.data)).catch(() => setEstimate(null))
+    }, 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, inputH, inputW, batch, archMode, backbone, freeze, layers])
 
   // Add layer dropdown
   const [showAddMenu, setShowAddMenu] = useState(false)
@@ -2112,6 +2130,16 @@ export default function CustomModel() {
         setChartData(prev => [...prev, { epoch: Number(ep), accuracy: acc, trainLoss: tloss, valLoss: vloss }])
         setLogs(prev => [...prev.filter(l => !l.startsWith('[PROG]')),
           `[PROG] Epoch ${ep}/${total} — acc ${(acc * 100).toFixed(1)}%  loss ${vloss.toFixed(4)}`])
+        return
+      }
+      if (data.startsWith('__BATCH__:')) {
+        // within-epoch progress: __BATCH__:epoch/total:frac
+        const [, ep, frac] = data.split(':')
+        const [e, t] = ep.split('/')
+        const pc = Math.round(Number(frac) * 100)
+        setActiveRun(prev => prev ? { ...prev, status: 'running' } : prev)
+        setLogs(prev => [...prev.filter(l => !l.startsWith('[PROG]')),
+          `[PROG] Epoch ${e}/${t} — ${pc}% …`])
         return
       }
       if (data === '__FAILED__') {
@@ -2971,6 +2999,11 @@ export default function CustomModel() {
               }}>
                 ⚠ Your network is invalid — a layer marked <strong>bad</strong> shrinks the
                 image to nothing. Remove some Max/Avg Pool layers or increase the input size.
+              </div>
+            )}
+            {estimate && (
+              <div style={{ marginBottom: 8 }}>
+                <EstimateCard estimate={estimate} onUseBatch={setBatch} />
               </div>
             )}
             <Btn
