@@ -624,26 +624,39 @@ export default function Pose() {
                 {camActive && exerciseId && (
                   <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10,
                     background: 'rgba(0,0,0,0.7)', borderRadius: 10, padding: '10px 16px',
-                    display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div>
-                      <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)',
-                        textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                        {EXERCISES.find(e => e.id === exerciseId)?.label} reps
+                    display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div>
+                        <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)',
+                          textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          {EXERCISES.find(e => e.id === exerciseId)?.label} reps
+                        </p>
+                        <p style={{ fontSize: 32, fontWeight: 800, color: '#fff', lineHeight: 1,
+                          fontFamily: 'JetBrains Mono, monospace' }}>{repState.count}</p>
+                        <p style={{ fontSize: 10, color: '#3fb950', marginTop: 2,
+                          fontFamily: 'JetBrains Mono, monospace' }}>{repState.goodReps} clean</p>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5,
+                          background: repState.phase === 'down' ? '#f0a500' : '#3fb950',
+                          color: '#000', fontWeight: 700 }}>
+                          {repState.phase === 'down' ? 'DOWN' : 'UP'}
+                        </span>
+                        {!isNaN(repState.angle) && (
+                          <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 3,
+                            fontFamily: 'JetBrains Mono, monospace' }}>{Math.round(repState.angle)}°</p>
+                        )}
+                      </div>
+                    </div>
+                    {repState.feedback && (
+                      <p style={{ fontSize: 11, fontWeight: 600, color: '#fff',
+                        background: repState.feedback.includes('Go deeper') ? 'rgba(240,165,0,0.85)'
+                          : repState.feedback.includes('clean') || repState.feedback.includes('drive') ? 'rgba(63,185,80,0.85)'
+                          : 'rgba(255,255,255,0.15)',
+                        padding: '3px 8px', borderRadius: 5, textAlign: 'center' }}>
+                        {repState.feedback}
                       </p>
-                      <p style={{ fontSize: 32, fontWeight: 800, color: '#fff', lineHeight: 1,
-                        fontFamily: 'JetBrains Mono, monospace' }}>{repState.count}</p>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5,
-                        background: repState.phase === 'down' ? '#f0a500' : '#3fb950',
-                        color: '#000', fontWeight: 700 }}>
-                        {repState.phase === 'down' ? 'DOWN' : 'UP'}
-                      </span>
-                      {!isNaN(repState.angle) && (
-                        <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 3,
-                          fontFamily: 'JetBrains Mono, monospace' }}>{Math.round(repState.angle)}°</p>
-                      )}
-                    </div>
+                    )}
                   </div>
                 )}
               </div>

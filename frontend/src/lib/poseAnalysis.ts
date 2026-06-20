@@ -146,6 +146,7 @@ export interface ExerciseDef {
   joints: { a: number; b: number; c: number }[]   // angles to average
   downThr: number      // below this = "down" phase
   upThr: number        // above this = "up" phase
+  goodDepth?: number   // stricter "down" target — reps deeper than this are clean
   hint: string
 }
 
@@ -153,20 +154,44 @@ export const EXERCISES: ExerciseDef[] = [
   {
     id: 'squat', label: 'Squat',
     joints: [{ a: 11, b: 13, c: 15 }, { a: 12, b: 14, c: 16 }], // both knees
-    downThr: 100, upThr: 160,
+    downThr: 100, upThr: 160, goodDepth: 90,
     hint: 'Face the camera side-on. Bend knees below 100°, then stand to 160°+.',
   },
   {
     id: 'pushup', label: 'Push-up',
     joints: [{ a: 5, b: 7, c: 9 }, { a: 6, b: 8, c: 10 }],       // both elbows
-    downThr: 90, upThr: 150,
+    downThr: 90, upThr: 150, goodDepth: 80,
     hint: 'Side-on view. Lower until elbows bend past 90°, then push back up.',
   },
   {
     id: 'curl', label: 'Bicep Curl',
     joints: [{ a: 5, b: 7, c: 9 }, { a: 6, b: 8, c: 10 }],       // both elbows
-    downThr: 50, upThr: 150,   // curled (small) → extended (large)
+    downThr: 50, upThr: 150, goodDepth: 45,   // curled (small) → extended (large)
     hint: 'Curl arms up (elbow < 50°) then lower fully (elbow > 150°).',
+  },
+  {
+    id: 'lunge', label: 'Lunge',
+    joints: [{ a: 11, b: 13, c: 15 }, { a: 12, b: 14, c: 16 }], // both knees
+    downThr: 110, upThr: 160, goodDepth: 95,
+    hint: 'Step forward and bend the front knee toward 90°, then drive back up.',
+  },
+  {
+    id: 'shoulder_press', label: 'Shoulder Press',
+    joints: [{ a: 5, b: 7, c: 9 }, { a: 6, b: 8, c: 10 }],       // both elbows
+    downThr: 100, upThr: 160, goodDepth: 95,   // racked → pressed overhead
+    hint: 'Start with elbows bent at shoulders, press straight up to full extension.',
+  },
+  {
+    id: 'situp', label: 'Sit-up',
+    joints: [{ a: 5, b: 11, c: 13 }, { a: 6, b: 12, c: 14 }],   // shoulder-hip-knee
+    downThr: 90, upThr: 150, goodDepth: 80,    // crunched up → lying back
+    hint: 'Lie side-on to the camera. Crunch up until the torso folds past 90°.',
+  },
+  {
+    id: 'jumping_jack', label: 'Jumping Jack',
+    joints: [{ a: 7, b: 5, c: 11 }, { a: 8, b: 6, c: 12 }],     // elbow-shoulder-hip
+    downThr: 40, upThr: 140, goodDepth: 130,   // arms down → arms overhead
+    hint: 'Face the camera. Raise both arms fully overhead, then back to your sides.',
   },
 ]
 
@@ -176,15 +201,21 @@ export interface RepState {
   count: number
   phase: RepPhase
   angle: number       // current tracked angle
+  minAngle: number    // deepest angle reached during the current down phase
+  goodReps: number    // reps that hit the exercise's goodDepth target
+  lastRepGood: boolean
+  feedback: string    // live coaching cue
 }
 
 export function initRep(): RepState {
-  return { count: 0, phase: 'up', angle: NaN }
+  return { count: 0, phase: 'up', angle: NaN, minAngle: NaN,
+           goodReps: 0, lastRepGood: false, feedback: '' }
 }
 
 /**
  * Advance the rep state machine by one frame.
- * Returns a NEW state (pure) plus whether a rep just completed.
+ * Tracks range-of-motion (deepest angle) to judge rep quality and give live
+ * form feedback. Returns a NEW state (pure) plus whether a rep just completed.
  */
 export function stepRep(
   state: RepState, kps: number[][], conf: number[], ex: ExerciseDef,
@@ -198,20 +229,36 @@ export function stepRep(
       if (!isNaN(ang)) vals.push(ang)
     }
   }
-  if (!vals.length) return { state, repJustCounted: false }
+  if (!vals.length) return { state: { ...state, feedback: 'Step into frame…' }, repJustCounted: false }
 
   const angle = vals.reduce((a, b) => a + b, 0) / vals.length
-  let { count, phase } = state
+  const good  = ex.goodDepth ?? ex.downThr
+  let { count, phase, minAngle, goodReps, lastRepGood } = state
   let counted = false
 
-  if (phase === 'up' && angle < ex.downThr) {
-    phase = 'down'
-  } else if (phase === 'down' && angle > ex.upThr) {
-    phase = 'up'
-    count += 1
-    counted = true
+  if (phase === 'up') {
+    if (angle < ex.downThr) { phase = 'down'; minAngle = angle }
+  } else {
+    minAngle = isNaN(minAngle) ? angle : Math.min(minAngle, angle)
+    if (angle > ex.upThr) {
+      phase = 'up'; count += 1; counted = true
+      lastRepGood = minAngle <= good
+      if (lastRepGood) goodReps += 1
+    }
   }
-  return { state: { count, phase, angle }, repJustCounted: counted }
+
+  // Live coaching cue
+  let feedback: string
+  if (phase === 'down') {
+    feedback = (isNaN(minAngle) ? angle : minAngle) <= good ? 'Good depth — drive up!' : 'Go deeper…'
+  } else if (counted) {
+    feedback = lastRepGood ? `Rep ${count} ✓ clean` : `Rep ${count} — go deeper next time`
+  } else {
+    feedback = 'Lower down for a rep'
+  }
+
+  return { state: { count, phase, angle, minAngle, goodReps, lastRepGood, feedback },
+           repJustCounted: counted }
 }
 
 // ─── Export helpers ───────────────────────────────────────────────────────────
