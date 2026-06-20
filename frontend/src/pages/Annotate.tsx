@@ -25,6 +25,7 @@ type Shape = BBoxShape | PolygonShape | PointShape
 type Drag =
   | { kind: 'none' }
   | { kind: 'bbox-draw';   start: [number,number] }
+  | { kind: 'sam-box';     start: [number,number] }
   | { kind: 'move-shape';  idx: number; mx0: number; my0: number; orig: Shape }
   | { kind: 'move-vertex'; idx: number; vi: number; mx0: number; my0: number; orig: PolygonShape }
   | { kind: 'bbox-handle'; idx: number; handle: string; mx0: number; my0: number; orig: BBoxShape }
@@ -69,6 +70,11 @@ export default function Annotate() {
   const [tool, setTool]         = useState<Tool>('bbox')
   const [samLoading, setSamLoading] = useState(false)
   const samBusyRef = useRef(false)
+  // Active SAM refinement session: accumulates pos/neg points + an optional box
+  // and updates one polygon shape in place. Cleared on Enter/Esc/tool change.
+  const samSession = useRef<{ points: [number,number][]; labels: number[];
+    box: [number,number,number,number] | null; idx: number } | null>(null)
+  useEffect(() => { samSession.current = null }, [tool])
   const [activeClass, setActiveClass] = useState(0)
   const [zoom, setZoom]         = useState(1)
   const [pan, setPan]           = useState({ x: 0, y: 0 })
@@ -168,7 +174,7 @@ export default function Annotate() {
   // ─── Load annotations on image change ──────────────────────────────────
   useEffect(() => {
     if (!currentImage) return
-    setSaved(false); setSelected(null); setPolyPts([]); setLiveBbox(null)
+    setSaved(false); setSelected(null); setPolyPts([]); setLiveBbox(null); samSession.current = null
     api.get(`/projects/${projectId}/images/${currentImage.id}/annotations`)
       .then(r => {
         const loaded = (r.data as AnnData[]).map(apiToShape)
@@ -340,6 +346,32 @@ export default function Annotate() {
   }
 
   // ─── Mouse events ─────────────────────────────────────────────────────���───
+  // Run MobileSAM for the current session and add/replace its polygon in place
+  const runSam = (sess: NonNullable<typeof samSession.current>) => {
+    if (!currentImage) return
+    samBusyRef.current = true
+    setSamLoading(true)
+    api.post(`/projects/${projectId}/images/${currentImage.id}/sam-segment`, {
+      points: sess.points, labels: sess.labels, box: sess.box,
+    })
+      .then(r => {
+        const pts = r.data.points as [number, number][]
+        if (!pts || pts.length < 3) return
+        const cur = shapesRef.current
+        if (sess.idx >= 0 && sess.idx < cur.length && cur[sess.idx]?.type === 'polygon') {
+          const ns = cur.map((s, i) =>
+            i === sess.idx ? { type: 'polygon' as const, class_id: activeClass, pts } : s)
+          setShapes(ns); snapshotHistory(ns)
+        } else {
+          const ns = [...cur, { type: 'polygon' as const, class_id: activeClass, pts }]
+          setShapes(ns); snapshotHistory(ns)
+          sess.idx = ns.length - 1
+        }
+      })
+      .catch(() => { /* no object / model loading */ })
+      .finally(() => { samBusyRef.current = false; setSamLoading(false) })
+  }
+
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const { cx, cy } = canvasPx(e)
     const [nx, ny]   = toNorm(e)
@@ -375,24 +407,20 @@ export default function Annotate() {
       return
     }
 
-    // ── SAM click-to-segment ──
+    // ── SAM click-to-segment (with refinement) ──
     if (currentTool === 'sam') {
       if (samBusyRef.current || !currentImage) return
-      samBusyRef.current = true
-      setSamLoading(true)
-      api.post(`/projects/${projectId}/images/${currentImage.id}/sam-point`, null,
-        { params: { x: nx, y: ny } })
-        .then(r => {
-          const pts = r.data.points as [number, number][]
-          if (pts && pts.length >= 3) {
-            const newShapes = [...shapesRef.current,
-              { type: 'polygon' as const, class_id: activeClass, pts }]
-            setShapes(newShapes)
-            snapshotHistory(newShapes)
-          }
-        })
-        .catch(() => { /* no object found / model loading */ })
-        .finally(() => { samBusyRef.current = false; setSamLoading(false) })
+      // Shift-click → negative point (carve away) on the current object
+      if (e.shiftKey) {
+        const s = samSession.current
+        if (s) { s.points.push([nx, ny]); s.labels.push(0); runSam(s) }
+        else { const ns = { points: [[nx, ny]] as [number,number][], labels: [1], box: null, idx: -1 }
+               samSession.current = ns; runSam(ns) }
+        return
+      }
+      // Plain press → start a drag; mouse-up decides click (point) vs box
+      drag.current = { kind: 'sam-box', start: [nx, ny] }
+      setLiveBbox(null)
       return
     }
 
@@ -449,7 +477,7 @@ export default function Annotate() {
       setPan({ x: d.px0 + (cx - d.cx0), y: d.py0 + (cy - d.cy0) })
       return
     }
-    if (d.kind === 'bbox-draw') {
+    if (d.kind === 'bbox-draw' || d.kind === 'sam-box') {
       const x = Math.min(d.start[0], nx), y = Math.min(d.start[1], ny)
       setLiveBbox({ type: 'bbox', class_id: activeClass, x, y, w: Math.abs(nx - d.start[0]), h: Math.abs(ny - d.start[1]) })
       return
@@ -483,13 +511,29 @@ export default function Annotate() {
     }
   }
 
-  const onMouseUp = () => {
+  const onMouseUp = (e?: React.MouseEvent<HTMLCanvasElement>) => {
     const d = drag.current
     drag.current = { kind: 'none' }
     if (d.kind === 'bbox-draw' && liveBbox && liveBbox.w > 0.01 && liveBbox.h > 0.01) {
       const newShapes = [...shapesRef.current, liveBbox]
       setShapes(newShapes)
       snapshotHistory(newShapes)
+    } else if (d.kind === 'sam-box') {
+      // Big drag → box prompt (new object). Tiny drag → treat as a click point:
+      // first click starts an object, later clicks add positive refinement points.
+      const big = liveBbox && liveBbox.w > 0.02 && liveBbox.h > 0.02
+      if (big && liveBbox) {
+        const ns = { points: [] as [number,number][], labels: [] as number[],
+          box: [liveBbox.x, liveBbox.y, liveBbox.x + liveBbox.w, liveBbox.y + liveBbox.h] as [number,number,number,number],
+          idx: -1 }
+        samSession.current = ns; runSam(ns)
+      } else {
+        const p = d.start
+        const s = samSession.current
+        if (s && !e?.shiftKey) { s.points.push(p); s.labels.push(1); runSam(s) }
+        else { const ns = { points: [p], labels: [1], box: null, idx: -1 }
+               samSession.current = ns; runSam(ns) }
+      }
     } else if (d.kind === 'move-shape' || d.kind === 'move-vertex' || d.kind === 'bbox-handle') {
       snapshotHistory(shapesRef.current)
     }
@@ -520,7 +564,9 @@ export default function Annotate() {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.code === 'Space') { spaceHeld.current = true; e.preventDefault() }
-      if (e.key === 'Escape') { setPolyPts([]); setLiveBbox(null); setSelected(null) }
+      if (e.key === 'Escape') { setPolyPts([]); setLiveBbox(null); setSelected(null); samSession.current = null }
+      // Enter finishes the current SAM object so the next click starts a fresh one
+      if (e.key === 'Enter' && toolRef.current === 'sam') { samSession.current = null }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRef.current !== null && document.activeElement?.tagName !== 'INPUT') {
         const newShapes = shapesRef.current.filter((_, i) => i !== selectedRef.current)
         setShapes(newShapes)
@@ -1120,7 +1166,8 @@ export default function Annotate() {
               color: '#fff', border: '1px solid rgba(168,85,247,0.6)',
               display: 'flex', alignItems: 'center', gap: 7, pointerEvents: 'none' }}>
               <Sparkles size={13} />
-              {samLoading ? 'Segmenting…' : 'Click an object to segment it'}
+              {samLoading ? 'Segmenting…'
+                : 'Click or drag a box · click to add · Shift-click to remove · Enter = next'}
             </div>
           )}
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center',

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Form
 from fastapi.responses import FileResponse
 from sqlmodel import Session
+from pydantic import BaseModel
 from typing import Optional, List
 import tempfile, os, shutil, json, threading, uuid
 from pathlib import Path
@@ -603,6 +604,58 @@ async def sam_point(
     if len(best) > 80:
         step = len(best) // 80
         best = best[::step]
+    pts = [[round(float(a), 5), round(float(b), 5)] for a, b in best]
+    return {"points": pts, "count": len(pts)}
+
+
+class SamPrompt(BaseModel):
+    points: list[list[float]] = []   # normalized [[x,y], ...]
+    labels: list[int] = []           # 1 = foreground (add), 0 = background (remove)
+    box: Optional[list[float]] = None  # normalized [x1, y1, x2, y2]
+
+
+@router.post("/projects/{project_id}/images/{image_id}/sam-segment")
+async def sam_segment(project_id: int, image_id: int, body: SamPrompt,
+                      session: Session = Depends(get_session)):
+    """Refinable click-to-segment: positive/negative points and/or a box are
+    grouped into ONE prompt so MobileSAM returns a single mask the user can
+    refine. Returns the mask polygon (normalized)."""
+    img_rec = session.get(ImageModel, image_id)
+    if not img_rec or img_rec.project_id != project_id:
+        raise HTTPException(404, "Image not found")
+    img_path = os.path.join(UPLOAD_DIR, img_rec.filename)
+    if not os.path.exists(img_path):
+        raise HTTPException(404, "Image file not found")
+
+    import torch, numpy as np
+    from PIL import Image as PILImage
+    pil = PILImage.open(img_path).convert("RGB")
+    W, H = pil.size
+
+    kwargs: dict = {}
+    if body.points:
+        kwargs["points"] = [[[int(x * W), int(y * H)] for x, y in body.points]]
+        labels = body.labels if len(body.labels) == len(body.points) else [1] * len(body.points)
+        kwargs["labels"] = [labels]
+    if body.box and len(body.box) == 4:
+        x1, y1, x2, y2 = body.box
+        kwargs["bboxes"] = [[int(x1 * W), int(y1 * H), int(x2 * W), int(y2 * H)]]
+    if not kwargs:
+        raise HTTPException(400, "Provide at least one point or a box")
+
+    model  = _get_sam()
+    device = "0" if torch.cuda.is_available() else "cpu"
+    try:
+        res = model.predict(np.array(pil), verbose=False, device=device, **kwargs)[0]
+    except (RuntimeError, Exception):
+        res = model.predict(np.array(pil), verbose=False, device="cpu", **kwargs)[0]
+
+    if res.masks is None or len(res.masks.xyn) == 0:
+        raise HTTPException(404, "No object found — try another point or add a box")
+
+    best = max(res.masks.xyn, key=_poly_area)
+    if len(best) > 80:
+        best = best[::len(best) // 80]
     pts = [[round(float(a), 5), round(float(b), 5)] for a, b in best]
     return {"points": pts, "count": len(pts)}
 
