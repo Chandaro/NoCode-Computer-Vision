@@ -4,6 +4,7 @@ import { Zap, Download, RefreshCw, ChevronDown, ChevronUp, BarChart2, FileCode, 
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import api, { type Project, type TrainingRun } from '../api'
 import { Card, Field, Select, Slider, Btn, Badge, PageHeader, LogTerminal, ProgressBar } from '../components/ui'
+import EstimateCard from '../components/EstimateCard'
 
 interface MetricPoint { epoch: number; mAP50: number; precision: number; recall: number }
 interface Progress   { epoch: number; total: number; mAP50: number; precision: number; recall: number }
@@ -697,61 +698,7 @@ export default function Train() {
           )}
 
           {/* ── Pre-flight resource estimate ── */}
-          {estimate && (() => {
-            const g = estimate.gpu
-            const v = g?.verdict as 'fits' | 'tight' | 'over' | undefined
-            const c = v === 'fits' ? '#22c55e' : v === 'tight' ? '#f59e0b' : v === 'over' ? '#ef4444' : 'var(--text3)'
-            const pct = g ? Math.min(100, Math.round(estimate.est_vram_gb / g.total_gb * 100)) : 0
-            const freePct = g ? Math.round(g.free_gb / g.total_gb * 100) : 0
-            return (
-              <div style={{ border: `1px solid ${c}55`, borderRadius: 8, padding: '10px 12px',
-                background: 'var(--surface2)', display: 'flex', flexDirection: 'column', gap: 7 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text2)' }}>
-                    Estimated load · {estimate.device}
-                  </span>
-                  {g && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: c, textTransform: 'uppercase',
-                      letterSpacing: '0.04em' }}>
-                      {v === 'fits' ? '✓ Fits' : v === 'tight' ? '⚠ Tight' : '✕ Too big'}
-                    </span>
-                  )}
-                </div>
-                {g ? (
-                  <>
-                    <div style={{ position: 'relative', height: 8, borderRadius: 4,
-                      background: 'var(--surface)', overflow: 'hidden' }}>
-                      {/* free-memory marker */}
-                      <div style={{ position: 'absolute', left: `${freePct}%`, top: 0, bottom: 0,
-                        width: 2, background: 'var(--text3)' }} title="Free VRAM" />
-                      <div style={{ height: '100%', width: `${pct}%`, background: c, borderRadius: 4,
-                        transition: 'width 0.2s' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10,
-                      color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
-                      <span>~{estimate.est_vram_gb} GB needed</span>
-                      <span>{g.free_gb} GB free / {g.total_gb} GB</span>
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--text3)' }}>{g.name}</div>
-                    {v === 'over' && g.suggested_batch && (
-                      <button onClick={() => setBatch(g.suggested_batch)}
-                        style={{ fontSize: 10, padding: '4px 8px', borderRadius: 5, cursor: 'pointer',
-                          border: `1px solid ${c}`, background: `${c}22`, color: c, alignSelf: 'flex-start' }}>
-                        Use batch {g.suggested_batch} to fit
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <span style={{ fontSize: 10, color: '#f59e0b' }}>{estimate.note}</span>
-                )}
-                <span style={{ fontSize: 9.5, color: 'var(--text3)', lineHeight: 1.4 }}>
-                  + ~{estimate.ram?.est_gb} GB system RAM
-                  {estimate.ram?.available_gb != null ? ` · ${estimate.ram.available_gb} GB free` : ''}
-                  {'  ·  estimate, not exact'}
-                </span>
-              </div>
-            )
-          })()}
+          {estimate && <EstimateCard estimate={estimate} onUseBatch={setBatch} />}
 
           <Btn variant="primary" onClick={startTraining} disabled={streaming}
             style={{ width: '100%', justifyContent: 'center', padding: '9px 14px' }}>
