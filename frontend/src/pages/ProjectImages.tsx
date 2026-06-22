@@ -29,10 +29,21 @@ function NavDropdown({ label, icon, items }:
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <Btn variant="secondary" size="sm" onClick={() => setOpen(o => !o)}>
-        {icon} {label} <ChevronDown size={12} style={{
+      <button onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px',
+          borderRadius: 7, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit',
+          background: open ? 'var(--surface2)' : 'transparent',
+          border: `1px solid ${open ? 'var(--border2)' : 'var(--border)'}`,
+          color: 'var(--text)', transition: 'background 0.12s, border-color 0.12s',
+        }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.background = 'var(--surface2)' }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.background = 'transparent' }}>
+        <span style={{ color: 'var(--accent)', display: 'flex' }}>{icon}</span>
+        {label}
+        <ChevronDown size={12} style={{ color: 'var(--text3)',
           transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
-      </Btn>
+      </button>
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
@@ -481,10 +492,6 @@ export default function ProjectImages() {
             { label: 'Webcam', desc: 'Live real-time inference',
               icon: <Camera size={14} />, onClick: () => navigate(`/projects/${projectId}/webcam`) },
           ]} />
-
-          <Btn variant="primary" size="sm" onClick={() => navigate(`/projects/${projectId}/train`)}>
-            <Zap size={13} strokeWidth={2.5} /> Detect & Train
-          </Btn>
         </>}
       />
 
