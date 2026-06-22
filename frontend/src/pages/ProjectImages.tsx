@@ -515,23 +515,28 @@ export default function ProjectImages() {
 
         {/* Tag list */}
         {(project?.classes.length ?? 0) > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: editingClasses ? 10 : 0 }}>
-            {project!.classes.map((c, i) => (
-              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
-                fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                background: 'var(--surface2)', color: 'var(--text2)',
-                border: '1px solid var(--border)', fontFamily: 'monospace' }}>
-                <span style={{ color: 'var(--text3)' }}>{i}:</span> {c}
-                {editingClasses && (
-                  <button onClick={() => removeClass(i)}
-                    style={{ background: 'none', border: 'none', color: 'var(--text3)',
-                      cursor: 'pointer', padding: 0, lineHeight: 1, fontSize: 13,
-                      display: 'flex', alignItems: 'center' }}>
-                    <X size={10} />
-                  </button>
-                )}
-              </span>
-            ))}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: editingClasses ? 10 : 0 }}>
+            {project!.classes.map((c, i) => {
+              const color = `hsl(${(i * 67) % 360} 65% 60%)`
+              return (
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 11.5, padding: '3px 9px', borderRadius: 6,
+                  background: 'var(--surface2)', color: 'var(--text)',
+                  border: '1px solid var(--border)' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'monospace' }}>{c}</span>
+                  <span style={{ fontSize: 9, color: 'var(--text3)', fontFamily: 'monospace' }}>#{i}</span>
+                  {editingClasses && (
+                    <button onClick={() => removeClass(i)} title="Remove class"
+                      style={{ background: 'none', border: 'none', color: 'var(--text3)',
+                        cursor: 'pointer', padding: 0, marginLeft: 1, lineHeight: 1,
+                        display: 'flex', alignItems: 'center' }}>
+                      <X size={11} />
+                    </button>
+                  )}
+                </span>
+              )
+            })}
           </div>
         )}
 
