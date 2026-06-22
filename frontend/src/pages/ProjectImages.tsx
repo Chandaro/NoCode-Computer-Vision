@@ -558,20 +558,21 @@ export default function ProjectImages() {
       </div>
 
       {/* ── Dataset Mode Toggle ── */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 8, overflow: 'hidden',
-        border: '1px solid var(--border)', width: 'fit-content' }}>
+      <div style={{ display: 'inline-flex', marginBottom: 18, borderRadius: 8, overflow: 'hidden',
+        border: '1px solid var(--border)', background: 'var(--surface)' }}>
         {([
           { key: 'detection',      icon: <Crosshair size={13} />,  label: 'Object Detection' },
           { key: 'classification', icon: <ScanLine  size={13} />,  label: 'Image Classification' },
-        ] as const).map(({ key, icon, label }) => (
+        ] as const).map(({ key, icon, label }, i) => (
           <button key={key} onClick={() => setDatasetMode(key)}
             style={{
               display: 'flex', alignItems: 'center', gap: 7,
-              padding: '8px 18px', border: 'none', cursor: 'pointer',
+              padding: '8px 18px', cursor: 'pointer',
+              border: 'none', borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
               fontSize: 12, fontWeight: datasetMode === key ? 600 : 400,
-              background: datasetMode === key ? 'var(--accent)' : 'var(--surface)',
+              background: datasetMode === key ? 'var(--accent)' : 'transparent',
               color: datasetMode === key ? '#fff' : 'var(--text2)',
-              transition: 'all 0.15s',
+              transition: 'background 0.15s, color 0.15s',
             }}>
             {icon} {label}
           </button>
@@ -833,22 +834,33 @@ export default function ProjectImages() {
       {datasetMode === 'detection' && <>
 
       {/* Filter + export bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {(['all','annotated','unannotated','corrupt'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-              border: `1px solid ${filter === f ? 'var(--accent)' : 'var(--border)'}`,
-              background: filter === f ? 'rgba(88,101,242,0.12)' : 'transparent',
-              color: filter === f ? 'var(--accent)' : 'var(--text2)',
-              fontWeight: filter === f ? 500 : 400, transition: 'all 0.12s' }}>
-            {f.charAt(0).toUpperCase() + f.slice(1)}
-            {f === 'all' && <span style={{ marginLeft: 5, color: 'var(--text3)' }}>{total}</span>}
-            {f === 'annotated' && <span style={{ marginLeft: 5, color: 'var(--text3)' }}>{annotated}</span>}
-            {f === 'unannotated' && <span style={{ marginLeft: 5, color: 'var(--text3)' }}>{total - annotated}</span>}
-            {f === 'corrupt' && <span style={{ marginLeft: 5, color: 'var(--text3)' }}>{images.filter(i => i.is_corrupt).length}</span>}
-          </button>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        {/* Connected segmented filter */}
+        <div style={{ display: 'inline-flex', borderRadius: 8, border: '1px solid var(--border)',
+          overflow: 'hidden', background: 'var(--surface)' }}>
+          {([
+            { key: 'all',         label: 'All',         count: total },
+            { key: 'annotated',   label: 'Annotated',   count: annotated },
+            { key: 'unannotated', label: 'Unannotated', count: total - annotated },
+            { key: 'corrupt',     label: 'Corrupt',     count: images.filter(i => i.is_corrupt).length },
+          ] as const).map((f, i) => {
+            const active = filter === f.key
+            return (
+              <button key={f.key} onClick={() => setFilter(f.key)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                  border: 'none', borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
+                  cursor: 'pointer', fontSize: 12, transition: 'background 0.12s, color 0.12s',
+                  background: active ? 'var(--accent)' : 'transparent',
+                  color: active ? '#fff' : 'var(--text2)', fontWeight: active ? 600 : 400 }}>
+                {f.label}
+                <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace',
+                  opacity: active ? 0.85 : 0.55 }}>{f.count}</span>
+              </button>
+            )
+          })}
+        </div>
         <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, color: 'var(--text3)', marginRight: 2 }}>Export</span>
         <Btn variant="ghost" size="sm" href={`/api/projects/${projectId}/export/dataset?format=yolo`}>↓ YOLO</Btn>
         <Btn variant="ghost" size="sm" href={`/api/projects/${projectId}/export/dataset?format=coco`}>↓ COCO</Btn>
       </div>
@@ -890,8 +902,10 @@ export default function ProjectImages() {
             <Btn variant="ghost" onClick={() => importRef.current?.click()} disabled={importing}>
               <FolderInput size={13} /> {importing ? 'Importing…' : 'Import YOLO Files'}
             </Btn>
+            {/* Push utilities to the right, separated from the import actions */}
+            <div style={{ flex: 1 }} />
             {images.length > 0 && (
-              <Btn variant="secondary" onClick={() => setSelectMode(true)}>
+              <Btn variant="ghost" onClick={() => setSelectMode(true)}>
                 <CheckSquare size={13} /> Select
               </Btn>
             )}
@@ -900,9 +914,9 @@ export default function ProjectImages() {
               onClick={() => setShowImportGuide(v => !v)}
               title="Show import format guide"
               style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '5px 10px', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', background: showImportGuide ? 'var(--accent-s)' : 'transparent',
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 12px', border: '1px solid var(--border)',
+                borderRadius: 8, background: showImportGuide ? 'var(--accent-s)' : 'transparent',
                 color: showImportGuide ? 'var(--accent)' : 'var(--text3)',
                 fontSize: 12, cursor: 'pointer', transition: 'all 0.1s',
               }}
