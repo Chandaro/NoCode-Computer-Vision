@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon, FileArchive, ImagePlus, ScanLine, Crosshair } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
-import { PageHeader, Btn, Badge, Empty } from '../components/ui'
+import { PageHeader, Btn, Empty } from '../components/ui'
 
 interface ImportResult {
   imported: number
@@ -772,39 +772,49 @@ export default function ProjectImages() {
                 </div>
 
                 {/* Thumbnail grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
                   {shown.map(img => {
                     const key = `${img.class_name}/${img.filename}`
                     return (
                       <div key={key}
-                        style={{ background: 'var(--surface)', borderRadius: 8, overflow: 'hidden',
-                          position: 'relative', border: '1px solid var(--border)' }}
-                        onMouseEnter={e => { e.currentTarget.querySelector<HTMLDivElement>('.cls-overlay')!.style.opacity = '1' }}
-                        onMouseLeave={e => { e.currentTarget.querySelector<HTMLDivElement>('.cls-overlay')!.style.opacity = '0' }}>
+                        style={{ background: '#0d0d0f', borderRadius: 10, overflow: 'hidden',
+                          position: 'relative', aspectRatio: '1 / 1', outline: '1px solid var(--border)',
+                          outlineOffset: -1, transition: 'transform 0.12s ease, box-shadow 0.12s ease' }}
+                        onMouseEnter={e => {
+                          e.currentTarget.querySelector<HTMLDivElement>('.cls-overlay')!.style.opacity = '1'
+                          e.currentTarget.style.transform = 'translateY(-2px)'
+                          e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.45)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.querySelector<HTMLDivElement>('.cls-overlay')!.style.opacity = '0'
+                          e.currentTarget.style.transform = 'none'
+                          e.currentTarget.style.boxShadow = 'none'
+                        }}>
                         <img
                           src={`/api/projects/${projectId}/classification/dataset/file/${encodeURIComponent(img.class_name)}/${encodeURIComponent(img.filename)}`}
                           alt={img.filename} loading="lazy"
-                          style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
 
                         {/* Class label chip */}
-                        <div style={{ position: 'absolute', top: 7, left: 7,
-                          fontSize: 10, padding: '2px 7px', borderRadius: 4,
-                          background: 'rgba(0,0,0,0.65)', color: '#fff',
-                          fontFamily: 'monospace', maxWidth: 'calc(100% - 14px)',
+                        <div style={{ position: 'absolute', top: 8, left: 8,
+                          fontSize: 10, padding: '2px 7px', borderRadius: 5,
+                          background: 'rgba(0,0,0,0.6)', color: '#fff', backdropFilter: 'blur(2px)',
+                          fontFamily: 'monospace', maxWidth: 'calc(100% - 16px)',
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {img.class_name}
                         </div>
 
                         {/* Hover overlay — delete */}
                         <div className="cls-overlay" style={{ position: 'absolute', inset: 0,
-                          background: 'rgba(0,0,0,0.6)', opacity: 0, transition: 'opacity 0.15s',
+                          background: 'rgba(0,0,0,0.55)', opacity: 0, transition: 'opacity 0.15s',
                           display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <button onClick={() => deleteClsImage(img.class_name, img.filename)}
-                            disabled={clsDeleting === key}
-                            style={{ padding: '7px 7px', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6,
-                              background: 'rgba(248,113,113,0.12)', color: 'var(--danger)',
+                            disabled={clsDeleting === key} title="Delete"
+                            style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)',
+                              background: 'rgba(248,113,113,0.18)', color: '#fff', backdropFilter: 'blur(3px)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
                               cursor: clsDeleting === key ? 'wait' : 'pointer' }}>
-                            <Trash2 size={13} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </div>
@@ -1082,60 +1092,85 @@ export default function ProjectImages() {
           <Empty icon={ImageIcon} message={`No ${filter} images`} sub="Try a different filter" />
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
           {filteredImages.map(img => {
             const isSelected = selected.has(img.id)
             return (
               <div key={img.id}
                 onClick={selectMode ? () => toggleSelect(img.id) : undefined}
-                style={{ background: 'var(--surface)', borderRadius: 8, overflow: 'hidden',
-                  position: 'relative', cursor: selectMode ? 'pointer' : 'default',
-                  border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
-                  boxShadow: isSelected ? '0 0 0 2px rgba(88,101,242,0.35)' : 'none',
-                  transition: 'border-color 0.1s, box-shadow 0.1s' }}
-                onMouseEnter={e => { if (!selectMode) e.currentTarget.querySelector<HTMLDivElement>('.overlay')!.style.opacity = '1' }}
-                onMouseLeave={e => { if (!selectMode) e.currentTarget.querySelector<HTMLDivElement>('.overlay')!.style.opacity = '0' }}>
+                style={{ background: '#0d0d0f', borderRadius: 10, overflow: 'hidden',
+                  position: 'relative', cursor: selectMode ? 'pointer' : 'default', aspectRatio: '1 / 1',
+                  outline: isSelected ? '2px solid var(--accent)' : '1px solid var(--border)',
+                  outlineOffset: isSelected ? -2 : -1,
+                  transition: 'transform 0.12s ease, box-shadow 0.12s ease' }}
+                onMouseEnter={e => { if (!selectMode) {
+                  e.currentTarget.querySelector<HTMLDivElement>('.overlay')!.style.opacity = '1'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.45)'
+                } }}
+                onMouseLeave={e => { if (!selectMode) {
+                  e.currentTarget.querySelector<HTMLDivElement>('.overlay')!.style.opacity = '0'
+                  e.currentTarget.style.transform = 'none'
+                  e.currentTarget.style.boxShadow = 'none'
+                } }}>
 
                 <img src={`/api/projects/${projectId}/images/${img.id}/file`} alt={img.original_name}
-                  style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
+                  loading="lazy"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
 
-                {/* Select mode checkbox */}
+                {/* Filename — subtle gradient caption (no clunky bordered row) */}
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0,
+                  padding: '16px 8px 5px', pointerEvents: 'none',
+                  background: 'linear-gradient(transparent, rgba(0,0,0,0.78))' }}>
+                  <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.92)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {img.original_name}
+                  </p>
+                </div>
+
+                {/* Select-mode checkbox */}
                 {selectMode && (
-                  <div style={{ position: 'absolute', top: 7, left: 7,
-                    width: 18, height: 18, borderRadius: 4,
-                    background: isSelected ? 'var(--accent)' : 'rgba(0,0,0,0.55)',
-                    border: `2px solid ${isSelected ? 'var(--accent)' : 'rgba(255,255,255,0.5)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ position: 'absolute', top: 8, left: 8,
+                    width: 18, height: 18, borderRadius: 5,
+                    background: isSelected ? 'var(--accent)' : 'rgba(0,0,0,0.5)',
+                    border: `2px solid ${isSelected ? 'var(--accent)' : 'rgba(255,255,255,0.6)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backdropFilter: 'blur(2px)' }}>
                     {isSelected && <span style={{ color: '#fff', fontSize: 11, lineHeight: 1 }}>✓</span>}
                   </div>
                 )}
 
-                {/* Status dot */}
-                <div style={{ position: 'absolute', top: 7, right: 7, width: 8, height: 8, borderRadius: '50%',
-                  background: img.annotated ? 'var(--success)' : 'var(--surface3)',
-                  border: '1.5px solid rgba(0,0,0,0.5)', boxShadow: '0 1px 3px rgba(0,0,0,0.5)' }} />
+                {/* Status badge — annotated check / corrupt flag */}
+                {img.is_corrupt ? (
+                  <span style={{ position: 'absolute', top: 7, right: 7, fontSize: 9, fontWeight: 600,
+                    padding: '2px 6px', borderRadius: 5, background: 'rgba(248,113,113,0.9)',
+                    color: '#fff', letterSpacing: '0.02em' }}>corrupt</span>
+                ) : img.annotated && (
+                  <div style={{ position: 'absolute', top: 7, right: 7, width: 16, height: 16,
+                    borderRadius: '50%', background: 'var(--success)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                    <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>
+                  </div>
+                )}
 
-                {/* Hover overlay (non-select mode only) */}
-                <div className="overlay" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)',
-                  opacity: 0, transition: 'opacity 0.15s', display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', gap: 8 }}>
+                {/* Hover actions (non-select mode only) */}
+                <div className="overlay" style={{ position: 'absolute', inset: 0,
+                  background: 'rgba(0,0,0,0.55)', opacity: 0, transition: 'opacity 0.15s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
                   <button onClick={() => navigate(`/projects/${projectId}/annotate/${img.id}`)}
-                    style={{ padding: '7px 7px', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
-                      background: 'rgba(255,255,255,0.1)', color: '#fff', cursor: 'pointer' }}>
-                    <Pencil size={13} />
+                    title="Annotate"
+                    style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid rgba(255,255,255,0.25)',
+                      background: 'rgba(255,255,255,0.14)', color: '#fff', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(3px)' }}>
+                    <Pencil size={14} />
                   </button>
-                  <button onClick={() => deleteImage(img.id)}
-                    style={{ padding: '7px 7px', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6,
-                      background: 'rgba(248,113,113,0.1)', color: 'var(--danger)', cursor: 'pointer' }}>
-                    <Trash2 size={13} />
+                  <button onClick={() => deleteImage(img.id)} title="Delete"
+                    style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)',
+                      background: 'rgba(248,113,113,0.18)', color: '#fff', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(3px)' }}>
+                    <Trash2 size={14} />
                   </button>
-                </div>
-
-                {/* Filename */}
-                <div style={{ padding: '6px 8px', borderTop: '1px solid var(--border)' }}>
-                  <p style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap',
-                    overflow: 'hidden', textOverflow: 'ellipsis' }}>{img.original_name}</p>
-                  {img.is_corrupt && <Badge color="red">corrupt</Badge>}
                 </div>
               </div>
             )
