@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 from typing import List
@@ -191,6 +191,74 @@ def derive_classes(project_id: int, session: Session = Depends(get_session)):
     session.add(project)
     session.commit()
     return {"classes": names, "count": len(names)}
+
+
+@router.post("/extract-frames")
+async def extract_frames(
+    project_id: int,
+    file: UploadFile = File(...),
+    every_sec: float = Form(1.0),
+    max_frames: int = Form(300),
+    session: Session = Depends(get_session),
+):
+    """Extract frames from an uploaded video into the project's image dataset.
+
+    Grabs one frame every `every_sec` seconds (up to `max_frames`), skips exact
+    duplicates (static footage), and adds each as a normal project image."""
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    import cv2
+    suffix = os.path.splitext(file.filename or "video.mp4")[1].lower() or ".mp4"
+    tmp = os.path.join(UPLOAD_DIR, f"_vidtmp_{uuid.uuid4().hex}{suffix}")
+    with open(tmp, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    imported = 0
+    skipped = 0
+    scanned = 0
+    base = os.path.splitext(os.path.basename(file.filename or "video"))[0]
+    try:
+        cap = cv2.VideoCapture(tmp)
+        if not cap.isOpened():
+            raise HTTPException(400, "Could not read this video file")
+        fps  = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        step = max(1, int(round(fps * max(0.1, every_sec))))   # frames between captures
+        cap_lim = max(1, min(int(max_frames), 5000))
+
+        while imported < cap_lim:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            if scanned % step == 0:
+                unique = f"{uuid.uuid4().hex}.jpg"
+                dest = os.path.join(UPLOAD_DIR, unique)
+                cv2.imwrite(dest, frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
+                md5 = _md5(dest)
+                existing = session.exec(
+                    select(Image).where(Image.project_id == project_id, Image.md5_hash == md5)
+                ).first()
+                if existing:
+                    os.remove(dest)
+                    skipped += 1
+                else:
+                    w, h, channels, color_space, is_corrupt = _inspect_image(dest)
+                    session.add(Image(
+                        project_id=project_id, filename=unique,
+                        original_name=f"{base}_f{scanned:06d}.jpg",
+                        md5_hash=md5, width=w, height=h, channels=channels,
+                        color_space=color_space, is_corrupt=is_corrupt,
+                        file_size=os.path.getsize(dest)))
+                    session.commit()
+                    imported += 1
+            scanned += 1
+        cap.release()
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+    return {"imported": imported, "skipped_duplicates": skipped, "frames_scanned": scanned}
 
 
 @router.post("/import-yolo")

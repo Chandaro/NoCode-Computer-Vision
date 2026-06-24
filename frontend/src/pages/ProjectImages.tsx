@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon, FileArchive, ImagePlus, ScanLine, Crosshair } from 'lucide-react'
+import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon, FileArchive, ImagePlus, ScanLine, Crosshair, Video } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Empty } from '../components/ui'
 
@@ -87,6 +87,14 @@ export default function ProjectImages() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null)
   const [uploadLabel, setUploadLabel] = useState<string | null>(null)  // generic upload progress label
+  // ── Extract frames from video ──
+  const [showFrameModal, setShowFrameModal] = useState(false)
+  const [frameVideo,     setFrameVideo]     = useState<File | null>(null)
+  const [frameEverySec,  setFrameEverySec]  = useState(1)
+  const [frameMax,       setFrameMax]       = useState(150)
+  const [frameBusy,      setFrameBusy]      = useState(false)
+  const [frameResult,    setFrameResult]    = useState<string | null>(null)
+  const frameVideoRef = useRef<HTMLInputElement>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
   const [editingClasses, setEditingClasses] = useState(false)
@@ -167,6 +175,25 @@ export default function ProjectImages() {
         window.alert(e?.response?.data?.detail ?? 'Could not derive classes — make sure images are annotated.')
       }
     } finally { setDerivingClasses(false) }
+  }
+
+  const extractFrames = async () => {
+    if (!frameVideo) return
+    setFrameBusy(true); setFrameResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', frameVideo)
+      fd.append('every_sec', String(frameEverySec))
+      fd.append('max_frames', String(frameMax))
+      const res = await api.post(`/projects/${projectId}/images/extract-frames`, fd)
+      await load()
+      const { imported, skipped_duplicates } = res.data
+      setFrameResult(`Added ${imported} frame${imported === 1 ? '' : 's'}`
+        + (skipped_duplicates ? ` · ${skipped_duplicates} duplicate${skipped_duplicates === 1 ? '' : 's'} skipped` : ''))
+      setFrameVideo(null)
+    } catch (e: any) {
+      setFrameResult(e?.response?.data?.detail ?? 'Extraction failed — is it a valid video?')
+    } finally { setFrameBusy(false) }
   }
 
   const saveClasses = async (newClasses: string[]) => {
@@ -437,6 +464,76 @@ export default function ProjectImages() {
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+      {/* ── Extract frames from video modal ── */}
+      {showFrameModal && (
+        <div onClick={() => !frameBusy && setShowFrameModal(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 220, background: 'rgba(0,0,0,0.72)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)',
+            border: '1px solid var(--border)', borderRadius: 12, padding: 22, width: 420,
+            display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                <Video size={15} style={{ color: 'var(--accent)' }} /> Extract Frames from Video
+              </p>
+              <button onClick={() => !frameBusy && setShowFrameModal(false)}
+                style={{ border: 'none', background: 'transparent', color: 'var(--text3)',
+                  cursor: frameBusy ? 'default' : 'pointer', padding: 2 }}><X size={16} /></button>
+            </div>
+
+            {/* Video picker */}
+            <button onClick={() => frameVideoRef.current?.click()} disabled={frameBusy}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
+                border: `1px dashed ${frameVideo ? 'var(--accent)' : 'var(--border2)'}`, borderRadius: 8,
+                background: frameVideo ? 'var(--accent-s)' : 'var(--surface2)',
+                color: frameVideo ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer', fontSize: 12, width: '100%' }}>
+              <Video size={14} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {frameVideo ? frameVideo.name : 'Choose a video file (mp4, mov, avi…)'}
+              </span>
+            </button>
+            <input ref={frameVideoRef} type="file" accept="video/*" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) { setFrameVideo(f); setFrameResult(null) }; e.target.value = '' }} />
+
+            {/* Settings */}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <label style={{ flex: 1, fontSize: 11, color: 'var(--text2)' }}>
+                One frame every
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <input type="number" min={0.1} step={0.1} value={frameEverySec} disabled={frameBusy}
+                    onChange={e => setFrameEverySec(Math.max(0.1, Number(e.target.value) || 1))}
+                    style={{ width: '100%', padding: '6px 8px', fontSize: 13, borderRadius: 6,
+                      background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }} />
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>sec</span>
+                </div>
+              </label>
+              <label style={{ flex: 1, fontSize: 11, color: 'var(--text2)' }}>
+                Max frames
+                <input type="number" min={1} max={5000} value={frameMax} disabled={frameBusy}
+                  onChange={e => setFrameMax(Math.max(1, Math.min(5000, Number(e.target.value) || 150)))}
+                  style={{ width: '100%', marginTop: 4, padding: '6px 8px', fontSize: 13, borderRadius: 6,
+                    background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }} />
+              </label>
+            </div>
+            <p style={{ fontSize: 10.5, color: 'var(--text3)', margin: 0, lineHeight: 1.5 }}>
+              Grabs a frame at that interval and adds each to the dataset. Identical (static) frames are
+              skipped automatically.
+            </p>
+
+            {frameResult && (
+              <p style={{ fontSize: 12, margin: 0, color: frameResult.startsWith('Added') ? 'var(--success)' : 'var(--danger)' }}>
+                {frameResult}
+              </p>
+            )}
+
+            <Btn variant="primary" onClick={extractFrames} disabled={!frameVideo || frameBusy}
+              style={{ width: '100%', justifyContent: 'center' }}>
+              {frameBusy ? 'Extracting…' : 'Extract Frames'}
+            </Btn>
+          </div>
+        </div>
+      )}
 
       {/* Import / upload progress overlay */}
       {(importing || uploadLabel) && importProgress && (
@@ -913,6 +1010,9 @@ export default function ProjectImages() {
             </Btn>
             <Btn variant="ghost" onClick={() => importRef.current?.click()} disabled={importing}>
               <FolderInput size={13} /> {importing ? 'Importing…' : 'Import YOLO Files'}
+            </Btn>
+            <Btn variant="ghost" onClick={() => { setFrameResult(null); setShowFrameModal(true) }}>
+              <Video size={13} /> Extract from Video
             </Btn>
             {/* Push utilities to the right, separated from the import actions */}
             <div style={{ flex: 1 }} />
