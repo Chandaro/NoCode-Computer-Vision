@@ -261,6 +261,50 @@ export function stepRep(
            repJustCounted: counted }
 }
 
+// ─── Left / right symmetry ──────────────────────────────────────────────────
+//
+// Compare matching left- and right-side joint angles. Large differences flag an
+// imbalance (useful for form checks and rehab). Pure geometry on the angles we
+// already compute.
+
+export interface SymmetryRow {
+  name: string        // joint pair, e.g. "Knees"
+  left: number; right: number
+  diff: number        // |left - right| in degrees
+  balanced: boolean   // diff within tolerance
+}
+
+const SYMMETRY_PAIRS: [string, string, string][] = [
+  ['L Elbow', 'R Elbow', 'Elbows'],
+  ['L Shoulder', 'R Shoulder', 'Shoulders'],
+  ['L Hip', 'R Hip', 'Hips'],
+  ['L Knee', 'R Knee', 'Knees'],
+]
+
+/** Per-pair left/right angle comparison + an overall 0–100 symmetry score. */
+export function computeSymmetry(
+  kps: number[][], conf: number[], tolDeg = 12,
+): { rows: SymmetryRow[]; score: number } {
+  const byName: Record<string, JointAngle> = {}
+  for (const a of computeAngles(kps, conf)) byName[a.name] = a
+
+  const rows: SymmetryRow[] = []
+  let totalDiff = 0
+  for (const [l, r, name] of SYMMETRY_PAIRS) {
+    const la = byName[l], ra = byName[r]
+    if (la?.valid && ra?.valid) {
+      const diff = Math.abs(la.angle - ra.angle)
+      rows.push({ name, left: la.angle, right: ra.angle, diff, balanced: diff <= tolDeg })
+      totalDiff += diff
+    }
+  }
+  // 0° avg difference = 100; each degree costs 1.5 points (clamped to 0–100).
+  const score = rows.length
+    ? Math.max(0, Math.min(100, Math.round(100 - (totalDiff / rows.length) * 1.5)))
+    : 0
+  return { rows, score }
+}
+
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
 /** Build a JSON-friendly object of a person's keypoints + angles + gestures. */
@@ -277,6 +321,14 @@ export function buildExport(kps: number[][], conf: number[]) {
       .filter(a => a.valid)
       .map(a => ({ joint: a.name, angle_deg: Math.round(a.angle * 10) / 10 })),
     gestures: detectGestures(kps, conf),
+    symmetry: (() => {
+      const s = computeSymmetry(kps, conf)
+      return {
+        score: s.score,
+        pairs: s.rows.map(r => ({ pair: r.name, left_deg: Math.round(r.left),
+          right_deg: Math.round(r.right), diff_deg: Math.round(r.diff), balanced: r.balanced })),
+      }
+    })(),
   }
 }
 

@@ -4,9 +4,9 @@
  * and lets students export the data (JSON / CSV) to use elsewhere.
  */
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Download, Activity, Tag, Table } from 'lucide-react'
+import { ChevronDown, ChevronUp, Download, Activity, Tag, Table, Scale } from 'lucide-react'
 import {
-  COCO_KEYPOINTS, computeAngles, detectGestures,
+  COCO_KEYPOINTS, computeAngles, detectGestures, computeSymmetry,
   buildExport, keypointsToCSV,
 } from '../lib/poseAnalysis'
 
@@ -27,6 +27,7 @@ export default function PoseLab({ keypoints, kpConf }: Props) {
   const [showInspector, setShowInspector] = useState(false)
   const angles   = computeAngles(keypoints, kpConf)
   const gestures = detectGestures(keypoints, kpConf)
+  const symmetry = computeSymmetry(keypoints, kpConf)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
@@ -72,6 +73,48 @@ export default function PoseLab({ keypoints, kpConf }: Props) {
           ))}
         </div>
       </div>
+
+      {/* ── Left / right symmetry ── */}
+      {symmetry.rows.length > 0 && (() => {
+        const sc = symmetry.score
+        const col = sc >= 85 ? '#22c55e' : sc >= 70 ? '#f59e0b' : '#ef4444'
+        return (
+          <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text3)',
+                textTransform: 'uppercase', letterSpacing: '0.07em',
+                display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                <Scale size={11} /> Left / Right Symmetry
+              </p>
+              <span style={{ fontSize: 13, fontWeight: 700, color: col,
+                fontFamily: 'JetBrains Mono, monospace' }}>{sc}/100</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {symmetry.rows.map(r => (
+                <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '5px 8px', borderRadius: 5, background: 'var(--surface)' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                    background: r.balanced ? '#22c55e' : '#f59e0b' }} />
+                  <span style={{ fontSize: 11, color: 'var(--text2)', flex: 1 }}>{r.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+                    {Math.round(r.left)}° / {Math.round(r.right)}°
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 600, minWidth: 38, textAlign: 'right',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    color: r.balanced ? 'var(--text3)' : '#f59e0b' }}>
+                    Δ{Math.round(r.diff)}°
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 8, lineHeight: 1.4 }}>
+              Compares matching left/right joint angles. A large Δ (amber dot) means that side is
+              bent differently — useful for spotting form imbalance. Side-on angles can read
+              uneven; face the camera for the cleanest read.
+            </p>
+          </div>
+        )
+      })()}
 
       {/* ── Keypoint inspector ── */}
       <div style={{ background: 'var(--surface2)', borderRadius: 8, overflow: 'hidden' }}>
