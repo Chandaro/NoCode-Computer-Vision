@@ -116,8 +116,16 @@ export default function Pose() {
   const [imgSkeleton,setImgSkeleton]= useState<number[][]>(SKELETON)
   const [imgRendered,setImgRendered]= useState({ w: 1, h: 1 })
   const [imgRunning, setImgRunning] = useState(false)
+  const [dragOver,   setDragOver]   = useState(false)
   const imgFileRef = useRef<HTMLInputElement>(null)
   const imgRef     = useRef<HTMLImageElement>(null)
+
+  // Accept an image dropped onto the dropzone (or pasted) → run inference
+  const onImageDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setDragOver(false)
+    const f = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
+    if (f) { setImgInputMode('file'); runImageInfer(f) }
+  }
 
   // ── Video mode ──────────────────────────────────────────────────────────────
   const [videoFile,      setVideoFile]      = useState<File | null>(null)
@@ -465,11 +473,21 @@ export default function Pose() {
                   )}
                 </div>
               ) : (
-                <div style={{ border: '2px dashed var(--border2)', borderRadius: 8, padding: 48,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-                  cursor: 'pointer' }} onClick={() => imgFileRef.current?.click()}>
-                  <Activity size={32} style={{ color: 'var(--text3)', opacity: 0.4 }} />
-                  <p style={{ fontSize: 13, color: 'var(--text3)' }}>Upload an image to detect poses</p>
+                <div
+                  onClick={() => imgFileRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onImageDrop}
+                  style={{ border: `2px dashed ${dragOver ? 'var(--accent)' : 'var(--border2)'}`,
+                    borderRadius: 8, padding: 48, display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', gap: 10, cursor: 'pointer',
+                    background: dragOver ? 'var(--accent-s)' : 'transparent',
+                    transition: 'border-color 0.15s, background 0.15s' }}>
+                  <Activity size={32} style={{ color: dragOver ? 'var(--accent)' : 'var(--text3)',
+                    opacity: dragOver ? 0.9 : 0.4 }} />
+                  <p style={{ fontSize: 13, color: dragOver ? 'var(--accent)' : 'var(--text3)' }}>
+                    {dragOver ? 'Drop image to detect poses' : 'Drag an image here, or click to upload'}
+                  </p>
                 </div>
               )}
 
