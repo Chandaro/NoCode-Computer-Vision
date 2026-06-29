@@ -2,7 +2,7 @@
 
 <img src="frontend/public/favicon.svg" width="56" height="56" alt="NoCode CV" />
 
-<h1>NoCode CV</h1>
+<h1>NoCode CV</h>
 
 <p><em>Train computer vision models without writing a single line of code.</em></p>
 
