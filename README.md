@@ -15,8 +15,7 @@
 
 </div>
 
-<br /
-
+<br />
 NoCode CV is a self-hosted computer vision workstation that runs entirely on your own machine. Annotate images, train YOLO models, run inference on video and webcam — all through a browser UI, all offline, no cloud account required.
 
 One installer script sets everything up. One launcher starts it. Everything stays on your hardware.
