@@ -20,6 +20,21 @@ const PLOT_LABELS: Record<string, string> = {
 
 function isValBatch(name: string) { return name.startsWith('val_batch') }
 
+// Small label + checkbox switch used for the advanced inference options.
+function Toggle({ label, checked, onChange }: {
+  label: string; checked: boolean; onChange: (v: boolean) => void
+}) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+      fontSize: 12, color: 'var(--text2)' }}>
+      <input type="checkbox" checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        style={{ accentColor: 'var(--accent)', width: 13, height: 13 }} />
+      {label}
+    </label>
+  )
+}
+
 export default function Evaluation() {
   const { id, runId } = useParams<{ id: string; runId: string }>()
   const projectId = Number(id)
@@ -36,6 +51,15 @@ export default function Evaluation() {
   const [inferIou,     setInferIou]     = useState(0.45)
   const [inferRunning, setInferRunning] = useState(false)
   const [inferResult,  setInferResult]  = useState<InferResult | null>(null)
+  // Advanced inference options
+  const [advanced,     setAdvanced]     = useState(false)
+  const [tta,          setTta]          = useState(false)
+  const [agnosticNms,  setAgnosticNms]  = useState(false)
+  const [sliceInfer,   setSliceInfer]   = useState(false)
+  const [sliceSize,    setSliceSize]    = useState(640)
+  const [sliceOverlap, setSliceOverlap] = useState(0.2)
+  const [mergeMode,    setMergeMode]    = useState<'nms' | 'wbf'>('wbf')
+  const [imgsz,        setImgsz]        = useState(640)
   const inferFileRef   = useRef<HTMLInputElement>(null)
   const inferCanvasRef = useRef<HTMLCanvasElement>(null)
   const inferImgRef    = useRef<HTMLImageElement | null>(null)
@@ -94,10 +118,21 @@ export default function Evaluation() {
       fd.append('file', inferFile)
       fd.append('conf', String(inferConf))
       fd.append('iou',  String(inferIou))
-      const res = await api.post(
-        `/projects/${projectId}/training/runs/${runId}/infer`, fd,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
-      )
+      if (advanced) {
+        // advanced path: sliced inference / TTA / agnostic NMS / WBF merge
+        fd.append('imgsz', String(imgsz))
+        fd.append('tta', String(tta))
+        fd.append('agnostic_nms', String(agnosticNms))
+        fd.append('slice_infer', String(sliceInfer))
+        fd.append('slice_size', String(sliceSize))
+        fd.append('slice_overlap', String(sliceOverlap))
+        fd.append('merge', mergeMode)
+      }
+      const url = advanced
+        ? `/projects/${projectId}/training/runs/${runId}/detect-advanced`
+        : `/projects/${projectId}/training/runs/${runId}/infer`
+      const res = await api.post(url, fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } })
       setInferResult(res.data)
       setTimeout(() => drawDetections(res.data), 50)
     } finally {
@@ -166,6 +201,45 @@ export default function Evaluation() {
               min={0.05} max={0.95} format={v => `${Math.round(v * 100)}%`} />
             <Slider label="IoU Threshold" value={inferIou} onChange={setInferIou}
               min={0.1} max={0.9} format={v => `${Math.round(v * 100)}%`} />
+
+            {/* Advanced inference options */}
+            <Toggle label="Advanced inference (slicing, TTA, WBF)" checked={advanced}
+              onChange={setAdvanced} />
+            {advanced && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10,
+                padding: '10px 12px', borderRadius: 8, background: 'var(--surface2)',
+                border: '1px solid var(--border)' }}>
+                <Toggle label="Test-Time Augmentation (TTA)" checked={tta} onChange={setTta} />
+                <Toggle label="Class-agnostic NMS (merge classes)" checked={agnosticNms}
+                  onChange={setAgnosticNms} />
+                <Toggle label="Sliced inference (small / far objects)" checked={sliceInfer}
+                  onChange={setSliceInfer} />
+                {sliceInfer && (
+                  <>
+                    <Slider label="Slice size (px)" value={sliceSize}
+                      onChange={v => setSliceSize(Math.round(v))}
+                      min={256} max={1280} step={64} format={v => `${Math.round(v)}`} />
+                    <Slider label="Slice overlap" value={sliceOverlap}
+                      onChange={setSliceOverlap}
+                      min={0} max={0.5} format={v => `${Math.round(v * 100)}%`} />
+                  </>
+                )}
+                <Slider label="Image size (imgsz)" value={imgsz}
+                  onChange={v => setImgsz(Math.round(v))}
+                  min={320} max={1280} step={64} format={v => `${Math.round(v)}`} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text2)' }}>Merge boxes with</span>
+                  <select value={mergeMode} onChange={e => setMergeMode(e.target.value as 'nms' | 'wbf')}
+                    style={{ fontSize: 12, padding: '3px 6px', borderRadius: 6,
+                      background: 'var(--surface)', color: 'var(--text)',
+                      border: '1px solid var(--border)' }}>
+                    <option value="wbf">WBF (Weighted Boxes Fusion)</option>
+                    <option value="nms">NMS</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
             <Btn variant="primary" size="sm" onClick={runInfer}
               disabled={!inferFile || inferRunning}>
               {inferRunning
@@ -179,6 +253,23 @@ export default function Evaluation() {
                 <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>
                   {inferResult.count} detection{inferResult.count !== 1 ? 's' : ''}
                 </p>
+                {inferResult.meta && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                    {[
+                      inferResult.meta.sliced ? `${inferResult.meta.tiles} tiles` : null,
+                      inferResult.meta.tta ? 'TTA' : null,
+                      inferResult.meta.agnostic_nms ? 'agnostic NMS' : null,
+                      `merge: ${inferResult.meta.merge.toUpperCase()}`,
+                      `imgsz ${inferResult.meta.imgsz}`,
+                      `${inferResult.meta.raw_boxes} raw boxes`,
+                      `${inferResult.meta.time_ms} ms`,
+                    ].filter(Boolean).map((t, i) => (
+                      <span key={i} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                        background: 'var(--surface3)', color: 'var(--text2)',
+                        border: '1px solid var(--border)' }}>{t}</span>
+                    ))}
+                  </div>
+                )}
                 {inferResult.detections.length > 0 && (
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>

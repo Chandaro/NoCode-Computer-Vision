@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, X, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, X, ChevronRight, Sparkles } from 'lucide-react'
 import api, { type Project } from '../api'
 import { Btn, TextInput, Field } from '../components/ui'
 
@@ -10,6 +10,7 @@ export default function Projects() {
   const [name, setName]         = useState('')
   const [desc, setDesc]         = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [seeding, setSeeding]       = useState(false)
   const [error, setError]       = useState('')
   const navigate = useNavigate()
 
@@ -28,6 +29,18 @@ export default function Projects() {
     } finally { setSubmitting(false) }
   }
 
+  // one-click demo: server builds a sample dataset + model config for us
+  const loadSample = async () => {
+    if (seeding) return
+    setSeeding(true); setError('')
+    try {
+      const r = await api.post('/sample/project')
+      navigate(`/projects/${r.data.project_id}/custom`)
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? 'Failed to create the sample project.')
+    } finally { setSeeding(false) }
+  }
+
   const remove = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation()
     if (confirm('Delete this project and all its data?')) {
@@ -43,9 +56,14 @@ export default function Projects() {
           <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.02em' }}>Projects</h1>
           <p style={{ fontSize: 13, color: 'var(--text2)', marginTop: 4 }}>Each project trains one computer vision model</p>
         </div>
-        <Btn variant="primary" onClick={() => setShowForm(true)}>
-          <Plus size={14} strokeWidth={2.5} /> New Project
-        </Btn>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Btn variant="secondary" onClick={loadSample} disabled={seeding}>
+            <Sparkles size={14} strokeWidth={2.5} /> {seeding ? 'Preparing…' : 'Try a sample'}
+          </Btn>
+          <Btn variant="primary" onClick={() => setShowForm(true)}>
+            <Plus size={14} strokeWidth={2.5} /> New Project
+          </Btn>
+        </div>
       </div>
 
       {/* Load error */}
@@ -57,8 +75,17 @@ export default function Projects() {
       {projects.length === 0 ? (
         <div style={{ border: '1px dashed var(--border2)', borderRadius: 10, padding: '64px 24px',
           textAlign: 'center', color: 'var(--text3)' }}>
-          <p style={{ fontSize: 14, marginBottom: 4 }}>No projects yet</p>
-          <p style={{ fontSize: 12 }}>Create your first project to get started</p>
+          <Sparkles size={22} style={{ color: 'var(--accent)', marginBottom: 10 }} />
+          <p style={{ fontSize: 14, marginBottom: 4, color: 'var(--text2)' }}>No projects yet</p>
+          <p style={{ fontSize: 12, marginBottom: 18 }}>Start from a ready-made sample, or create your own</p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <Btn variant="primary" onClick={loadSample} disabled={seeding}>
+              <Sparkles size={14} strokeWidth={2.5} /> {seeding ? 'Preparing…' : 'Load sample project'}
+            </Btn>
+            <Btn variant="secondary" onClick={() => setShowForm(true)}>
+              <Plus size={14} strokeWidth={2.5} /> New Project
+            </Btn>
+          </div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>

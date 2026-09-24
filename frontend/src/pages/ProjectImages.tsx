@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon, FileArchive, ImagePlus, ScanLine, Crosshair, Video } from 'lucide-react'
+import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon, FileArchive, ImagePlus, ScanLine, Crosshair, Video, Bike, Navigation } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Empty } from '../components/ui'
 
@@ -588,6 +588,10 @@ export default function ProjectImages() {
               icon: <Layers size={14} />, onClick: () => navigate(`/projects/${projectId}/depth`) },
             { label: 'Webcam', desc: 'Live real-time inference',
               icon: <Camera size={14} />, onClick: () => navigate(`/projects/${projectId}/webcam`) },
+            { label: 'Road Safety', desc: 'Track road users & check helmets',
+              icon: <Bike size={14} />, onClick: () => navigate(`/projects/${projectId}/road-safety`) },
+            { label: 'Steering Guide', desc: 'Which way to move the wheel',
+              icon: <Navigation size={14} />, onClick: () => navigate(`/projects/${projectId}/guidance`) },
           ]} />
         </>}
       />

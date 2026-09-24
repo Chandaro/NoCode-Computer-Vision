@@ -15,6 +15,8 @@ const CustomModel   = lazy(() => import('./pages/CustomModel'))
 const Webcam        = lazy(() => import('./pages/Webcam'))
 const Pose          = lazy(() => import('./pages/Pose'))
 const Segmentation  = lazy(() => import('./pages/Segmentation'))
+const RoadSafety    = lazy(() => import('./pages/RoadSafety'))
+const Guidance      = lazy(() => import('./pages/Guidance'))
 const Depth         = lazy(() => import('./pages/Depth'))
 
 function Nav() {
@@ -71,6 +73,8 @@ export default function App() {
               <Route path="/projects/:id/webcam"            element={<Webcam />} />
               <Route path="/projects/:id/pose"              element={<Pose />} />
               <Route path="/projects/:id/segment"           element={<Segmentation />} />
+              <Route path="/projects/:id/road-safety"       element={<RoadSafety />} />
+              <Route path="/projects/:id/guidance"          element={<Guidance />} />
               <Route path="/projects/:id/depth"             element={<Depth />} />
             </Routes>
           </Suspense>

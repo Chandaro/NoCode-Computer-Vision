@@ -61,6 +61,11 @@ export interface Detection {
 export interface InferResult {
   detections: Detection[]
   image_w: number; image_h: number; count: number
+  meta?: {
+    sliced: boolean; tiles: number; slice_size: number; slice_overlap: number
+    tta: boolean; agnostic_nms: boolean; imgsz: number; merge: string
+    raw_boxes: number; time_ms: number
+  }
 }
 
 export interface ClsPrediction {
