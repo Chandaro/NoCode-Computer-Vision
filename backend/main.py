@@ -18,6 +18,10 @@ import models as _models  # noqa: F401
 from routers import projects, images, annotations, training
 from routers import analytics, evaluation, export, classification, infer, external_models
 from routers import custom as custom_router
+from routers import sample as sample_router
+from routers import advanced_infer as adv_router
+from routers import road_safety as road_router
+from routers import guidance as guide_router
 from routers import pose as pose_router
 from routers import segmentation as seg_router
 from routers import depth as depth_router
@@ -58,6 +62,10 @@ api.include_router(classification.router)
 api.include_router(infer.router)
 api.include_router(external_models.router)
 api.include_router(custom_router.router)
+api.include_router(sample_router.router)
+api.include_router(adv_router.router)
+api.include_router(road_router.router)
+api.include_router(guide_router.router)
 api.include_router(pose_router.router)
 api.include_router(seg_router.router)
 api.include_router(depth_router.router)
