@@ -817,7 +817,7 @@ export default function Annotate() {
   const iconBtn = (active = false): React.CSSProperties => ({
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 6px',
     borderRadius: 6, border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-    background: active ? 'rgba(88,101,242,0.15)' : 'var(--surface2)',
+    background: active ? 'rgba(228,180,63,0.15)' : 'var(--surface2)',
     color: active ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer',
     fontSize: 10, fontWeight: 500, transition: 'all 0.12s',
   })
@@ -870,7 +870,7 @@ export default function Annotate() {
           display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px',
           borderRadius: 6, border: `1px solid ${saved ? 'var(--success)' : 'var(--accent)'}`,
           background: saved ? 'rgba(34,197,94,0.12)' : 'var(--accent)',
-          color: saved ? 'var(--success)' : '#fff', cursor: 'pointer',
+          color: saved ? 'var(--success)' : 'var(--on-accent)', cursor: 'pointer',
           fontSize: 13, fontWeight: 500, transition: 'all 0.15s',
         }}>
           <Save size={13} /> {saved ? 'Saved!' : 'Save'}
@@ -893,13 +893,13 @@ export default function Annotate() {
                   style={iconBtn(tool === t.id)}>
                   {t.icon}
                   <span>{t.label}</span>
-                  {t.hint && <kbd style={{ fontSize: 9, opacity: 0.5, fontFamily: 'JetBrains Mono, monospace' }}>{t.hint}</kbd>}
+                  {t.hint && <kbd style={{ fontSize: 9, opacity: 0.5, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{t.hint}</kbd>}
                 </button>
               ))}
             </div>
             {tool === 'polygon' && polyPts.length > 0 && (
               <div style={{ marginTop: 8, padding: '7px 9px',
-                background: 'rgba(88,101,242,0.08)', border: '1px solid rgba(88,101,242,0.25)',
+                background: 'rgba(228,180,63,0.08)', border: '1px solid rgba(228,180,63,0.25)',
                 borderRadius: 6, fontSize: 11, color: '#a5b4fc' }}>
                 <p>{polyPts.length} pts — click near start or dbl-click to close</p>
                 <button onClick={() => setPolyPts([])}
@@ -919,7 +919,7 @@ export default function Annotate() {
                 <ZoomOut size={13} />
               </button>
               <span style={{ flex: 1, textAlign: 'center', fontSize: 11,
-                color: 'var(--text2)', fontFamily: 'JetBrains Mono, monospace' }}>
+                color: 'var(--text2)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                 {Math.round(zoom * 100)}%
               </span>
               <button onClick={() => setZoom(z => clamp(z * 1.3, 0.15, 15))} style={zoomBtn}>
@@ -942,7 +942,7 @@ export default function Annotate() {
                 <button key={i} onClick={() => setActiveClass(i)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px',
                     borderRadius: 6, border: `1px solid ${activeClass === i ? 'var(--accent)' : 'var(--border)'}`,
-                    background: activeClass === i ? 'rgba(88,101,242,0.12)' : 'var(--surface2)',
+                    background: activeClass === i ? 'rgba(228,180,63,0.12)' : 'var(--surface2)',
                     color: activeClass === i ? 'var(--accent)' : 'var(--text2)',
                     cursor: 'pointer', fontSize: 12, textAlign: 'left', transition: 'all 0.12s' }}>
                   <span style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
@@ -972,7 +972,7 @@ export default function Annotate() {
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '5px 8px', borderRadius: 5, cursor: 'pointer',
                     border: `1px solid ${selected === i ? 'var(--accent)' : 'var(--border)'}`,
-                    background: selected === i ? 'rgba(88,101,242,0.10)' : 'var(--surface2)',
+                    background: selected === i ? 'rgba(228,180,63,0.10)' : 'var(--surface2)',
                     transition: 'all 0.1s' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
@@ -1083,7 +1083,7 @@ export default function Annotate() {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                     <span style={{ fontSize: 10, color: 'var(--text2)' }}>Conf</span>
-                    <span style={{ fontSize: 10, color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}>
+                    <span style={{ fontSize: 10, color: 'var(--text)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                       {Math.round(autoConf * 100)}%
                     </span>
                   </div>
@@ -1101,7 +1101,7 @@ export default function Annotate() {
                         <button onClick={autoAnnotate} disabled={busy || !autoRunId || noModel}
                           title="Suggest annotations on this image (review before saving)"
                           style={{ flex: 1, padding: '6px 0', background: 'var(--accent)',
-                            border: '1px solid var(--accent)', borderRadius: 5, color: '#fff',
+                            border: '1px solid var(--accent)', borderRadius: 5, color: 'var(--on-accent)',
                             fontSize: 11, fontFamily: 'inherit',
                             cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1 }}>
                           {autoLoading ? 'Running…' : '⚡ This image'}
@@ -1185,7 +1185,7 @@ export default function Annotate() {
           {/* Hint bar */}
           <div style={{ flexShrink: 0, padding: '7px 14px', borderTop: '1px solid var(--border)',
             display: 'flex', flexWrap: 'wrap', gap: '4px 16px',
-            fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+            fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
             {[['1','Select'],['2','Rect'],['3','Polygon'],['4','Point'],['5','✨ SAM click'],['Del','Delete'],['Ctrl+D','Dupe'],['Esc','Cancel']].map(([k,v]) => (
               <span key={k}><kbd style={{ background: 'var(--surface3)', border: '1px solid var(--border2)',
                 borderRadius: 3, padding: '1px 4px', fontSize: 9 }}>{k}</kbd> {v}</span>

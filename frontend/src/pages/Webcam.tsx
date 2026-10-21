@@ -185,7 +185,7 @@ export default function Webcam() {
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 12, color: 'var(--text3)' }}>{label}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)',
-                  fontFamily: 'JetBrains Mono, monospace' }}>{value}</span>
+                  fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{value}</span>
               </div>
             ))}
           </Card>
@@ -203,7 +203,7 @@ export default function Webcam() {
                 <div key={cls} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: getClsColor(i), flexShrink: 0 }} />
                   <span style={{ fontSize: 12, color: 'var(--text2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cls}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}>{count}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{count}</span>
                 </div>
               ))}
             </Card>
@@ -227,7 +227,7 @@ export default function Webcam() {
             {active && <Badge color="green"><Zap size={9} /> Live</Badge>}
             {active && fps > 0 && (
               <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.6)', color: '#fff',
-                padding: '3px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace' }}>
+                padding: '3px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                 {fps} fps
               </span>
             )}
@@ -290,7 +290,7 @@ export default function Webcam() {
                     fontSize: 9, fontWeight: 600,
                     padding: '2px 5px', borderRadius: 3,
                     whiteSpace: 'nowrap', lineHeight: 1.4,
-                    fontFamily: 'JetBrains Mono, monospace',
+                    fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                   }}>
                     {d.class_name} {Math.round(d.conf * 100)}%
                   </span>

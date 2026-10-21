@@ -1,62 +1,69 @@
 @import "tailwindcss";
 
 /* ── Design tokens ──────────────────────────────────────────────────────── */
+/*
+ * "Argus" theme. Argus Panoptes was the hundred-eyed watchman; after Hermes
+ * put him to sleep, Hera set his eyes into the peacock's tail. The palette is
+ * taken from one peacock ocellus: night plumage, verdigris barbs, the gold
+ * eye-ring and the blue-violet iris. Every page reads these tokens, so a
+ * change here re-skins the whole app.
+ */
 :root {
-  /*
-   * Palette sources (real production values, not generated):
-   *   Backgrounds  — GitHub Primer dark  (#0d1117 system)
-   *   Accent       — Linear brand indigo (#5e6ad2) — most designer-loved in 2024
-   *   Secondary    — Radix blueDark.9    (#0090ff)
-   *   Text         — GitHub fg scale     (#e2e8f0 / #8b949e / #484f58)
-   *   Semantic     — GitHub status scale (green / red / orange)
-   */
+  /* Plumage (backgrounds) */
+  --bg:        #071315;
+  --surface:   #0c1d20;
+  --surface2:  #12282c;
+  --surface3:  #19353a;
 
-  /* Backgrounds */
-  --bg:        #0d1117;
-  --surface:   #161b22;
-  --surface2:  #1e2430;
-  --surface3:  #252f3e;
+  /* Barbs (borders) */
+  --border:    #1a3236;
+  --border2:   #28494e;
 
-  /* Borders */
-  --border:    #21262d;
-  --border2:   #30363d;
+  /* Down (text) */
+  --text:      #ecf1e7;
+  --text2:     #a3b9b3;
+  --text3:     #738e89;
 
-  /* Text */
-  --text:      #e2e8f0;
-  --text2:     #8b949e;
-  --text3:     #484f58;
+  /* Eye-ring gold (primary accent). Text on a gold fill uses --on-accent. */
+  --accent:    #e4b43f;
+  --accent-h:  #efc458;
+  --accent-s:  rgba(228, 180, 63, 0.14);
+  --accent-t:  rgba(228, 180, 63, 0.07);
+  --on-accent: #1a1405;
 
-  /* Accent — Linear indigo */
-  --accent:    #5e6ad2;
-  --accent-h:  #6e7ae0;
-  --accent-s:  rgba(94, 106, 210, 0.12);
-  --accent-t:  rgba(94, 106, 210, 0.06);
+  /* Verdigris (secondary) */
+  --secondary:   #3cc4b4;
+  --secondary-h: #52d6c6;
+  --secondary-s: rgba(60, 196, 180, 0.12);
+  --secondary-t: rgba(60, 196, 180, 0.06);
 
-  /* Secondary — Radix blue */
-  --secondary:   #0090ff;
-  --secondary-h: #0084f0;
-  --secondary-s: rgba(0, 144, 255, 0.10);
-  --secondary-t: rgba(0, 144, 255, 0.05);
+  /* Iris (art + focus only) */
+  --iris:      #5866e8;
 
-  /* Semantic — GitHub status scale */
-  --success:   #3fb950;
-  --success-s: rgba(63, 185, 80, 0.10);
-  --danger:    #f85149;
-  --danger-s:  rgba(248, 81, 73, 0.10);
-  --warn:      #d29922;
-  --warn-s:    rgba(210, 153, 34, 0.10);
+  /* Semantic */
+  --success:   #6acb8e;
+  --success-s: rgba(106, 203, 142, 0.12);
+  --danger:    #f06a5e;
+  --danger-s:  rgba(240, 106, 94, 0.12);
+  --warn:      #f39a4a;
+  --warn-s:    rgba(243, 154, 74, 0.12);
 
-  /* Radius */
-  --radius:    3px;
-  --radius-sm: 2px;
-  --radius-lg: 4px;
-  --radius-xl: 6px;
+  /* Radius: small for controls, larger for panels. */
+  --radius:    8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
 
-  /* Shadows — none */
-  --shadow-xs: none;
-  --shadow-sm: none;
-  --shadow:    none;
-  --shadow-lg: none;
+  --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.25);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow:    0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5);
+
+  --font-display: 'Gloock', 'Iowan Old Style', Georgia, serif;
+  --font-body:    'Schibsted Grotesk Variable', 'Schibsted Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono Variable', 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+
+  color-scheme: dark;
 }
 
 /* ── Reset ──────────────────────────────────────────────────────────────── */
@@ -66,35 +73,37 @@
 html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
-  line-height: 1.6;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  line-height: 1.55;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
 }
 
-/* ── Monospace ──────────────────────────────────────────────────────────── */
-code, pre, .mono {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+/* A very faint barb texture behind everything, so empty space reads as plumage. */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 85% -10%, rgba(60, 196, 180, 0.07), transparent 60%),
+    repeating-linear-gradient(115deg, rgba(60, 196, 180, 0.018) 0 1px, transparent 1px 7px);
 }
 
+/* ── Monospace ──────────────────────────────────────────────────────────── */
+code, pre, .mono { font-family: var(--font-mono); }
+
 /* ── Scrollbar ──────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 0; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 8px; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
 /* ── Selection ──────────────────────────────────────────────────────────── */
-::selection { background: rgba(94, 106, 210, 0.30); }
+::selection { background: rgba(228, 180, 63, 0.35); color: var(--text); }
 
 /* ── Focus ring ─────────────────────────────────────────────────────────── */
-:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 0;
-}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn-primary:hover:not(:disabled) {
@@ -116,8 +125,9 @@ code, pre, .mono {
 
 /* ── Button transitions — minimal ────────────────────────────────────────── */
 button, a[class^="btn-"] {
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  transition: background 0.14s, color 0.14s, border-color 0.14s, transform 0.14s;
 }
+.btn-primary:active:not(:disabled), .btn-secondary:active:not(:disabled) { transform: translateY(1px); }
 
 /* ── Range input — thumb is rendered as a real DOM element in the Slider  ── */
 /* component; these rules only style the invisible native input underneath.  */
@@ -138,14 +148,14 @@ input[type=range]::-moz-range-track    { background: transparent; height: 3px; }
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23484f58' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23738e89' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px !important;
 }
 
 /* ── Cards ───────────────────────────────────────────────────────────────── */
-.card-hover { transition: border-color 0.1s; }
+.card-hover { transition: border-color 0.14s; }
 .card-hover:hover { border-color: var(--border2) !important; }
 
 /* ── Inputs ──────────────────────────────────────────────────────────────── */
@@ -164,7 +174,7 @@ textarea:focus {
 /* ── Recharts ────────────────────────────────────────────────────────────── */
 .recharts-cartesian-axis-tick-value {
   font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   fill: var(--text3);
 }
 .recharts-tooltip-wrapper { filter: none; }
@@ -197,16 +207,15 @@ textarea:focus {
 .layer-card { animation: layerSlideIn 0.26s cubic-bezier(0.16, 1, 0.3, 1); }
 .drop-indicator { animation: dropPulse 0.9s ease-in-out infinite; }
 
-/* ── Display / gaming fonts ─────────────────────────────────────────────────── */
-/* Orbitron = sci-fi / gaming display. Rajdhani = techy condensed UI labels. */
+/* ── Display fonts ─────────────────────────────────────────────────────────── */
+/* Gloock ships one weight; pin it so inline fontWeight never fakes a bold. */
 .font-display {
-  font-family: 'Orbitron', 'JetBrains Mono', sans-serif;
-  letter-spacing: 0.01em;
+  font-family: var(--font-display);
+  font-weight: 400 !important;
+  font-synthesis: none;
+  letter-spacing: 0 !important;
 }
-.font-tech {
-  font-family: 'Rajdhani', 'Inter', sans-serif;
-  letter-spacing: 0.02em;
-}
+.font-tech { font-family: var(--font-body); letter-spacing: 0.01em; }
 
 /* ── Guide figure animations (looping, GIF-like) ───────────────────────────── */
 @keyframes augFlipX { 0%,15% { transform: scaleX(1); } 50% { transform: scaleX(-1); } 85%,100% { transform: scaleX(1); } }
@@ -225,3 +234,70 @@ textarea:focus {
 .stage-flow { animation: stageFlow 2.4s ease-in-out infinite; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Argus shell ─────────────────────────────────────────────────────────── */
+.argus-nav-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--text2); text-decoration: none;
+  border: 1px solid transparent;
+}
+.argus-nav-link:hover { color: var(--text); background: var(--surface2); }
+.argus-nav-link.active {
+  color: var(--text); background: var(--accent-t);
+  border-color: rgba(228, 180, 63, 0.28);
+}
+.argus-nav-link .pip {
+  width: 7px; height: 7px; border-radius: 50%;
+  border: 1.5px solid var(--text3); flex-shrink: 0;
+}
+.argus-nav-link.active .pip { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 3px rgba(228,180,63,0.18); }
+
+.argus-layout { display: grid; grid-template-columns: 212px minmax(0, 1fr); gap: 28px; align-items: start; }
+.argus-rail { position: sticky; top: 76px; }
+@media (max-width: 1000px) {
+  .argus-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .argus-rail { position: static; }
+  .argus-rail-groups { display: flex !important; gap: 4px !important; overflow-x: auto; padding-bottom: 6px; }
+  .argus-rail-groups > div { display: flex; gap: 4px; flex-shrink: 0; }
+  .argus-rail-groups h3 { display: none; }
+  .argus-nav-link { white-space: nowrap; }
+}
+
+.project-card {
+  position: relative; text-align: left; width: 100%;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 18px 18px 16px;
+  cursor: pointer; color: inherit; font: inherit;
+  display: flex; flex-direction: column; gap: 14px;
+  transition: border-color 0.16s, background 0.16s;
+}
+.project-card:hover, .project-card:focus-visible { border-color: rgba(228,180,63,0.45); background: #0f2326; }
+.project-card .card-delete { opacity: 0; transition: opacity 0.14s, color 0.14s; }
+.project-card:hover .card-delete, .project-card:focus-within .card-delete { opacity: 1; }
+.project-card .card-delete:hover { color: var(--danger) !important; }
+
+.argus-hero-veil {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(7,19,21,0.96) 0%, rgba(7,19,21,0.82) 30%, rgba(7,19,21,0.15) 62%, rgba(7,19,21,0) 100%),
+    linear-gradient(0deg, rgba(7,19,21,0.9), rgba(7,19,21,0) 30%);
+}
+@media (max-width: 700px) {
+  .argus-hero-veil { background: linear-gradient(0deg, rgba(7,19,21,0.97) 0%, rgba(7,19,21,0.88) 55%, rgba(7,19,21,0.2) 100%); }
+}
+
+@keyframes argusRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.argus-rise { animation: argusRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes argusBlink { 0%, 86%, 100% { transform: scaleY(1); } 92% { transform: scaleY(0.1); } }
+.argus-blink { display: inline-flex; animation: argusBlink 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .animate-spin { animation-duration: 1s !important; animation-iteration-count: infinite !important; }
+}

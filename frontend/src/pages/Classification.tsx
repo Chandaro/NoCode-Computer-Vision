@@ -421,7 +421,7 @@ export default function Classification() {
                   borderRadius: 6, padding: '8px 16px', textAlign: 'center' }}>
                   <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 2 }}>Val Accuracy</p>
                   <p style={{ fontSize: 18, fontWeight: 600,
-                    fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>
+                    fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--accent)' }}>
                     {(progress.accuracy * 100).toFixed(1)}%
                   </p>
                 </div>
@@ -494,7 +494,7 @@ export default function Classification() {
                   <Tooltip {...TT} formatter={(v: unknown) => [`${(v as number).toFixed(1)}%`, 'Top-1']} />
                   <Bar dataKey="acc" radius={[3,3,0,0]}>
                     {runs.filter(r => r.status === 'done').map((_, i) => (
-                      <Cell key={i} fill={['#5865f2','#22c55e','#f59e0b','#06b6d4','#a855f7','#ec4899'][i % 6]} />
+                      <Cell key={i} fill={['#e4b43f','#3cc4b4','#5866e8','#f39a4a','#c46a9a','#6acb8e'][i % 6]} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -579,7 +579,7 @@ export default function Classification() {
                           <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>
                             {inferResult.top1.class_name}
                           </p>
-                          <p style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace',
+                          <p style={{ fontSize: 13, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                             color: 'var(--accent)' }}>
                             {(inferResult.top1.probability * 100).toFixed(1)}%
                           </p>
@@ -590,7 +590,7 @@ export default function Classification() {
                           alignItems: 'center', fontSize: 12, color: 'var(--text2)',
                           padding: '3px 0', borderTop: i === 0 ? '1px solid var(--border)' : 'none' }}>
                           <span>{p.class_name}</span>
-                          <span style={{ fontFamily: 'JetBrains Mono, monospace',
+                          <span style={{ fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                             color: 'var(--text3)', fontSize: 11 }}>
                             {(p.probability * 100).toFixed(1)}%
                           </span>
@@ -647,7 +647,7 @@ export default function Classification() {
                               <span style={{ fontSize: 13, color: 'var(--text)',
                                 fontWeight: 500 }}>Run #{run.id}</span>
                               <span style={{ fontSize: 11, color: 'var(--text3)',
-                                fontFamily: 'JetBrains Mono, monospace' }}>
+                                fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                                 {run.base_model} · {run.epochs} ep
                               </span>
                             </div>
@@ -658,12 +658,12 @@ export default function Classification() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             {acc1 !== null && (
                               <div style={{ textAlign: 'right' }}>
-                                <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace',
+                                <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                                   color: 'var(--accent)' }}>
                                   top-1: {(acc1 * 100).toFixed(1)}%
                                 </span>
                                 {acc5 !== null && (
-                                  <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace',
+                                  <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                                     color: 'var(--text3)', marginLeft: 8 }}>
                                     top-5: {(acc5 * 100).toFixed(1)}%
                                   </span>
@@ -738,14 +738,14 @@ export default function Classification() {
                                             const good = v >= 0.7
                                             return (
                                               <td key={k} style={{ padding: '4px 8px', textAlign: 'center',
-                                                fontFamily: 'JetBrains Mono, monospace',
+                                                fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                                                 color: good ? 'var(--success,#22c55e)' : v < 0.4 ? 'var(--danger,#f87171)' : 'var(--warn,#f59e0b)' }}>
                                                 {(v * 100).toFixed(1)}%
                                               </td>
                                             )
                                           })}
                                           <td style={{ padding: '4px 8px', textAlign: 'center',
-                                            color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+                                            color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                                             {m.support}
                                           </td>
                                         </tr>
@@ -796,7 +796,7 @@ export default function Classification() {
                                                     ? `rgba(34,197,94,${intensity * 0.6})`
                                                     : intensity > 0.1 ? `rgba(248,113,113,${intensity * 0.5})` : 'transparent',
                                                   color: intensity > 0.4 ? '#fff' : 'var(--text2)',
-                                                  fontFamily: 'JetBrains Mono, monospace',
+                                                  fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                                                   fontWeight: isCorrect ? 600 : 400,
                                                   borderRadius: 3,
                                                 }}>

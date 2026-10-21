@@ -41,7 +41,7 @@ export default function EstimateCard(
             <div style={{ position: 'absolute', left: `${freePct}%`, top: 0, bottom: 0, width: 2, background: 'var(--text3)' }} title="Free VRAM" />
             <div style={{ height: '100%', width: `${pct}%`, background: c, borderRadius: 4, transition: 'width 0.2s' }} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
             <span>~{estimate.est_vram_gb} GB needed</span>
             <span>{g.free_gb} GB free / {g.total_gb} GB</span>
           </div>
