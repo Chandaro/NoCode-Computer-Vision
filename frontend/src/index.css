@@ -437,9 +437,16 @@ textarea:focus {
 @keyframes kwRake { from { transform: translateX(-120px); } to { transform: translateX(460px); } }
 .kw-rake { animation: kwRake 7s ease-in-out infinite; }
 @keyframes kwDraw { from { stroke-dashoffset: 420; } to { stroke-dashoffset: 0; } }
-.kw-roots path { stroke-dasharray: 420; animation: kwDraw 3.2s cubic-bezier(0.45, 0, 0.2, 1) both; }
-.kw-roots path:nth-child(2) { animation-delay: 0.3s; } .kw-roots path:nth-child(3) { animation-delay: 0.6s; }
-.kw-roots path:nth-child(4) { animation-delay: 0.9s; } .kw-roots path:nth-child(5) { animation-delay: 1.2s; }
+@keyframes kwGrow { from { transform: scaleY(0.05); } to { transform: scaleY(1); } }
+.kw-roots-fill path { transform-box: fill-box; transform-origin: top; animation: kwGrow 3s cubic-bezier(0.45, 0, 0.2, 1) both; }
+.kw-roots-fill path:nth-child(2) { animation-delay: 0.3s; } .kw-roots-fill path:nth-child(3) { animation-delay: 0.6s; }
+.kw-roots-fill path:nth-child(4) { animation-delay: 0.9s; } .kw-roots-fill path:nth-child(5) { animation-delay: 1.2s; }
+@keyframes kwShadow { from { transform: translateX(-80px); } to { transform: translateX(380px); } }
+.kw-shadow { animation: kwShadow 12s ease-in-out infinite alternate; }
+@keyframes kwCloud { from { transform: translateX(0); } to { transform: translateX(40px); } }
+.kw-cloud { animation: kwCloud 9s ease-in-out infinite alternate; }
+@keyframes kwWave { from { transform: translateX(0); } to { transform: translateX(14px); } }
+.kw-wave { animation: kwWave 2.4s ease-in-out infinite alternate; }
 @keyframes kwDapple { 0%, 100% { opacity: 0.6; } 40% { opacity: 1; } 70% { opacity: 0.75; } }
 .kw-dapple { animation: kwDapple 5s ease-in-out infinite; }
 @keyframes kwFlicker { 0%, 100% { opacity: 1; } 12% { opacity: 0.86; } 20% { opacity: 0.97; } 46% { opacity: 0.82; } 52% { opacity: 1; } 78% { opacity: 0.9; } }
@@ -475,6 +482,8 @@ textarea:focus {
 .kw-band-palace { background-size: 30px 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='16' viewBox='0 0 30 16'%3E%3Cpath d='M0 13H30' stroke='%23f2c94c' stroke-opacity='.7' stroke-width='1.5'/%3E%3Cpath d='M15 2 L19 12 H11 Z' fill='%23f2c94c' fill-opacity='.75'/%3E%3Cpath d='M3 13 c -2 0 -3 -2 -1 -4 M27 13 c 2 0 3 -2 1 -4' fill='none' stroke='%23ef8a5a' stroke-opacity='.8'/%3E%3C/svg%3E"); }
 .kw-band-tonlesap { background-size: 36px 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='16' viewBox='0 0 36 16'%3E%3Cpath d='M0 6 Q 9 1 18 6 T 36 6' fill='none' stroke='%235fd0c6' stroke-opacity='.7' stroke-width='1.3'/%3E%3Cpath d='M0 12 Q 9 7 18 12 T 36 12' fill='none' stroke='%23f39a5a' stroke-opacity='.5'/%3E%3C/svg%3E"); animation: kwWaves 6s linear infinite; }
 @keyframes kwWaves { to { background-position: 36px center; } }
+.kw-band-bayon { background-size: 24px 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Cpath d='M0 14H24' stroke='%23c9c2a4' stroke-opacity='.6'/%3E%3Cpath d='M12 3 C15 7 15 10 12 13 C9 10 9 7 12 3Z' fill='%238fc4ff' fill-opacity='.6'/%3E%3C/svg%3E"); }
+.kw-band-mural { background-size: 20px 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='16' viewBox='0 0 20 16'%3E%3Crect y='3' width='20' height='10' fill='%236a1e14' fill-opacity='.7'/%3E%3Cpath d='M10 4 L15 8 L10 12 L5 8Z' fill='%23e0a83a'/%3E%3C/svg%3E"); }
 .kw-band, .kh-naga { margin-left: 24px; margin-right: 0; }
 
 /* World textures behind banner titles */
@@ -485,6 +494,8 @@ textarea:focus {
 .kw-tex-taprohm  { background-size: 28px 28px; background-image: radial-gradient(circle at 50% 50%, transparent 7px, rgba(166,209,122,0.12) 7.5px, rgba(166,209,122,0.12) 8.5px, transparent 9px); }
 .kw-tex-sbek     { background-size: 10px 10px; background-image: radial-gradient(circle, rgba(245,160,74,0.18) 1.2px, transparent 1.6px); }
 .kw-tex-palace   { background-size: 22px 14px; background-image: radial-gradient(ellipse at 50% 0, transparent 9px, rgba(242,201,76,0.12) 9.5px, rgba(242,201,76,0.12) 10.5px, transparent 11px); }
+.kw-tex-bayon    { background-size: 36px 18px; background-image: linear-gradient(rgba(201,194,164,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(201,194,164,0.08) 1px, transparent 1px); }
+.kw-tex-mural    { background-size: 26px 26px; background-image: radial-gradient(circle, rgba(224,168,58,0.22) 1.4px, transparent 1.8px), radial-gradient(circle at 0 0, rgba(255,143,107,0.14) 2px, transparent 2.5px); }
 .kw-tex-tonlesap { background-size: 40px 14px; background-image: repeating-linear-gradient(0deg, transparent 0 11px, rgba(95,208,198,0.1) 11px 12px); }
 
 /* World picker in the rail */
@@ -513,7 +524,7 @@ textarea:focus {
   background: rgba(0,0,0,0.5); border: 1px solid rgba(var(--world-rgb), 0.55); backdrop-filter: blur(3px); }
 .kw-card-tag .font-khmer { color: var(--world-accent); font-size: 10.5px; margin-right: 3px; }
 .project-card:hover, .project-card:focus-visible { border-color: rgba(var(--world-rgb), 0.6) !important; }
-.project-card .kw-fill :is(.kw-pulse, .kw-ripple, .kw-glint, .kw-star, .kw-rake, .kw-dapple, .kw-flicker, .kw-sway, .kw-fire path, .kw-shine, .kw-lamp, .kw-birds, .kw-boat, .kw-oars) { animation-play-state: paused; }
-.project-card:hover .kw-fill :is(.kw-pulse, .kw-ripple, .kw-glint, .kw-star, .kw-rake, .kw-dapple, .kw-flicker, .kw-sway, .kw-fire path, .kw-shine, .kw-lamp, .kw-birds, .kw-boat, .kw-oars) { animation-play-state: running; }
+.project-card .kw-fill :is(.kw-pulse, .kw-ripple, .kw-glint, .kw-star, .kw-rake, .kw-dapple, .kw-flicker, .kw-sway, .kw-fire path, .kw-shine, .kw-lamp, .kw-birds, .kw-boat, .kw-oars, .kw-shadow, .kw-cloud, .kw-wave) { animation-play-state: paused; }
+.project-card:hover .kw-fill :is(.kw-pulse, .kw-ripple, .kw-glint, .kw-star, .kw-rake, .kw-dapple, .kw-flicker, .kw-sway, .kw-fire path, .kw-shine, .kw-lamp, .kw-birds, .kw-boat, .kw-oars, .kw-shadow, .kw-cloud, .kw-wave) { animation-play-state: running; }
 .kw-swatch * { animation: none !important; }
 .kw-swatch .kw-boat { transform: translate(260px, 166px); }

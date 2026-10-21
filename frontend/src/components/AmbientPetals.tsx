@@ -8,10 +8,11 @@ import { useEffect, useRef } from 'react'
  *   embers     sparks rising from the coconut-husk fire (Sbek Thom)
  *   gold       gold-leaf flakes glinting (Royal Palace)
  *   fireflies  fireflies over the lake (Tonle Sap)
+ *   motes      stone dust drifting in sunlight (Bayon)
  * Deliberately faint and low-frame-rate so it never competes with the work.
  * Pauses when the tab is hidden; does nothing with reduced motion.
  */
-export type ParticleMode = 'petals' | 'roses' | 'leaves' | 'embers' | 'gold' | 'fireflies'
+export type ParticleMode = 'petals' | 'roses' | 'leaves' | 'embers' | 'gold' | 'fireflies' | 'motes'
 
 const STYLE: Record<ParticleMode, { colors: string[]; shape: 'petal' | 'leaf' | 'dot' | 'flake'; n: number; vy: [number, number]; size: [number, number]; alpha: [number, number]; glow?: boolean }> = {
   petals:    { colors: ['234,143,162', '242,166,182', '247,201,210'], shape: 'petal', n: 14, vy: [0.12, 0.32], size: [6, 13], alpha: [0.22, 0.42] },
@@ -19,6 +20,7 @@ const STYLE: Record<ParticleMode, { colors: string[]; shape: 'petal' | 'leaf' | 
   leaves:    { colors: ['122,170,90', '166,209,122', '200,180,110'], shape: 'leaf', n: 13, vy: [0.18, 0.4], size: [7, 14], alpha: [0.25, 0.45] },
   embers:    { colors: ['255,179,71', '255,122,41', '255,213,154'], shape: 'dot', n: 34, vy: [-0.55, -0.25], size: [1, 2.4], alpha: [0.5, 0.9], glow: true },
   gold:      { colors: ['242,201,76', '246,214,112', '255,241,200'], shape: 'flake', n: 22, vy: [0.08, 0.22], size: [2, 4.5], alpha: [0.35, 0.7] },
+  motes:     { colors: ['220,226,214', '201,194,164', '143,196,255'], shape: 'dot', n: 30, vy: [-0.06, 0.1], size: [0.8, 1.8], alpha: [0.25, 0.55] },
   fireflies: { colors: ['220,255,170', '255,230,140', '170,240,220'], shape: 'dot', n: 26, vy: [-0.08, 0.08], size: [1.2, 2.2], alpha: [0.5, 0.95], glow: true },
 }
 
