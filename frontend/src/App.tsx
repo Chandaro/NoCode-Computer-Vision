@@ -3,6 +3,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import Projects from './pages/Projects'   // landing page — keep eager for instant first paint
 import { PrasatMark, Lotus } from './components/Sigil'
 import ProjectRail, { useProject } from './components/ProjectRail'
+import AmbientPetals from './components/AmbientPetals'
 
 // Heavy / less-frequent pages are code-split so the initial bundle stays small.
 // Each becomes its own chunk, fetched on first navigation.
@@ -72,13 +73,14 @@ function PageFallback() {
 
 function Frame({ children }: { children: ReactNode }) {
   const route = useProjectRoute()
+  const { pathname } = useLocation()
   const withRail = route && !FULL_BLEED.has(route.section)
   return (
     <main style={{ flex: 1, padding: '28px 24px 48px', width: '100%' }}>
       {withRail ? (
         <div className="kh-layout" style={{ maxWidth: 1340, margin: '0 auto' }}>
           <ProjectRail projectId={route.id} section={route.section} />
-          <div style={{ minWidth: 0 }}>{children}</div>
+          <div key={pathname} className="kh-page" style={{ minWidth: 0 }}>{children}</div>
         </div>
       ) : children}
     </main>
@@ -88,7 +90,8 @@ function Frame({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <AmbientRoute />
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
         <TopBar />
         <Frame>
           <Suspense fallback={<PageFallback />}>
@@ -123,4 +126,11 @@ function NotFound() {
       <NavLink to="/" style={{ display: 'inline-block', marginTop: 20, color: 'var(--accent)' }}>Open projects</NavLink>
     </div>
   )
+}
+
+// Drifting petals everywhere except the canvas editors, where nothing should move behind the work.
+function AmbientRoute() {
+  const route = useProjectRoute()
+  if (route && FULL_BLEED.has(route.section)) return null
+  return <AmbientPetals density={route ? 0.7 : 1} />
 }

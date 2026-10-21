@@ -496,6 +496,7 @@ export default function ProjectImages() {
       <PageHeader
         back={() => navigate('/')}
         title={project?.name ?? '…'}
+        khmer="រូបភាព និងស្លាក"
         subtitle={`${total} images · ${annotated} annotated · ${pct}%`}
       />
 
@@ -793,7 +794,7 @@ export default function ProjectImages() {
                   {shown.map(img => {
                     const key = `${img.class_name}/${img.filename}`
                     return (
-                      <div key={key}
+                      <div key={key} className="kh-tile"
                         style={{ background: '#0b0919', borderRadius: 10, overflow: 'hidden',
                           position: 'relative', aspectRatio: '1 / 1', outline: '1px solid var(--border)',
                           outlineOffset: -1, transition: 'transform 0.12s ease, box-shadow 0.12s ease' }}
@@ -1129,7 +1130,7 @@ export default function ProjectImages() {
           {filteredImages.map(img => {
             const isSelected = selected.has(img.id)
             return (
-              <div key={img.id}
+              <div key={img.id} className="kh-tile"
                 onClick={selectMode ? () => toggleSelect(img.id) : undefined}
                 style={{ background: '#0b0919', borderRadius: 10, overflow: 'hidden',
                   position: 'relative', cursor: selectMode ? 'pointer' : 'default', aspectRatio: '1 / 1',

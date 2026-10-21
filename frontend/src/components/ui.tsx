@@ -1,16 +1,21 @@
 import { type ReactNode, type CSSProperties } from 'react'
+import { KbachFrame, NagaRail, Rosette } from './Kbach'
 
 // ── Card ─────────────────────────────────────────────────────────────────────
 export function Card({ children, style, className = '' }: {
   children: ReactNode; style?: CSSProperties; className?: string
 }) {
   return (
-    <div className={`card-hover ${className}`} style={{
+    <div className={`card-hover kh-card ${className}`} style={{
       background: 'var(--surface)',
       border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)',
+      position: 'relative', isolation: 'isolate',
       ...style,
     }}>
+      <span aria-hidden style={{ position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none' }}>
+        <KbachFrame size={22} inset={5} opacity={0.32} />
+      </span>
       {children}
     </div>
   )
@@ -211,51 +216,67 @@ export function TextInput({ value, onChange, placeholder, onKeyDown, type = 'tex
 }
 
 // ── PageHeader ────────────────────────────────────────────────────────────────
-export function PageHeader({ back, title, subtitle, actions }: {
-  back?: () => void; title: string; subtitle?: string; actions?: ReactNode
+// Khmer line shown under each page title. Keyed by the English title.
+const KHMER_TITLES: Record<string, string> = {
+  'Dataset Analytics': 'វិភាគទិន្នន័យ',
+  'Image Classification': 'ការចាត់ថ្នាក់រូបភាព',
+  'Multi-View 3D Reconstruction': 'ការបង្កើតរូបបីវិមាត្រ',
+  'Depth Estimation': 'ការប៉ាន់ស្មានជម្រៅ',
+  'Model Evaluation': 'ការវាយតម្លៃម៉ូដែល',
+  'Pose Estimation': 'ការប៉ាន់ស្មានឥរិយាបថ',
+  'Instance Segmentation': 'ការបែងចែករូបភាព',
+  'Instance Segmentation Training': 'បង្ហាត់ការបែងចែករូបភាព',
+  'Object Detection Training': 'បង្ហាត់ការរកវត្ថុ',
+  'Live Webcam Inference': 'សាកល្បងតាមកាមេរ៉ា',
+}
+
+export function PageHeader({ back, title, subtitle, actions, khmer }: {
+  back?: () => void; title: string; subtitle?: string; actions?: ReactNode; khmer?: string
 }) {
+  const km = khmer ?? KHMER_TITLES[title] ?? (title.startsWith('Conv Builder') ? 'សង់បណ្តាញសរសៃប្រសាទ' : undefined)
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
-      marginBottom: 24,
-      paddingBottom: 18,
-      borderBottom: '1px solid var(--border)',
-    }}>
-      {back && (
-        <button
-          onClick={back}
-          className="btn-ghost"
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 34, height: 34,
-            border: '1px solid var(--border2)',
-            borderRadius: '50%',
-            background: 'var(--surface2)',
-            color: 'var(--text2)', cursor: 'pointer', flexShrink: 0,
-            fontSize: 14,
-          }}
-          aria-label="Go back"
-        >
-          ←
-        </button>
-      )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h1 className="font-display" style={{
-          fontSize: 34, color: 'var(--text)', lineHeight: 1, paddingTop: 3,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {title}
-        </h1>
-        {subtitle && (
-          <p style={{ fontSize: 13, color: 'var(--text2)', marginTop: 4, fontWeight: 400 }}>{subtitle}</p>
+    <header className="kh-banner">
+      <div className="kh-hol" aria-hidden />
+      <Rosette size={220} className="kh-banner-rosette" />
+      <div className="kh-banner-inner">
+        {back && (
+          <button
+            onClick={back}
+            className="btn-ghost"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 36, height: 36,
+              border: '1px solid var(--border2)',
+              borderRadius: '50%',
+              background: 'var(--surface2)',
+              color: 'var(--text2)', cursor: 'pointer', flexShrink: 0,
+              fontSize: 14,
+            }}
+            aria-label="Go back"
+          >
+            ←
+          </button>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 className="font-display kh-title" style={{
+            fontSize: 36, color: 'var(--text)', lineHeight: 1, paddingTop: 4,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {title}
+          </h1>
+          {km && <p className="font-khmer" lang="km" style={{ fontSize: 14, color: 'var(--accent)', marginTop: 2 }}>{km}</p>}
+          {subtitle && (
+            <p style={{ fontSize: 13, color: 'var(--text2)', marginTop: km ? 0 : 4, fontWeight: 400 }}>{subtitle}</p>
+          )}
+        </div>
+        {actions && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+            {actions}
+          </div>
         )}
       </div>
-      {actions && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
-          {actions}
-        </div>
-      )}
-    </div>
+      <NagaRail />
+    </header>
   )
 }
 
@@ -268,13 +289,16 @@ export function Empty({ icon: Icon, message, sub }: {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       justifyContent: 'center', padding: '56px 24px', gap: 14,
     }}>
-      <div style={{
-        width: 52, height: 52,
-        background: 'var(--surface2)', border: '1px solid var(--border2)',
-        borderRadius: '50%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Icon size={20} style={{ color: 'var(--text3)' }} strokeWidth={1.5} />
+      <div style={{ position: 'relative', width: 96, height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Rosette size={96} style={{ position: 'absolute', inset: 0, color: 'var(--accent)', opacity: 0.35 }} />
+        <div style={{
+          position: 'relative', width: 46, height: 46,
+          background: 'var(--surface2)', border: '1px solid var(--border2)',
+          borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon size={19} style={{ color: 'var(--accent)' }} strokeWidth={1.5} />
+        </div>
       </div>
       <div style={{ textAlign: 'center', maxWidth: 280 }}>
         <p style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 600 }}>{message}</p>
@@ -377,7 +401,7 @@ export function ProgressBar({ value, max, label, sublabel }: {
         </div>
       )}
       <div style={{ height: 5, background: 'var(--surface3)', borderRadius: 5, overflow: 'hidden' }}>
-        <div style={{
+        <div className={pct > 0 && pct < 100 ? 'kh-progress-live' : undefined} style={{
           height: '100%', width: `${pct}%`, borderRadius: 5,
           background: 'linear-gradient(90deg, var(--secondary), var(--accent))',
           transition: 'width 0.3s',
