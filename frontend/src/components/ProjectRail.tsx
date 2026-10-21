@@ -48,7 +48,7 @@ export default function ProjectRail({ projectId, section }: { projectId: string;
   return (
     <aside className="kh-rail" aria-label="Project tools">
       <div className="kh-rail-sky" style={{ height: 116 }}>
-        {world && <world.Scene className="kw-fill" />}
+        {world && <world.Scene className="kw-fill kw-still" />}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 9,
           padding: '22px 10px 8px', background: 'linear-gradient(0deg, rgba(0,0,0,0.78), rgba(0,0,0,0))' }}>
           <Lotus size={28} seed={projectId} />
@@ -74,9 +74,8 @@ export default function ProjectRail({ projectId, section }: { projectId: string;
             {WORLDS.map(w => (
               <button key={w.id} className="kw-swatch" aria-pressed={w.id === world.id}
                 title={`${w.en}: ${w.blurb}`} aria-label={`Use ${w.en} art`}
-                onClick={() => setWorld(projectId, w.id)}>
-                <w.Scene className="kw-fill" />
-              </button>
+                onClick={() => setWorld(projectId, w.id)}
+                style={{ background: `radial-gradient(circle at 50% 70%, ${w.vars['--accent']} 0 28%, transparent 30%), linear-gradient(160deg, ${w.vars['--surface3']}, ${w.vars['--bg']})` }} />
             ))}
           </div>
         </div>

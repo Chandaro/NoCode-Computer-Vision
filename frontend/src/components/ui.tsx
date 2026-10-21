@@ -1,4 +1,4 @@
-import { type ReactNode, type CSSProperties } from 'react'
+import { type ReactNode, type CSSProperties, useEffect, useRef } from 'react'
 import { KbachFrame, NagaRail, Rosette } from './Kbach'
 import { useCurrentWorld } from './KhmerWorlds'
 
@@ -238,11 +238,20 @@ export function PageHeader({ back, title, subtitle, actions, khmer }: {
 }) {
   const km = khmer ?? KHMER_TITLES[title] ?? (title.startsWith('Conv Builder') ? 'សង់បណ្តាញសរសៃប្រសាទ' : undefined)
   const world = useCurrentWorld()
+  const ref = useRef<HTMLElement>(null)
+  // stop the scene's motion while the banner is scrolled out of view
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !('IntersectionObserver' in window)) return
+    const io = new IntersectionObserver(([e]) => el.classList.toggle('kw-offscreen', !e.isIntersecting))
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
   return (
-    <header className={`kh-banner${world ? ` kw-banner kw-${world.id}` : ''}`}>
+    <header ref={ref} className={`kh-banner${world ? ` kw-banner kw-${world.id}` : ''}`}>
       {world ? <>
         <div className={`kw-tex kw-tex-${world.id}${world.id === 'angkor' ? ' kh-hol' : ''}`} aria-hidden />
-        <world.Scene className="kw-banner-scene" />
+        <div className="kw-banner-scene"><world.Scene className="kw-fill" /><span className="kw-scene-fade" /></div>
         <span className="kw-world-tag" aria-hidden>
           <span lang="km" className="font-khmer">{world.km}</span> {world.en}
         </span>

@@ -90,6 +90,10 @@ export default function AngkorField({ height = 420 }: { height?: number }) {
     let raf = 0, visible = true, last = 0
     const t0 = performance.now()
     let lens: { x: number; y: number } | null = null
+    // Once the sun has risen the sky and temple stop changing, so their
+    // colours are cached and only the moat (and the lens) are redrawn.
+    let skyDone = false
+    let aboveCache: Uint8ClampedArray | null = null
 
     const build = () => {
       const rect = canvas.getBoundingClientRect()
@@ -98,6 +102,7 @@ export default function AngkorField({ height = 420 }: { height?: number }) {
       img = ctx.createImageData(W, H)
       lab = new Uint8Array(W * H); val = new Float32Array(W * H); sil = new Uint8Array(W * H)
       g = geometry(W, H)
+      skyDone = false; aboveCache = null
       const { U, hz, cx, towers, palms } = g
       for (let y = 0; y < hz; y++) {
         const h = (hz - y) / U
@@ -146,8 +151,8 @@ export default function AngkorField({ height = 420 }: { height?: number }) {
       const sunR = 0.1 * U, sunX = cx, sunY = hz - (0.08 + 0.3 * p) * U
       const dawn = 0.35 + 0.65 * p
 
-      // pass 1: above the waterline
-      for (let y = 0; y < hz; y++) {
+      // pass 1: above the waterline (skipped once the sunrise has finished)
+      if (!skyDone) for (let y = 0; y < hz; y++) {
         const v = y / hz
         for (let x = 0; x < W; x++) {
           const i = y * W + x
@@ -187,26 +192,41 @@ export default function AngkorField({ height = 420 }: { height?: number }) {
       }
       // colour pass, with the lens
       const d = img.data
-      for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-          const i = y * W + x
-          const th = BAYER[(x & 3) + ((y & 3) << 2)]
-          const cl = lab[i]
-          const rmp = cl === C.SKY ? SKY : cl === C.SUN ? SUN : cl === C.WATER ? WATER
-            : cl === C.PAD ? PAD : cl === C.LOTUS ? BUD : STONE
-          const f = val[i] * (rmp.length - 1)
-          const lo = Math.floor(f)
-          let col = rmp[Math.min(rmp.length - 1, lo + (f - lo > th ? 1 : 0))]
-          if (lens) {
-            const ld = Math.hypot(x - lens.x, y - lens.y)
-            if (ld < LENS) {
-              const edge = (x + 1 < W && lab[i + 1] !== cl) || (y + 1 < H && lab[i + W] !== cl)
-              col = edge ? EDGE : th < 0.8 ? MASK[cl] : col
-            } else if (ld < LENS + 1) col = RING
+      const paint = (y0: number, y1: number, x0: number, x1: number, withLens: boolean) => {
+        for (let y = y0; y < y1; y++) {
+          for (let x = x0; x < x1; x++) {
+            const i = y * W + x
+            const th = BAYER[(x & 3) + ((y & 3) << 2)]
+            const cl = lab[i]
+            const rmp = cl === C.SKY ? SKY : cl === C.SUN ? SUN : cl === C.WATER ? WATER
+              : cl === C.PAD ? PAD : cl === C.LOTUS ? BUD : STONE
+            const f = val[i] * (rmp.length - 1)
+            const lo = Math.floor(f)
+            let col = rmp[Math.min(rmp.length - 1, lo + (f - lo > th ? 1 : 0))]
+            if (withLens && lens) {
+              const ld = Math.hypot(x - lens.x, y - lens.y)
+              if (ld < LENS) {
+                const edge = (x + 1 < W && lab[i + 1] !== cl) || (y + 1 < H && lab[i + W] !== cl)
+                col = edge ? EDGE : th < 0.8 ? MASK[cl] : col
+              } else if (ld < LENS + 1) col = RING
+            }
+            const k = i << 2
+            d[k] = col[0]; d[k + 1] = col[1]; d[k + 2] = col[2]; d[k + 3] = 255
           }
-          const k = i << 2
-          d[k] = col[0]; d[k + 1] = col[1]; d[k + 2] = col[2]; d[k + 3] = 255
         }
+      }
+      if (aboveCache) {
+        d.set(aboveCache)
+        paint(hz, H, 0, W, true)
+      } else {
+        paint(0, hz, 0, W, false)
+        if (p >= 1) { skyDone = true; aboveCache = d.slice(0, hz * W * 4) }
+        paint(hz, H, 0, W, true)
+      }
+      if (lens && lens.y - LENS - 2 < hz) {
+        const ly0 = Math.max(0, Math.floor(lens.y - LENS - 2)), ly1 = Math.min(hz, Math.ceil(lens.y + LENS + 2))
+        const lx0 = Math.max(0, Math.floor(lens.x - LENS - 2)), lx1 = Math.min(W, Math.ceil(lens.x + LENS + 2))
+        paint(ly0, ly1, lx0, lx1, true)
       }
       ctx.putImageData(img, 0, 0)
     }
@@ -214,7 +234,8 @@ export default function AngkorField({ height = 420 }: { height?: number }) {
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop)
       if (!visible || document.hidden) return
-      if (now - last < 40) return
+      // full rate while the sun rises or the lens is in use, then just the slow ripple
+      if (now - last < (lens || !skyDone ? 50 : 100)) return
       last = now
       frame(now)
     }

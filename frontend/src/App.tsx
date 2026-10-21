@@ -36,7 +36,7 @@ function TopBar() {
   const project = useProject(route?.id)
   return (
     <header className="sticky top-0 z-40" style={{
-      background: 'rgba(16, 14, 34, 0.84)', backdropFilter: 'blur(10px)',
+      background: 'color-mix(in srgb, var(--bg) 94%, transparent)',
       borderBottom: '1px solid var(--border)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '0 24px', height: 56 }}>

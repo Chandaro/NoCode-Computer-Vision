@@ -299,7 +299,7 @@ export function SbekScene({ className }: P) {
         </mask>
       </defs>
       <rect width="600" height="200" fill="#0e0a07" />
-      <rect className="kw-flicker" x="236" y="0" width="364" height="176" fill={`url(#${id}scr)`} />
+      <rect x="236" y="0" width="364" height="176" fill={`url(#${id}scr)`} />
       <rect x="236" y="0" width="364" height="176" fill="none" stroke="#2a1408" strokeWidth="6" />
       <g className="kw-sway" style={{ transformOrigin: '420px 200px' }}>
         <path d={shield} fill="#2a1408" mask={`url(#${id}m)`} />
