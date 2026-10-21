@@ -212,8 +212,8 @@ export default function Reconstruct3D() {
           </Card>
 
           {/* DUSt3R install note */}
-          <Card style={{ padding: 14, background: 'rgba(228,180,63,0.06)',
-            border: '1px solid rgba(228,180,63,0.2)' }}>
+          <Card style={{ padding: 14, background: 'rgba(224,168,58,0.06)',
+            border: '1px solid rgba(224,168,58,0.2)' }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>
               First-time setup
             </p>
@@ -237,7 +237,7 @@ export default function Reconstruct3D() {
                 borderRadius: 8, padding: '24px 16px', textAlign: 'center',
                 cursor: files.length < 12 ? 'pointer' : 'default',
                 transition: 'border-color 0.15s',
-                background: files.length >= 2 ? 'rgba(228,180,63,0.04)' : 'transparent',
+                background: files.length >= 2 ? 'rgba(224,168,58,0.04)' : 'transparent',
                 marginBottom: files.length > 0 ? 14 : 0,
               }}>
               <Camera size={28} style={{ color: 'var(--text3)', opacity: 0.5, marginBottom: 8 }} />

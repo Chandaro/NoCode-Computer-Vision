@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import api, { type Project } from '../api'
-import { Ocellus } from './Ocellus'
+import { Lotus } from './Sigil'
 
 // Left-hand tool rail for every page inside a project. Groups follow the
 // dataset each tool needs, so it is clear which annotations feed which model.
@@ -41,11 +41,11 @@ export function useProject(id: string | undefined) {
 export default function ProjectRail({ projectId, section }: { projectId: string; section: string }) {
   const project = useProject(projectId)
   return (
-    <aside className="argus-rail" aria-label="Project tools">
+    <aside className="kh-rail" aria-label="Project tools">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 10px 16px' }}>
-        <Ocellus size={30} seed={projectId} />
+        <Lotus size={32} seed={projectId} />
         <div style={{ minWidth: 0 }}>
-          <p className="font-display" style={{ fontSize: 17, lineHeight: 1.15, color: 'var(--text)',
+          <p className="font-display" style={{ fontSize: 20, lineHeight: 1.1, paddingTop: 2, color: 'var(--text)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {project?.name ?? 'Project'}
           </p>
@@ -54,7 +54,7 @@ export default function ProjectRail({ projectId, section }: { projectId: string;
           </p>
         </div>
       </div>
-      <nav className="argus-rail-groups" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <nav className="kh-rail-groups" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {GROUPS.map(g => (
           <div key={g.title}>
             <h3 style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text3)', padding: '0 10px 4px' }}>{g.title}</h3>
@@ -62,7 +62,7 @@ export default function ProjectRail({ projectId, section }: { projectId: string;
               const active = section === it.to || (it.match?.includes(section) ?? false)
               return (
                 <NavLink key={it.to} to={`/projects/${projectId}/${it.to}`}
-                  className={`argus-nav-link${active ? ' active' : ''}`}
+                  className={`kh-nav-link${active ? ' active' : ''}`}
                   aria-current={active ? 'page' : undefined}>
                   <span className="pip" />
                   {it.label}

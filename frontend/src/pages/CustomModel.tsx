@@ -465,7 +465,7 @@ function makeLabel(text1: string, text2: string, color: string): THREE.Sprite {
   canvas.height = H
   const ctx = canvas.getContext('2d')!
   ctx.clearRect(0, 0, W, H)
-  ctx.font      = '400 20px "Gloock", Georgia, serif'
+  ctx.font      = '400 22px "Koulen", Impact, sans-serif'
   ctx.fillStyle = color
   ctx.textAlign = 'center'
   ctx.fillText(text1, W / 2, 26)
@@ -798,7 +798,7 @@ function draw2DScene(
   const CW   = canvas.width
   const CH   = canvas.height
 
-  ctx.fillStyle = '#040d0e'
+  ctx.fillStyle = '#0b0919'
   ctx.fillRect(0, 0, CW, CH)
 
   const shapes   = [...computeAllShapes(layers, inputH, inputW), [numClasses]]
@@ -2290,8 +2290,8 @@ export default function CustomModel() {
 
       <div style={{ padding: '8px 0 10px', flexShrink: 0 }}>
         <ConvBuilderGuide />
-        <div style={{ padding: '9px 14px', background: 'rgba(228,180,63,0.08)',
-          border: '1px solid rgba(228,180,63,0.22)', borderRadius: 8,
+        <div style={{ padding: '9px 14px', background: 'rgba(224,168,58,0.08)',
+          border: '1px solid rgba(224,168,58,0.22)', borderRadius: 8,
           fontSize: 12, color: '#a5b4fc', lineHeight: 1.6 }}>
           ℹ️ Uses the same classification dataset as the <strong>Image Classification</strong> page — upload images per class there first, then come back to build and train your custom CNN.
         </div>
@@ -2309,7 +2309,7 @@ export default function CustomModel() {
           {/* ── Header: model name + params + input size ────────────────────── */}
           <div style={{ padding: '12px 13px 10px', borderBottom: '1px solid rgba(255,255,255,0.055)', flexShrink: 0 }}>
             <input
-              className="font-display"
+              className="font-tech"
               value={modelName} onChange={e => setModelName(e.target.value)}
               placeholder="Model name"
               style={{
@@ -2371,7 +2371,7 @@ export default function CustomModel() {
                 background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(99,102,241,0.03))',
                 border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, padding: 14, marginBottom: 12,
               }}>
-                <p className="font-display" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)',
+                <p className="font-tech" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)',
                   marginBottom: 4 }}>Pretrained Backbone</p>
                 <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.6 }}>
                   Start from a model already trained on millions of images. It learns your
@@ -2739,7 +2739,7 @@ export default function CustomModel() {
         </div>
 
         {/* ── Center: Canvas (3D or 2D) ───────────────────────────────────── */}
-        <div style={{ flex: 1, position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: '#040d0e' }}>
+        <div style={{ flex: 1, position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: '#0b0919' }}>
           {archMode === 'pretrained' ? (
             <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', gap: 22, padding: 24 }}>
@@ -2760,7 +2760,7 @@ export default function CustomModel() {
                         background: `linear-gradient(135deg, ${s.c}26, ${s.c}0a)`,
                         border: `2px solid ${s.c}`, boxShadow: `0 0 28px ${s.c}44`,
                       }}>
-                        <span className="font-display" style={{ fontSize: (s as any).big ? 13 : 11,
+                        <span className="font-tech" style={{ fontSize: (s as any).big ? 13 : 11,
                           fontWeight: 700, color: s.c, textAlign: 'center', padding: '0 8px' }}>{s.label}</span>
                       </div>
                       <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6,
@@ -2833,7 +2833,7 @@ export default function CustomModel() {
                 disabled={flyMode}
                 style={{
                   padding: '4px 10px', borderRadius: 5,
-                  background: autoRotate && !flyMode ? 'rgba(228,180,63,0.25)' : 'rgba(15,15,18,0.85)',
+                  background: autoRotate && !flyMode ? 'rgba(224,168,58,0.25)' : 'rgba(15,15,18,0.85)',
                   border: `1px solid ${autoRotate && !flyMode ? 'var(--accent)' : 'var(--border2)'}`,
                   color: autoRotate && !flyMode ? 'var(--accent)' : 'var(--text2)',
                   fontSize: 11, cursor: flyMode ? 'default' : 'pointer',
@@ -3122,7 +3122,7 @@ export default function CustomModel() {
                     />
                     <Bar dataKey="acc" radius={[3, 3, 0, 0]}>
                       {allRuns.filter(r => r.status === 'done').map((_, i) => (
-                        <Cell key={i} fill={['#e4b43f','#3cc4b4','#5866e8','#f39a4a','#c46a9a','#6acb8e'][i % 6]} />
+                        <Cell key={i} fill={['#e0a83a','#ea8fa2','#4fb3a9','#f0913a','#9b7fd1','#86c27a'][i % 6]} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -3193,7 +3193,7 @@ export default function CustomModel() {
                         <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 52 }}>
                           {acc1 !== null ? (
                             <>
-                              <p className="font-display" style={{ fontSize: 18, fontWeight: 800,
+                              <p className="font-tech" style={{ fontSize: 18, fontWeight: 800,
                                 color: accColor, lineHeight: 1, margin: 0,
                                 textShadow: `0 0 12px ${accColor}55` }}>
                                 {(acc1 * 100).toFixed(0)}<span style={{ fontSize: 10 }}>%</span>
@@ -3213,7 +3213,7 @@ export default function CustomModel() {
                         {/* Middle: id + config + accuracy bar */}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <span className="font-display" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                            <span className="font-tech" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
                               Run #{run.id}
                             </span>
                             {isBest && <span style={{ fontSize: 10, color: '#22c55e' }} title="Best run">★</span>}

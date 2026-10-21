@@ -558,8 +558,8 @@ export default function Depth() {
                   min={1} max={12} step={0.5} format={v => String(v)} />
               )}
             </Card>
-            <Card style={{ padding: 12, background: 'rgba(228,180,63,0.06)',
-              border: '1px solid rgba(228,180,63,0.2)' }}>
+            <Card style={{ padding: 12, background: 'rgba(224,168,58,0.06)',
+              border: '1px solid rgba(224,168,58,0.2)' }}>
               <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>First-time setup</p>
               <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.6 }}>
                 Run <code style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>setup_dust3r.bat</code> then
@@ -621,7 +621,7 @@ export default function Depth() {
                   border: `2px dashed ${reconFiles.length >= 2 ? 'var(--accent)' : 'var(--border2)'}`,
                   borderRadius: 8, padding: '20px 16px', textAlign: 'center',
                   cursor: reconFiles.length < 12 ? 'pointer' : 'default', marginBottom: 12,
-                  background: reconFiles.length >= 2 ? 'rgba(228,180,63,0.04)' : 'transparent',
+                  background: reconFiles.length >= 2 ? 'rgba(224,168,58,0.04)' : 'transparent',
                 }}>
                 <Camera size={26} style={{ color: 'var(--text3)', opacity: 0.5, marginBottom: 6 }} />
                 <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 2 }}>
@@ -1377,7 +1377,7 @@ export default function Depth() {
 
               {/* Info about two-pass */}
               <div style={{ padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 12,
-                background: 'rgba(228,180,63,0.08)', border: '1px solid rgba(228,180,63,0.18)',
+                background: 'rgba(224,168,58,0.08)', border: '1px solid rgba(224,168,58,0.18)',
                 color: 'var(--text2)', lineHeight: 1.6 }}>
                 <strong style={{ color: 'var(--accent)', display: 'block', marginBottom: 2, fontSize: 11 }}>
                   Two-pass processing

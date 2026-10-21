@@ -2,53 +2,51 @@
 
 /* ── Design tokens ──────────────────────────────────────────────────────── */
 /*
- * "Argus" theme. Argus Panoptes was the hundred-eyed watchman; after Hermes
- * put him to sleep, Hera set his eyes into the peacock's tail. The palette is
- * taken from one peacock ocellus: night plumage, verdigris barbs, the gold
- * eye-ring and the blue-violet iris. Every page reads these tokens, so a
- * change here re-skins the whole app.
+ * "Angkor dawn" theme, drawn from Khmer art: the indigo sky before sunrise
+ * over Angkor Wat, gold leaf from temple murals, lotus pink from the moat,
+ * sandstone for text, monk-robe saffron and rice-field green for status.
+ * Every page reads these tokens, so a change here re-skins the whole app.
  */
 :root {
-  /* Plumage (backgrounds) */
-  --bg:        #071315;
-  --surface:   #0c1d20;
-  --surface2:  #12282c;
-  --surface3:  #19353a;
+  /* Pre-dawn sky (backgrounds) */
+  --bg:        #100e22;
+  --surface:   #17142e;
+  --surface2:  #1e1a3a;
+  --surface3:  #282347;
 
-  /* Barbs (borders) */
-  --border:    #1a3236;
-  --border2:   #28494e;
+  /* Shadow lines (borders) */
+  --border:    #29234a;
+  --border2:   #3b3266;
 
-  /* Down (text) */
-  --text:      #ecf1e7;
-  --text2:     #a3b9b3;
-  --text3:     #738e89;
+  /* Sandstone (text) */
+  --text:      #efe4cf;
+  --text2:     #b9ad9a;
+  --text3:     #8f86a3;
 
-  /* Eye-ring gold (primary accent). Text on a gold fill uses --on-accent. */
-  --accent:    #e4b43f;
-  --accent-h:  #efc458;
-  --accent-s:  rgba(228, 180, 63, 0.14);
-  --accent-t:  rgba(228, 180, 63, 0.07);
-  --on-accent: #1a1405;
+  /* Gold leaf (primary accent). Text on a gold fill uses --on-accent. */
+  --accent:    #e0a83a;
+  --accent-h:  #ebb952;
+  --accent-s:  rgba(224, 168, 58, 0.15);
+  --accent-t:  rgba(224, 168, 58, 0.07);
+  --on-accent: #1d1305;
 
-  /* Verdigris (secondary) */
-  --secondary:   #3cc4b4;
-  --secondary-h: #52d6c6;
-  --secondary-s: rgba(60, 196, 180, 0.12);
-  --secondary-t: rgba(60, 196, 180, 0.06);
+  /* Lotus (secondary) */
+  --secondary:   #ea8fa2;
+  --secondary-h: #f2a6b6;
+  --secondary-s: rgba(234, 143, 162, 0.13);
+  --secondary-t: rgba(234, 143, 162, 0.06);
 
-  /* Iris (art + focus only) */
-  --iris:      #5866e8;
+  /* Moat water (art + charts) */
+  --iris:      #4fb3a9;
 
-  /* Semantic */
-  --success:   #6acb8e;
-  --success-s: rgba(106, 203, 142, 0.12);
-  --danger:    #f06a5e;
-  --danger-s:  rgba(240, 106, 94, 0.12);
-  --warn:      #f39a4a;
-  --warn-s:    rgba(243, 154, 74, 0.12);
+  /* Semantic: rice field, madder red, saffron */
+  --success:   #86c27a;
+  --success-s: rgba(134, 194, 122, 0.13);
+  --danger:    #ef6a55;
+  --danger-s:  rgba(239, 106, 85, 0.13);
+  --warn:      #f0913a;
+  --warn-s:    rgba(240, 145, 58, 0.13);
 
-  /* Radius: small for controls, larger for panels. */
   --radius:    8px;
   --radius-sm: 6px;
   --radius-lg: 12px;
@@ -59,9 +57,11 @@
   --shadow:    0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5);
 
-  --font-display: 'Gloock', 'Iowan Old Style', Georgia, serif;
-  --font-body:    'Schibsted Grotesk Variable', 'Schibsted Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono:    'JetBrains Mono Variable', 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+  /* Koulen and Moul are Cambodian display faces; Kantumruy Pro sets Latin and Khmer body text. */
+  --font-display: 'Koulen', 'Kantumruy Pro Variable', Impact, sans-serif;
+  --font-khmer:   'Moul', 'Koulen', serif;
+  --font-body:    'Kantumruy Pro Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono Variable', 'JetBrains Mono', Consolas, monospace;
 
   color-scheme: dark;
 }
@@ -81,13 +81,13 @@ body {
   min-height: 100vh;
 }
 
-/* A very faint barb texture behind everything, so empty space reads as plumage. */
+/* Faint dawn glow and a sandstone grain behind everything. */
 body::before {
   content: '';
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(120% 80% at 85% -10%, rgba(60, 196, 180, 0.07), transparent 60%),
-    repeating-linear-gradient(115deg, rgba(60, 196, 180, 0.018) 0 1px, transparent 1px 7px);
+    radial-gradient(90% 60% at 80% -10%, rgba(234, 143, 162, 0.08), transparent 60%),
+    radial-gradient(60% 40% at 10% 110%, rgba(224, 168, 58, 0.05), transparent 70%);
 }
 
 /* ── Monospace ──────────────────────────────────────────────────────────── */
@@ -100,7 +100,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
 /* ── Selection ──────────────────────────────────────────────────────────── */
-::selection { background: rgba(228, 180, 63, 0.35); color: var(--text); }
+::selection { background: rgba(224, 168, 58, 0.35); color: var(--text); }
 
 /* ── Focus ring ─────────────────────────────────────────────────────────── */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -148,7 +148,7 @@ input[type=range]::-moz-range-track    { background: transparent; height: 3px; }
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23738e89' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238f86a3' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px !important;
@@ -208,13 +208,14 @@ textarea:focus {
 .drop-indicator { animation: dropPulse 0.9s ease-in-out infinite; }
 
 /* ── Display fonts ─────────────────────────────────────────────────────────── */
-/* Gloock ships one weight; pin it so inline fontWeight never fakes a bold. */
+/* Koulen ships one weight; pin it so inline fontWeight never fakes a bold. */
 .font-display {
   font-family: var(--font-display);
   font-weight: 400 !important;
   font-synthesis: none;
-  letter-spacing: 0 !important;
+  letter-spacing: 0.02em !important;
 }
+.font-khmer { font-family: var(--font-khmer); font-weight: 400; line-height: 1.6; }
 .font-tech { font-family: var(--font-body); letter-spacing: 0.01em; }
 
 /* ── Guide figure animations (looping, GIF-like) ───────────────────────────── */
@@ -235,33 +236,33 @@ textarea:focus {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Argus shell ─────────────────────────────────────────────────────────── */
-.argus-nav-link {
+/* ── App shell ─────────────────────────────────────────────────────────── */
+.kh-nav-link {
   display: flex; align-items: center; gap: 10px;
   padding: 7px 10px; border-radius: var(--radius-sm);
   font-size: 13px; color: var(--text2); text-decoration: none;
   border: 1px solid transparent;
 }
-.argus-nav-link:hover { color: var(--text); background: var(--surface2); }
-.argus-nav-link.active {
+.kh-nav-link:hover { color: var(--text); background: var(--surface2); }
+.kh-nav-link.active {
   color: var(--text); background: var(--accent-t);
-  border-color: rgba(228, 180, 63, 0.28);
+  border-color: rgba(224,168,58, 0.28);
 }
-.argus-nav-link .pip {
+.kh-nav-link .pip {
   width: 7px; height: 7px; border-radius: 50%;
   border: 1.5px solid var(--text3); flex-shrink: 0;
 }
-.argus-nav-link.active .pip { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 3px rgba(228,180,63,0.18); }
+.kh-nav-link.active .pip { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 3px rgba(224,168,58,0.18); }
 
-.argus-layout { display: grid; grid-template-columns: 212px minmax(0, 1fr); gap: 28px; align-items: start; }
-.argus-rail { position: sticky; top: 76px; }
+.kh-layout { display: grid; grid-template-columns: 212px minmax(0, 1fr); gap: 28px; align-items: start; }
+.kh-rail { position: sticky; top: 76px; }
 @media (max-width: 1000px) {
-  .argus-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .argus-rail { position: static; }
-  .argus-rail-groups { display: flex !important; gap: 4px !important; overflow-x: auto; padding-bottom: 6px; }
-  .argus-rail-groups > div { display: flex; gap: 4px; flex-shrink: 0; }
-  .argus-rail-groups h3 { display: none; }
-  .argus-nav-link { white-space: nowrap; }
+  .kh-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .kh-rail { position: static; }
+  .kh-rail-groups { display: flex !important; gap: 4px !important; overflow-x: auto; padding-bottom: 6px; }
+  .kh-rail-groups > div { display: flex; gap: 4px; flex-shrink: 0; }
+  .kh-rail-groups h3 { display: none; }
+  .kh-nav-link { white-space: nowrap; }
 }
 
 .project-card {
@@ -272,26 +273,40 @@ textarea:focus {
   display: flex; flex-direction: column; gap: 14px;
   transition: border-color 0.16s, background 0.16s;
 }
-.project-card:hover, .project-card:focus-visible { border-color: rgba(228,180,63,0.45); background: #0f2326; }
+.project-card:hover, .project-card:focus-visible { border-color: rgba(224,168,58,0.45); background: #1b1736; }
 .project-card .card-delete { opacity: 0; transition: opacity 0.14s, color 0.14s; }
 .project-card:hover .card-delete, .project-card:focus-within .card-delete { opacity: 1; }
 .project-card .card-delete:hover { color: var(--danger) !important; }
 
-.argus-hero-veil {
+.kh-hero-veil {
   position: absolute; inset: 0; pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(7,19,21,0.96) 0%, rgba(7,19,21,0.82) 30%, rgba(7,19,21,0.15) 62%, rgba(7,19,21,0) 100%),
-    linear-gradient(0deg, rgba(7,19,21,0.9), rgba(7,19,21,0) 30%);
+    linear-gradient(90deg, rgba(16,14,34,0.92) 0%, rgba(16,14,34,0.7) 28%, rgba(16,14,34,0) 52%);
 }
-@media (max-width: 700px) {
-  .argus-hero-veil { background: linear-gradient(0deg, rgba(7,19,21,0.97) 0%, rgba(7,19,21,0.88) 55%, rgba(7,19,21,0.2) 100%); }
+@media (max-width: 760px) {
+  .kh-boxes { display: none; }
+  .kh-hero-veil { background: linear-gradient(0deg, rgba(16,14,34,0.96) 0%, rgba(16,14,34,0.85) 50%, rgba(16,14,34,0.1) 100%); }
 }
 
-@keyframes argusRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.argus-rise { animation: argusRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* Detection boxes that draw themselves over the hero once the sun is up. */
+.kh-box rect { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 1200; stroke-dashoffset: 1200;
+  animation: khDraw 0.9s cubic-bezier(0.65, 0, 0.35, 1) forwards; }
+.kh-box .tag { opacity: 0; animation: khFade 0.4s ease-out forwards; }
+@keyframes khDraw { to { stroke-dashoffset: 0; } }
+@keyframes khFade { to { opacity: 1; } }
 
-@keyframes argusBlink { 0%, 86%, 100% { transform: scaleY(1); } 92% { transform: scaleY(0.1); } }
-.argus-blink { display: inline-flex; animation: argusBlink 2.4s ease-in-out infinite; }
+/* Lotus-petal frieze, the band carved along the base of Khmer temple walls. */
+.kh-frieze {
+  height: 14px;
+  background-repeat: repeat-x; background-position: center; background-size: 28px 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14' viewBox='0 0 28 14'%3E%3Cpath d='M0 13.5 H28' stroke='%23e0a83a' stroke-opacity='.55'/%3E%3Cpath d='M2 13 C2 7 8 4 14 1 C20 4 26 7 26 13' fill='none' stroke='%23e0a83a' stroke-opacity='.7'/%3E%3Cpath d='M8 13 C8 9.5 11 7.5 14 5.5 C17 7.5 20 9.5 20 13' fill='none' stroke='%23ea8fa2' stroke-opacity='.55'/%3E%3C/svg%3E");
+}
+
+@keyframes khRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.kh-rise { animation: khRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes khBlink { 0%, 86%, 100% { transform: scaleY(1); } 92% { transform: scaleY(0.1); } }
+.kh-blink { display: inline-flex; animation: khBlink 2.4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

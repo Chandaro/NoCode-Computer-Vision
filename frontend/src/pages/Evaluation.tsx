@@ -4,7 +4,7 @@ import { Loader, Image as ImageIcon, Upload, Zap } from 'lucide-react'
 import api, { type EvalData, type InferResult } from '../api'
 import { Card, Label, PageHeader, MetricPill, Empty, Btn, Slider } from '../components/ui'
 
-const PALETTE = ['#e4b43f','#3cc4b4','#5866e8','#f39a4a','#c46a9a','#6acb8e','#738e89','#f06a5e']
+const PALETTE = ['#e0a83a','#ea8fa2','#4fb3a9','#f0913a','#9b7fd1','#86c27a','#8f86a3','#ef6a55']
 
 const PLOT_LABELS: Record<string, string> = {
   'confusion_matrix.png':            'Confusion Matrix',
@@ -81,7 +81,7 @@ export default function Evaluation() {
       ctx.strokeRect(x, y, w, h)
       ctx.fillStyle = color + 'cc'
       ctx.fillRect(x, y - 18, Math.min(w, ctx.measureText(`${d.class_name} ${(d.conf*100).toFixed(0)}%`).width + 8), 18)
-      ctx.fillStyle = '#fff'; ctx.font = '12px "Schibsted Grotesk Variable", sans-serif'
+      ctx.fillStyle = '#fff'; ctx.font = '12px "Kantumruy Pro Variable", sans-serif'
       ctx.fillText(`${d.class_name} ${(d.conf*100).toFixed(0)}%`, x + 4, y - 5)
     })
   }

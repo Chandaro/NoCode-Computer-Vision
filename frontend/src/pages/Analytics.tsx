@@ -8,7 +8,7 @@ import {
 import api, { type AnalyticsData, type Project } from '../api'
 import { Card, StatTile, PageHeader, Label } from '../components/ui'
 
-const PALETTE = ['#e4b43f','#3cc4b4','#5866e8','#f39a4a','#c46a9a','#6acb8e','#738e89','#f06a5e']
+const PALETTE = ['#e0a83a','#ea8fa2','#4fb3a9','#f0913a','#9b7fd1','#86c27a','#8f86a3','#ef6a55']
 const TT = { contentStyle: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 } }
 
 export default function Analytics() {

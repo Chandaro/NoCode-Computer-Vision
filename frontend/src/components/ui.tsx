@@ -42,8 +42,8 @@ export function StatTile({ label, value, sub }: {
       background: 'var(--surface2)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)', padding: '16px 20px',
     }}>
-      <p className="font-display" style={{
-        fontSize: 34, color: 'var(--text)',
+      <p style={{
+        fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)',
         lineHeight: 1, fontVariantNumeric: 'tabular-nums',
       }}>{value}</p>
       <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6, fontWeight: 500 }}>{label}</p>
@@ -77,7 +77,7 @@ export function Btn({
   }
   const variants: Record<BtnVariant, CSSProperties> = {
     primary:   { background: 'var(--accent)', color: 'var(--on-accent)', borderColor: 'transparent' },
-    secondary: { background: 'var(--secondary-t)', color: 'var(--secondary)', borderColor: 'rgba(60,196,180,0.35)' },
+    secondary: { background: 'var(--secondary-t)', color: 'var(--secondary)', borderColor: 'rgba(234,143,162,0.35)' },
     ghost:     { background: 'transparent', color: 'var(--text2)', borderColor: 'transparent' },
     danger:    { background: 'transparent', color: 'var(--danger)', borderColor: 'var(--danger)' },
   }
@@ -95,12 +95,12 @@ export function Btn({
 type BadgeColor = 'green' | 'red' | 'yellow' | 'gray' | 'blue' | 'purple'
 export function Badge({ children, color = 'gray' }: { children: ReactNode; color?: BadgeColor }) {
   const colors: Record<BadgeColor, CSSProperties> = {
-    green:  { background: 'var(--success-s)',   color: 'var(--success)', border: '1px solid rgba(106,203,142,0.22)' },
-    red:    { background: 'var(--danger-s)',     color: 'var(--danger)',  border: '1px solid rgba(240,106,94,0.22)' },
-    yellow: { background: 'var(--accent-s)',     color: 'var(--accent)',  border: '1px solid rgba(228,180,63,0.25)' },
+    green:  { background: 'var(--success-s)',   color: 'var(--success)', border: '1px solid rgba(134,194,122,0.22)' },
+    red:    { background: 'var(--danger-s)',     color: 'var(--danger)',  border: '1px solid rgba(239,106,85,0.22)' },
+    yellow: { background: 'var(--accent-s)',     color: 'var(--accent)',  border: '1px solid rgba(224,168,58,0.25)' },
     gray:   { background: 'var(--surface2)',     color: 'var(--text2)',   border: '1px solid var(--border)' },
-    blue:   { background: 'var(--secondary-s)', color: 'var(--secondary)', border: '1px solid rgba(60,196,180,0.25)' },
-    purple: { background: 'rgba(88,102,232,0.14)', color: '#9aa4ff',      border: '1px solid rgba(88,102,232,0.32)' },
+    blue:   { background: 'var(--secondary-s)', color: 'var(--secondary)', border: '1px solid rgba(234,143,162,0.25)' },
+    purple: { background: 'rgba(155,127,209,0.14)', color: '#c3adf0',      border: '1px solid rgba(155,127,209,0.32)' },
   }
   return (
     <span style={{
@@ -160,13 +160,13 @@ export function Slider({ label, value, onChange, min, max, step = 0.05, format }
           onChange={e => onChange(Number(e.target.value))}
           style={{ position: 'absolute', width: '100%', opacity: 0, cursor: 'grab', height: '100%', margin: 0, padding: 0, zIndex: 2 } as CSSProperties}
         />
-        {/* Eye thumb: gold ring, iris, pupil */}
+        {/* Thumb: gold disc with a lotus-pink core */}
         <div style={{
           position: 'absolute',
           left: `calc(${pct}% - 9px)`,
           width: 18, height: 18, borderRadius: '50%',
           pointerEvents: 'none', zIndex: 1,
-          background: 'radial-gradient(circle, #05090b 0 2.5px, var(--iris) 3px 5px, var(--accent) 5.5px 8px, var(--bg) 8.5px)',
+          background: 'radial-gradient(circle, var(--secondary) 0 3px, var(--accent) 3.5px 8px, var(--bg) 8.5px)',
           boxShadow: '0 0 0 1px var(--accent), 0 2px 8px rgba(0,0,0,0.5)',
         }} />
       </div>
@@ -241,7 +241,7 @@ export function PageHeader({ back, title, subtitle, actions }: {
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <h1 className="font-display" style={{
-          fontSize: 28, color: 'var(--text)', lineHeight: 1.1,
+          fontSize: 34, color: 'var(--text)', lineHeight: 1, paddingTop: 3,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {title}
@@ -289,13 +289,13 @@ import { type RefObject } from 'react'
 
 function termColor(l: string): string {
   const lo = l.toLowerCase()
-  if (l.startsWith('[ERROR]') || lo.includes('error') || lo.includes('traceback')) return '#f06a5e'
-  if (l.startsWith('[DONE]')  || lo.includes('finished') || lo.includes('complete')) return '#6acb8e'
-  if (l.startsWith('[WARN]')  || l.startsWith('[STOPPED]') || lo.includes('warning')) return '#f39a4a'
-  if (lo.includes('epoch'))  return '#3cc4b4'
-  if (lo.includes('loss') || lo.includes('map') || lo.includes('precision') || lo.includes('recall')) return '#e4b43f'
-  if (l.startsWith('[INFO]')) return '#3cc4b4'
-  return '#c9d6d1'
+  if (l.startsWith('[ERROR]') || lo.includes('error') || lo.includes('traceback')) return '#ef6a55'
+  if (l.startsWith('[DONE]')  || lo.includes('finished') || lo.includes('complete')) return '#86c27a'
+  if (l.startsWith('[WARN]')  || l.startsWith('[STOPPED]') || lo.includes('warning')) return '#f0913a'
+  if (lo.includes('epoch'))  return '#4fb3a9'
+  if (lo.includes('loss') || lo.includes('map') || lo.includes('precision') || lo.includes('recall')) return '#e0a83a'
+  if (l.startsWith('[INFO]')) return '#4fb3a9'
+  return '#d9cfbf'
 }
 
 export function LogTerminal({ logs, logRef }: {
@@ -317,7 +317,7 @@ export function LogTerminal({ logs, logRef }: {
         userSelect: 'none',
       }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: logs.length ? 'var(--success)' : 'var(--text3)',
-          boxShadow: logs.length ? '0 0 0 3px rgba(106,203,142,0.18)' : 'none' }} />
+          boxShadow: logs.length ? '0 0 0 3px rgba(134,194,122,0.18)' : 'none' }} />
         <span style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>
           training.log
         </span>
@@ -331,7 +331,7 @@ export function LogTerminal({ logs, logRef }: {
         ref={logRef}
         style={{
           height: 220, overflowY: 'auto',
-          background: '#040d0e',
+          background: '#0b0919',
           padding: '12px 16px',
           fontFamily: 'var(--font-mono)',
           fontSize: 11.5, lineHeight: 2,
@@ -347,12 +347,12 @@ export function LogTerminal({ logs, logRef }: {
         ) : logs.map((l, i) => (
           <div key={i} style={{ display: 'flex', gap: 0 }}>
             <span style={{
-              color: '#2a4448', userSelect: 'none', flexShrink: 0, minWidth: 34,
+              color: '#3b3266', userSelect: 'none', flexShrink: 0, minWidth: 34,
               fontVariantNumeric: 'tabular-nums', textAlign: 'right', paddingRight: 14,
             }}>
               {i + 1}
             </span>
-            <span style={{ color: '#1a3236', flexShrink: 0, marginRight: 14 }}>│</span>
+            <span style={{ color: '#29234a', flexShrink: 0, marginRight: 14 }}>│</span>
             <span style={{ color: termColor(l), wordBreak: 'break-all' }}>{l}</span>
           </div>
         ))}
@@ -453,7 +453,7 @@ export function InfoBanner({ children }: { children: ReactNode }) {
     <div style={{
       padding: '10px 14px',
       background: 'var(--accent-t)',
-      border: '1px solid rgba(228,180,63,0.22)',
+      border: '1px solid rgba(224,168,58,0.22)',
       borderLeft: '3px solid var(--accent)',
       borderRadius: 'var(--radius)',
       marginBottom: 20,

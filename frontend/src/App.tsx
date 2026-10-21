@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, useLocation, matchPath } from 'react-router-dom'
 import { lazy, Suspense, type ReactNode } from 'react'
 import Projects from './pages/Projects'   // landing page — keep eager for instant first paint
-import { Ocellus } from './components/Ocellus'
+import { PrasatMark, Lotus } from './components/Sigil'
 import ProjectRail, { useProject } from './components/ProjectRail'
 
 // Heavy / less-frequent pages are code-split so the initial bundle stays small.
@@ -32,13 +32,13 @@ function TopBar() {
   const project = useProject(route?.id)
   return (
     <header className="sticky top-0 z-40" style={{
-      background: 'rgba(7, 19, 21, 0.82)', backdropFilter: 'blur(10px)',
+      background: 'rgba(16, 14, 34, 0.84)', backdropFilter: 'blur(10px)',
       borderBottom: '1px solid var(--border)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '0 24px', height: 56 }}>
         <NavLink to="/" aria-label="NoCode CV home" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <Ocellus size={26} seed="argus" />
-          <span className="font-display" style={{ color: 'var(--text)', fontSize: 20, lineHeight: 1 }}>
+          <PrasatMark size={28} />
+          <span className="font-display" style={{ color: 'var(--text)', fontSize: 23, lineHeight: 1, paddingTop: 3 }}>
             NoCode CV
           </span>
         </NavLink>
@@ -64,7 +64,7 @@ function PageFallback() {
   return (
     <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '96px 0', color: 'var(--text3)', gap: 12 }}>
-      <span className="argus-blink"><Ocellus size={22} seed="argus" /></span>
+      <span className="kh-blink"><Lotus size={24} seed="loading" /></span>
       <span style={{ fontSize: 13 }}>Opening…</span>
     </div>
   )
@@ -76,7 +76,7 @@ function Frame({ children }: { children: ReactNode }) {
   return (
     <main style={{ flex: 1, padding: '28px 24px 48px', width: '100%' }}>
       {withRail ? (
-        <div className="argus-layout" style={{ maxWidth: 1340, margin: '0 auto' }}>
+        <div className="kh-layout" style={{ maxWidth: 1340, margin: '0 auto' }}>
           <ProjectRail projectId={route.id} section={route.section} />
           <div style={{ minWidth: 0 }}>{children}</div>
         </div>
@@ -117,8 +117,8 @@ export default function App() {
 function NotFound() {
   return (
     <div style={{ maxWidth: 520, margin: '80px auto', textAlign: 'center' }}>
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}><Ocellus size={56} seed="lost" /></div>
-      <h1 className="font-display" style={{ fontSize: 32 }}>Nothing to see here</h1>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}><Lotus size={60} seed="lost" /></div>
+      <h1 className="font-display" style={{ fontSize: 40 }}>Nothing to see here</h1>
       <p style={{ color: 'var(--text2)', marginTop: 8 }}>This page doesn't exist. Go back to your projects to pick up where you left off.</p>
       <NavLink to="/" style={{ display: 'inline-block', marginTop: 20, color: 'var(--accent)' }}>Open projects</NavLink>
     </div>

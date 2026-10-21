@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, X } from 'lucide-react'
 import api, { type Project } from '../api'
 import { Btn, TextInput, Field } from '../components/ui'
-import ArgusField, { setArgusGaze } from '../components/ArgusField'
-import { Ocellus } from '../components/Ocellus'
+import AngkorField from '../components/AngkorField'
+import { Lotus } from '../components/Sigil'
 
 export default function Projects() {
   const [projects, setProjects] = useState<Project[] | null>(null)
@@ -20,7 +20,6 @@ export default function Projects() {
     .then(r => { setProjects(r.data); setError('') })
     .catch(() => { setProjects([]); setError("Can't reach the NoCode CV server. Start it with “NoCode CV.bat”, then reload this page.") })
   useEffect(() => { load() }, [])
-  useEffect(() => () => setArgusGaze(null), [])
 
   const submit = async () => {
     if (!name.trim() || submitting) return
@@ -48,22 +47,24 @@ export default function Projects() {
 
   return (
     <div>
-      {/* ── Hero: the watching field ─────────────────────────────────────── */}
-      <section style={{ position: 'relative', margin: '-28px -24px 0', overflow: 'hidden',
-        borderBottom: '1px solid var(--border)' }}>
-        <ArgusField height={420} />
-        <div aria-hidden className="argus-hero-veil" />
+      {/* ── Hero: Angkor at dawn, seen by a model ───────────────────────── */}
+      <section style={{ position: 'relative', margin: '-28px -24px 0', height: 440, overflow: 'hidden' }}>
+        <AngkorField height={440} />
+        <div aria-hidden className="kh-hero-veil" />
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'flex-end' }}>
-          <div className="argus-rise" style={{ width: '100%', maxWidth: 1228, margin: '0 auto', padding: '0 24px 44px' }}>
-            <h1 className="font-display" style={{ fontSize: 'clamp(40px, 6.4vw, 76px)', lineHeight: 0.98,
-              color: 'var(--text)', maxWidth: 620 }}>
-              Teach a machine to see.
+          <div className="kh-rise" style={{ width: '100%', maxWidth: 1228, margin: '0 auto', padding: '0 24px 46px' }}>
+            <h1 className="font-display" style={{ fontSize: 'clamp(46px, 7vw, 92px)', lineHeight: 0.92,
+              color: 'var(--text)', maxWidth: 560 }}>
+              Teach a machine to see
             </h1>
-            <p style={{ marginTop: 16, maxWidth: 470, fontSize: 15.5, lineHeight: 1.6, color: 'var(--text2)' }}>
-              Label your images, train a detector or classifier, and test it on your webcam.
-              Everything runs on this computer.
+            <p className="font-khmer" lang="km" style={{ fontSize: 'clamp(17px, 2vw, 23px)', color: 'var(--accent)', marginTop: 8 }}>
+              បង្រៀនម៉ាស៊ីនឱ្យមើលឃើញ
             </p>
-            <div style={{ marginTop: 24, pointerEvents: 'auto', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <p style={{ marginTop: 14, maxWidth: 440, fontSize: 15.5, lineHeight: 1.6, color: 'var(--text2)' }}>
+              Label your images, train a detector or classifier, and test it on your webcam.
+              Everything runs on this computer. Move your pointer over the temple to see it the way a model does.
+            </p>
+            <div style={{ marginTop: 22, pointerEvents: 'auto', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <Btn variant="primary" onClick={() => { setFormError(''); setShowForm(true) }}>
                 <Plus size={15} strokeWidth={2.5} /> New project
               </Btn>
@@ -71,17 +72,18 @@ export default function Projects() {
           </div>
         </div>
       </section>
+      <div className="kh-frieze" aria-hidden style={{ margin: '0 -24px' }} />
 
       {/* ── Projects ─────────────────────────────────────────────────────── */}
       <section style={{ maxWidth: 1180, margin: '0 auto', paddingTop: 40 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
-          <h2 className="font-display" style={{ fontSize: 28, color: 'var(--text)' }}>Your projects</h2>
+          <h2 className="font-display" style={{ fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>Your projects</h2>
           {count > 0 && <span style={{ fontSize: 13, color: 'var(--text3)' }}>{count} {count === 1 ? 'project' : 'projects'}</span>}
         </div>
 
         {error && (
           <div role="alert" style={{ fontSize: 13.5, color: 'var(--danger)', marginBottom: 18, padding: '12px 16px',
-            background: 'var(--danger-s)', border: '1px solid rgba(240,106,94,0.25)', borderRadius: 'var(--radius)' }}>
+            background: 'var(--danger-s)', border: '1px solid rgba(239,106,85,0.25)', borderRadius: 'var(--radius)' }}>
             {error}
           </div>
         )}
@@ -99,12 +101,9 @@ export default function Projects() {
                 aria-label={`Open ${p.name}`}
                 onClick={() => navigate(`/projects/${p.id}/images`)}
                 onKeyDown={e => { if (e.key === 'Enter') navigate(`/projects/${p.id}/images`) }}
-                onMouseEnter={e => setArgusGaze(e.currentTarget)}
-                onMouseLeave={() => setArgusGaze(null)}
-                onFocus={e => setArgusGaze(e.currentTarget)}
-                onBlur={() => setArgusGaze(null)}>
+>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  <Ocellus size={38} seed={p.id} />
+                  <Lotus size={40} seed={p.id} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{ fontSize: 15.5, fontWeight: 600, color: 'var(--text)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -165,7 +164,7 @@ function FirstProject({ onCreate }: { onCreate: () => void }) {
       <ol style={{ listStyle: 'none', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18, margin: '22px 0 24px' }}>
         {steps.map(([t, d], i) => (
           <li key={t} style={{ display: 'flex', gap: 12 }}>
-            <span className="font-display" style={{ fontSize: 30, lineHeight: 1, color: 'var(--accent)', width: 22 }}>{i + 1}</span>
+            <span style={{ fontSize: 28, fontWeight: 700, lineHeight: 1, color: 'var(--accent)', width: 24 }}>{i + 1}</span>
             <div>
               <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{t}</p>
               <p style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2, lineHeight: 1.55 }}>{d}</p>
@@ -194,13 +193,13 @@ function CreateDialog({ name, desc, setName, setDesc, error, submitting, onSubmi
 
   return (
     <div className="guide-backdrop-in" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(3,9,10,0.72)', display: 'flex',
+      style={{ position: 'fixed', inset: 0, background: 'rgba(8,6,20,0.75)', display: 'flex',
         alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(6px)', padding: 16 }}>
       <div ref={boxRef} role="dialog" aria-modal="true" aria-labelledby="new-project-title" className="guide-card-in"
         style={{ background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 'var(--radius-xl)',
           padding: 26, width: '100%', maxWidth: 460, boxShadow: 'var(--shadow-lg)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 id="new-project-title" className="font-display" style={{ fontSize: 24, color: 'var(--text)' }}>New project</h2>
+          <h2 id="new-project-title" className="font-display" style={{ fontSize: 30, color: 'var(--text)', lineHeight: 1 }}>New project</h2>
           <button onClick={onClose} aria-label="Close"
             style={{ padding: 6, border: 'none', background: 'transparent', color: 'var(--text2)', cursor: 'pointer', borderRadius: 6, display: 'flex' }}>
             <X size={17} />

@@ -73,7 +73,7 @@ function SkeletonOverlay({ persons, width, height, skeleton, showAngles }:
             {jointAngles.filter(a => a.valid).map((a, ai) => (
               <g key={`ang${ai}`}>
                 <rect x={a.vx * width + 6} y={a.vy * height - 9} width={34} height={15}
-                  rx={3} fill="rgba(228,180,63,0.85)" />
+                  rx={3} fill="rgba(224,168,58,0.85)" />
                 <text x={a.vx * width + 8} y={a.vy * height + 2}
                   fill="#fff" fontSize={11} fontWeight={700}
                   fontFamily="JetBrains Mono Variable, JetBrains Mono, monospace">{Math.round(a.angle)}°</text>

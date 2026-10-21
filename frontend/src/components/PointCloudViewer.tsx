@@ -320,7 +320,7 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
     <div style={{ position: 'relative' }}>
       <div ref={mountRef} style={{
         width: '100%', height: 500, borderRadius: 8, overflow: 'hidden',
-        border: '1px solid var(--border)', background: '#071315',
+        border: '1px solid var(--border)', background: '#100e22',
       }} />
 
       {loading && !error && (
@@ -359,8 +359,8 @@ export default function PointCloudViewer({ fetchUrl, pointSize }: Props) {
             <button onClick={() => setEdl(v => !v)}
               title="Eye-Dome Lighting — depth shading for sharper shapes"
               style={{ padding: '5px 9px',
-                border: `1px solid ${edl ? 'rgba(228,180,63,0.8)' : 'rgba(255,255,255,0.15)'}`,
-                borderRadius: 5, background: edl ? 'rgba(228,180,63,0.25)' : 'rgba(0,0,0,0.55)',
+                border: `1px solid ${edl ? 'rgba(224,168,58,0.8)' : 'rgba(255,255,255,0.15)'}`,
+                borderRadius: 5, background: edl ? 'rgba(224,168,58,0.25)' : 'rgba(0,0,0,0.55)',
                 color: edl ? '#fff' : 'rgba(255,255,255,0.7)', cursor: 'pointer',
                 fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
               ◐ EDL

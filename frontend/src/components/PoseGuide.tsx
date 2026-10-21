@@ -89,9 +89,9 @@ function KeypointDiagram() {
           {KP.map(k => (
             <g key={k.i}>
               <circle cx={k.x} cy={k.y} r={9} fill={sideColor(k.side)}
-                stroke="#071315" strokeWidth={2} />
+                stroke="#100e22" strokeWidth={2} />
               <text x={k.x} y={k.y + 3.5} textAnchor="middle" fontSize={9.5}
-                fontWeight={700} fill="#071315"
+                fontWeight={700} fill="#100e22"
                 fontFamily="JetBrains Mono Variable, JetBrains Mono, monospace">{k.i}</text>
             </g>
           ))}

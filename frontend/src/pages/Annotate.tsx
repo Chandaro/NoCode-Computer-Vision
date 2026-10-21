@@ -817,7 +817,7 @@ export default function Annotate() {
   const iconBtn = (active = false): React.CSSProperties => ({
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 6px',
     borderRadius: 6, border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-    background: active ? 'rgba(228,180,63,0.15)' : 'var(--surface2)',
+    background: active ? 'rgba(224,168,58,0.15)' : 'var(--surface2)',
     color: active ? 'var(--accent)' : 'var(--text2)', cursor: 'pointer',
     fontSize: 10, fontWeight: 500, transition: 'all 0.12s',
   })
@@ -899,7 +899,7 @@ export default function Annotate() {
             </div>
             {tool === 'polygon' && polyPts.length > 0 && (
               <div style={{ marginTop: 8, padding: '7px 9px',
-                background: 'rgba(228,180,63,0.08)', border: '1px solid rgba(228,180,63,0.25)',
+                background: 'rgba(224,168,58,0.08)', border: '1px solid rgba(224,168,58,0.25)',
                 borderRadius: 6, fontSize: 11, color: '#a5b4fc' }}>
                 <p>{polyPts.length} pts — click near start or dbl-click to close</p>
                 <button onClick={() => setPolyPts([])}
@@ -942,7 +942,7 @@ export default function Annotate() {
                 <button key={i} onClick={() => setActiveClass(i)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px',
                     borderRadius: 6, border: `1px solid ${activeClass === i ? 'var(--accent)' : 'var(--border)'}`,
-                    background: activeClass === i ? 'rgba(228,180,63,0.12)' : 'var(--surface2)',
+                    background: activeClass === i ? 'rgba(224,168,58,0.12)' : 'var(--surface2)',
                     color: activeClass === i ? 'var(--accent)' : 'var(--text2)',
                     cursor: 'pointer', fontSize: 12, textAlign: 'left', transition: 'all 0.12s' }}>
                   <span style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
@@ -972,7 +972,7 @@ export default function Annotate() {
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '5px 8px', borderRadius: 5, cursor: 'pointer',
                     border: `1px solid ${selected === i ? 'var(--accent)' : 'var(--border)'}`,
-                    background: selected === i ? 'rgba(228,180,63,0.10)' : 'var(--surface2)',
+                    background: selected === i ? 'rgba(224,168,58,0.10)' : 'var(--surface2)',
                     transition: 'all 0.1s' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0,

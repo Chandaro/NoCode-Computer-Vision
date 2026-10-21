@@ -494,7 +494,7 @@ export default function Classification() {
                   <Tooltip {...TT} formatter={(v: unknown) => [`${(v as number).toFixed(1)}%`, 'Top-1']} />
                   <Bar dataKey="acc" radius={[3,3,0,0]}>
                     {runs.filter(r => r.status === 'done').map((_, i) => (
-                      <Cell key={i} fill={['#e4b43f','#3cc4b4','#5866e8','#f39a4a','#c46a9a','#6acb8e'][i % 6]} />
+                      <Cell key={i} fill={['#e0a83a','#ea8fa2','#4fb3a9','#f0913a','#9b7fd1','#86c27a'][i % 6]} />
                     ))}
                   </Bar>
                 </BarChart>

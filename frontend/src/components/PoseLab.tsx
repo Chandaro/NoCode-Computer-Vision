@@ -43,7 +43,7 @@ export default function PoseLab({ keypoints, kpConf }: Props) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {gestures.map(g => (
               <span key={g} style={{ fontSize: 13, padding: '4px 10px', borderRadius: 6,
-                background: 'rgba(228,180,63,0.15)', border: '1px solid rgba(228,180,63,0.3)',
+                background: 'rgba(224,168,58,0.15)', border: '1px solid rgba(224,168,58,0.3)',
                 color: 'var(--text)' }}>{g}</span>
             ))}
           </div>

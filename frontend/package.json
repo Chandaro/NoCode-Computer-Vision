@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
-    "@fontsource-variable/schibsted-grotesk": "^5.3.0",
-    "@fontsource/gloock": "^5.3.0",
+    "@fontsource-variable/kantumruy-pro": "^5.3.0",
+    "@fontsource/bayon": "^5.3.0",
+    "@fontsource/koulen": "^5.3.0",
+    "@fontsource/moul": "^5.3.0",
     "@types/three": "^0.184.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

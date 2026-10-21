@@ -761,7 +761,7 @@ export default function ProjectImages() {
                   <button onClick={() => setClsFilter('all')}
                     style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                       border: `1px solid ${clsFilter === 'all' ? 'var(--accent)' : 'var(--border)'}`,
-                      background: clsFilter === 'all' ? 'rgba(228,180,63,0.12)' : 'transparent',
+                      background: clsFilter === 'all' ? 'rgba(224,168,58,0.12)' : 'transparent',
                       color: clsFilter === 'all' ? 'var(--accent)' : 'var(--text2)',
                       fontWeight: clsFilter === 'all' ? 500 : 400, transition: 'all 0.12s' }}>
                     All <span style={{ marginLeft: 5, color: 'var(--text3)' }}>{clsImages.length}</span>
@@ -774,7 +774,7 @@ export default function ProjectImages() {
                         style={{ display: 'flex', alignItems: 'center', gap: 6,
                           padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                           border: `1px solid ${clsFilter === cls ? 'var(--accent)' : 'var(--border)'}`,
-                          background: clsFilter === cls ? 'rgba(228,180,63,0.12)' : 'transparent',
+                          background: clsFilter === cls ? 'rgba(224,168,58,0.12)' : 'transparent',
                           color: clsFilter === cls ? 'var(--accent)' : 'var(--text2)',
                           fontWeight: clsFilter === cls ? 500 : 400, transition: 'all 0.12s',
                           fontFamily: 'monospace' }}>
@@ -794,7 +794,7 @@ export default function ProjectImages() {
                     const key = `${img.class_name}/${img.filename}`
                     return (
                       <div key={key}
-                        style={{ background: '#040d0e', borderRadius: 10, overflow: 'hidden',
+                        style={{ background: '#0b0919', borderRadius: 10, overflow: 'hidden',
                           position: 'relative', aspectRatio: '1 / 1', outline: '1px solid var(--border)',
                           outlineOffset: -1, transition: 'transform 0.12s ease, box-shadow 0.12s ease' }}
                         onMouseEnter={e => {
@@ -1131,7 +1131,7 @@ export default function ProjectImages() {
             return (
               <div key={img.id}
                 onClick={selectMode ? () => toggleSelect(img.id) : undefined}
-                style={{ background: '#040d0e', borderRadius: 10, overflow: 'hidden',
+                style={{ background: '#0b0919', borderRadius: 10, overflow: 'hidden',
                   position: 'relative', cursor: selectMode ? 'pointer' : 'default', aspectRatio: '1 / 1',
                   outline: isSelected ? '2px solid var(--accent)' : '1px solid var(--border)',
                   outlineOffset: isSelected ? -2 : -1,
