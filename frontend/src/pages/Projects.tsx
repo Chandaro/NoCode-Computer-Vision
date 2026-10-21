@@ -5,6 +5,7 @@ import api, { type Project } from '../api'
 import { Btn, TextInput, Field } from '../components/ui'
 import AngkorField from '../components/AngkorField'
 import { Lotus } from '../components/Sigil'
+import { getWorld } from '../components/KhmerWorlds'
 
 export default function Projects() {
   const [projects, setProjects] = useState<Project[] | null>(null)
@@ -113,12 +114,16 @@ export default function Projects() {
           <FirstProject onCreate={() => setShowForm(true)} onSample={loadSample} seeding={seeding} />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>
-            {projects.map(p => (
+            {projects.map(p => { const w = getWorld(p.id); return (
               <div key={p.id} className="project-card" role="link" tabIndex={0}
                 aria-label={`Open ${p.name}`}
                 onClick={() => navigate(`/projects/${p.id}/images`)}
                 onKeyDown={e => { if (e.key === 'Enter') navigate(`/projects/${p.id}/images`) }}
->
+                style={{ ['--world-accent' as string]: w.vars['--accent'], ['--world-rgb' as string]: w.vars['--world-rgb'] }}>
+                <div className="kw-card-art">
+                  <w.Scene className="kw-fill" />
+                  <span className="kw-card-tag"><span lang="km" className="font-khmer">{w.km}</span> {w.en}</span>
+                </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                   <Lotus size={40} seed={p.id} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -151,7 +156,7 @@ export default function Projects() {
                   )}
                 </div>
               </div>
-            ))}
+            ) })}
           </div>
         )}
       </section>

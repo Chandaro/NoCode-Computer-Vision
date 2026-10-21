@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import api, { type Project } from '../api'
 import { Lotus } from './Sigil'
-import { AngkorMini, LotusPip } from './Kbach'
+import { LotusPip } from './Kbach'
+import { WORLDS, setWorld, useCurrentWorld } from './KhmerWorlds'
 
 // Left-hand tool rail for every page inside a project. Groups follow the
 // dataset each tool needs, so it is clear which annotations feed which model.
@@ -43,12 +44,13 @@ export function useProject(id: string | undefined) {
 
 export default function ProjectRail({ projectId, section }: { projectId: string; section: string }) {
   const project = useProject(projectId)
+  const world = useCurrentWorld()
   return (
     <aside className="kh-rail" aria-label="Project tools">
-      <div className="kh-rail-sky">
-        <AngkorMini />
+      <div className="kh-rail-sky" style={{ height: 116 }}>
+        {world && <world.Scene className="kw-fill" />}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 9,
-          padding: '22px 10px 8px', background: 'linear-gradient(0deg, rgba(11,9,24,0.95), rgba(11,9,24,0))' }}>
+          padding: '22px 10px 8px', background: 'linear-gradient(0deg, rgba(0,0,0,0.78), rgba(0,0,0,0))' }}>
           <Lotus size={28} seed={projectId} />
           <div style={{ minWidth: 0 }}>
             <p className="font-display" style={{ fontSize: 19, lineHeight: 1.05, paddingTop: 2, color: 'var(--text)',
@@ -61,6 +63,24 @@ export default function ProjectRail({ projectId, section }: { projectId: string;
           </div>
         </div>
       </div>
+      {world && (
+        <div style={{ padding: '0 4px 14px' }}>
+          <p style={{ fontSize: 12, color: 'var(--text2)' }}>
+            <span lang="km" className="font-khmer" style={{ color: 'var(--accent)', fontSize: 12, marginRight: 6 }}>{world.km}</span>
+            {world.en}
+          </p>
+          <p style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.45 }}>{world.blurb}</p>
+          <div className="kw-picker" role="group" aria-label="Art style for this project">
+            {WORLDS.map(w => (
+              <button key={w.id} className="kw-swatch" aria-pressed={w.id === world.id}
+                title={`${w.en}: ${w.blurb}`} aria-label={`Use ${w.en} art`}
+                onClick={() => setWorld(projectId, w.id)}>
+                <w.Scene className="kw-fill" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <nav className="kh-rail-groups" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {GROUPS.map((g, gi) => (
           <div key={g.title}>

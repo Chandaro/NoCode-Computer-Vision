@@ -1,5 +1,6 @@
 import { type ReactNode, type CSSProperties } from 'react'
 import { KbachFrame, NagaRail, Rosette } from './Kbach'
+import { useCurrentWorld } from './KhmerWorlds'
 
 // ── Card ─────────────────────────────────────────────────────────────────────
 export function Card({ children, style, className = '' }: {
@@ -236,10 +237,19 @@ export function PageHeader({ back, title, subtitle, actions, khmer }: {
   back?: () => void; title: string; subtitle?: string; actions?: ReactNode; khmer?: string
 }) {
   const km = khmer ?? KHMER_TITLES[title] ?? (title.startsWith('Conv Builder') ? 'សង់បណ្តាញសរសៃប្រសាទ' : undefined)
+  const world = useCurrentWorld()
   return (
-    <header className="kh-banner">
-      <div className="kh-hol" aria-hidden />
-      <Rosette size={220} className="kh-banner-rosette" />
+    <header className={`kh-banner${world ? ` kw-banner kw-${world.id}` : ''}`}>
+      {world ? <>
+        <div className={`kw-tex kw-tex-${world.id}${world.id === 'angkor' ? ' kh-hol' : ''}`} aria-hidden />
+        <world.Scene className="kw-banner-scene" />
+        <span className="kw-world-tag" aria-hidden>
+          <span lang="km" className="font-khmer">{world.km}</span> {world.en}
+        </span>
+      </> : <>
+        <div className="kh-hol" aria-hidden />
+        <Rosette size={220} className="kh-banner-rosette" />
+      </>}
       <div className="kh-banner-inner">
         {back && (
           <button
@@ -277,7 +287,7 @@ export function PageHeader({ back, title, subtitle, actions, khmer }: {
           </div>
         )}
       </div>
-      <NagaRail />
+      {!world || world.id === 'angkor' ? <NagaRail /> : <div aria-hidden className={`kw-band kw-band-${world.id}`} />}
     </header>
   )
 }

@@ -4,6 +4,7 @@ import Projects from './pages/Projects'   // landing page — keep eager for ins
 import { PrasatMark, Lotus } from './components/Sigil'
 import ProjectRail, { useProject } from './components/ProjectRail'
 import AmbientPetals from './components/AmbientPetals'
+import { WorldContext, useWorld, useWorldPalette } from './components/KhmerWorlds'
 
 // Heavy / less-frequent pages are code-split so the initial bundle stays small.
 // Each becomes its own chunk, fetched on first navigation.
@@ -77,7 +78,10 @@ function Frame({ children }: { children: ReactNode }) {
   const route = useProjectRoute()
   const { pathname } = useLocation()
   const withRail = route && !FULL_BLEED.has(route.section)
+  const world = useWorld(route?.id)
+  useWorldPalette(world)
   return (
+    <WorldContext.Provider value={world}>
     <main style={{ flex: 1, padding: '28px 24px 48px', width: '100%' }}>
       {withRail ? (
         <div className="kh-layout" style={{ maxWidth: 1340, margin: '0 auto' }}>
@@ -86,6 +90,7 @@ function Frame({ children }: { children: ReactNode }) {
         </div>
       ) : children}
     </main>
+    </WorldContext.Provider>
   )
 }
 
@@ -135,6 +140,7 @@ function NotFound() {
 // Drifting petals everywhere except the canvas editors, where nothing should move behind the work.
 function AmbientRoute() {
   const route = useProjectRoute()
+  const world = useWorld(route?.id)
   if (route && FULL_BLEED.has(route.section)) return null
-  return <AmbientPetals density={route ? 0.7 : 1} />
+  return <AmbientPetals key={world?.particles ?? 'petals'} mode={world?.particles ?? 'petals'} density={route ? 0.8 : 1} />
 }
