@@ -51,19 +51,6 @@ function sugarPalm(x: number, base: number, h: number, fill: string) {
   )
 }
 
-// point and normal angle on a quadratic Bezier
-function qpt(p0: number[], p1: number[], p2: number[], t: number) {
-  const u = 1 - t
-  const x = u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0]
-  const y = u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]
-  const dx = 2 * u * (p1[0] - p0[0]) + 2 * t * (p2[0] - p1[0])
-  const dy = 2 * u * (p1[1] - p0[1]) + 2 * t * (p2[1] - p1[1])
-  return { x, y, a: Math.atan2(dy, dx) * 180 / Math.PI }
-}
-
-// large flame-leaf lobe (kbach phñi phleung), pointing up in local space
-const LOBE = 'M0 0 C -7 -5, -8 -15, -2 -24 C -1 -17, 2 -14, 6 -13 C 4 -16, 5 -21, 9 -24 C 10 -15, 7 -6, 0 0 Z'
-
 /* ── Angkor Wat: five towers at dawn over the western pond ───────────── */
 export function AngkorScene({ className }: P) {
   const id = useSid()
@@ -108,70 +95,109 @@ export function AngkorScene({ className }: P) {
 }
 
 /* ── Banteay Srei: layered pink sandstone pediments with flame lobes ─── */
-function pediment(cx: number, base: number, halfW: number, h: number, stone: string, dark: string, lobe: string, key: string) {
-  const L0 = [cx - halfW, base], L1 = [cx - halfW * 0.4, base - h * 0.42], A = [cx, base - h]
-  const R0 = [cx + halfW, base], R1 = [cx + halfW * 0.4, base - h * 0.42]
-  const outline = `M${L0} Q ${L1} ${A} Q ${R1} ${R0} Z`
-  const lobes: ReactNode[] = []
-  const n = 9
-  for (let i = 1; i <= n; i++) {
-    const t = i / (n + 1)
-    for (const side of [0, 1]) {
-      const pt = side ? qpt(R0, R1, A, t) : qpt(L0, L1, A, t)
-      const rot = pt.a + (side ? 90 : -90)
-      const sc = (h / 80) * (1.35 + (1 - t) * 0.5)
-      lobes.push(<path key={`${key}${side}${i}`} d={LOBE} transform={`translate(${pt.x} ${pt.y}) rotate(${rot}) scale(${side ? -sc : sc} ${sc})`} fill={lobe} stroke={dark} strokeWidth="0.6" />)
-    }
+// Banteay Srei frames are multi-lobed (ogee) arches: the band rises from
+// outward-curling spirals, swells, and closes in a pointed crown, repeated
+// as nested frames around a tympanum crowded with figures.
+function lobedArch(cx: number, base: number, hw: number, h: number) {
+  const s = hw / 100
+  return `M${cx - hw} ${base}
+    C ${cx - hw} ${base - 22 * s}, ${cx - hw * 0.78} ${base - 30 * s}, ${cx - hw * 0.86} ${base - 44 * s}
+    C ${cx - hw * 0.96} ${base - 62 * s}, ${cx - hw * 0.62} ${base - 74 * s}, ${cx - hw * 0.62} ${base - h * 0.62}
+    C ${cx - hw * 0.62} ${base - h * 0.86}, ${cx - hw * 0.22} ${base - h * 0.84}, ${cx} ${base - h}
+    C ${cx + hw * 0.22} ${base - h * 0.84}, ${cx + hw * 0.62} ${base - h * 0.86}, ${cx + hw * 0.62} ${base - h * 0.62}
+    C ${cx + hw * 0.62} ${base - 74 * s}, ${cx + hw * 0.96} ${base - 62 * s}, ${cx + hw * 0.86} ${base - 44 * s}
+    C ${cx + hw * 0.78} ${base - 30 * s}, ${cx + hw} ${base - 22 * s}, ${cx + hw} ${base}`
+}
+
+function reliefFigures(x0: number, x1: number, y: number, size: number, color: string, key: string) {
+  // a frieze of small carved figures: heads with crowns, shoulders, raised arms
+  const out: ReactNode[] = []
+  const n = Math.max(2, Math.floor((x1 - x0) / (size * 1.25)))
+  for (let i = 0; i < n; i++) {
+    const x = x0 + (i + 0.5) * (x1 - x0) / n, k = size / 10
+    const arm = i % 2 ? -1 : 1
+    out.push(
+      <g key={`${key}${i}`} fill={color}>
+        <path d={`M${x} ${y - 13 * k} l ${-1.6 * k} ${3 * k} h ${3.2 * k} Z`} />
+        <circle cx={x} cy={y - 8.5 * k} r={2.4 * k} />
+        <path d={`M${x - 4 * k} ${y} C ${x - 4 * k} ${y - 4 * k}, ${x - 2.6 * k} ${y - 6 * k}, ${x} ${y - 6 * k} C ${x + 2.6 * k} ${y - 6 * k}, ${x + 4 * k} ${y - 4 * k}, ${x + 4 * k} ${y} Z`} />
+        <path d={`M${x + 3 * arm * k} ${y - 5 * k} l ${3.5 * arm * k} ${-4 * k}`} stroke={color} strokeWidth={1.3 * k} strokeLinecap="round" />
+      </g>,
+    )
   }
-  const tip = qpt(L0, L1, A, 1)
-  // carved tympanum: rows of small flame scrolls cut into the stone
-  const carving: ReactNode[] = []
-  for (let r = 0; r < 4; r++) for (let c = -3 + r; c <= 3 - r; c++) {
-    const x = cx + c * 15 * (h / 80), y = base - 12 - r * 15 * (h / 80)
-    carving.push(<path key={`${key}c${r}${c}`} d={LOBE} transform={`translate(${x} ${y}) scale(${0.45 * h / 80}) ${c % 2 ? 'scale(-1 1)' : ''}`} fill={dark} opacity="0.55" />)
-  }
+  return out
+}
+
+function flameFringe(d: string, color: string, id: string) {
+  // flame tongues standing along the outer edge of a frame
   return (
-    <g>
-      {lobes}
-      <path d={`M${tip.x} ${tip.y} l -4 -14 l 4 -10 l 4 10 Z`} fill={lobe} />
-      <path d={outline} fill={stone} stroke={dark} strokeWidth="1.5" />
-      {carving}
-      <path d={`M${cx - halfW} ${base} c -12 -2, -14 -16, -4 -20 c 6 -2, 8 4, 4 7`} fill="none" stroke={lobe} strokeWidth="4" strokeLinecap="round" />
-      <path d={`M${cx + halfW} ${base} c 12 -2, 14 -16, 4 -20 c -6 -2, -8 4, -4 7`} fill="none" stroke={lobe} strokeWidth="4" strokeLinecap="round" />
+    <g id={id}>
+      <path d={d} fill="none" stroke="#5a2a24" strokeWidth="22" strokeDasharray="5 4" strokeLinecap="butt" />
+      <path d={d} fill="none" stroke={color} strokeWidth="20" strokeDasharray="3.5 5.5" strokeLinecap="butt" />
     </g>
   )
 }
 
 export function BanteayScene({ className }: P) {
   const id = useSid()
+  const cx = 425
+  const outer = lobedArch(cx, 150, 132, 136)
+  const mid = lobedArch(cx, 150, 104, 112)
+  const inner = lobedArch(cx, 150, 78, 90)
   return (
     <svg className={className} viewBox="0 0 600 200" preserveAspectRatio="xMidYMid slice" aria-hidden>
       <defs>
-        <linearGradient id={`${id}s`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3a5a8a" /><stop offset="1" stopColor="#c9a2a0" /></linearGradient>
-        <linearGradient id={`${id}st`} x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stopColor="#d9806a" /><stop offset="1" stopColor="#8f4238" /></linearGradient>
-        <pattern id={`${id}ck`} width="14" height="14" patternUnits="userSpaceOnUse">
-          <rect width="14" height="14" fill="#7a3632" />
-          <rect width="7" height="7" fill="#c2685a" /><rect x="7" y="7" width="7" height="7" fill="#c2685a" />
-          <path d="M3.5 1.5 l2 2 -2 2 -2 -2 Z M10.5 8.5 l2 2 -2 2 -2 -2 Z" fill="#f2b09a" />
-        </pattern>
-        <linearGradient id={`${id}l`} x1="0" x2="1"><stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset="0.5" stopColor="#ffe9dc" stopOpacity="0.3" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
+        <linearGradient id={`${id}s`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#4f7fb8" /><stop offset="1" stopColor="#a9c6dc" /></linearGradient>
+        <linearGradient id={`${id}st`} x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stopColor="#d98a6e" /><stop offset="1" stopColor="#a65a48" /></linearGradient>
+        <linearGradient id={`${id}l`} x1="0" x2="1"><stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset="0.5" stopColor="#ffe9dc" stopOpacity="0.28" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
         <clipPath id={`${id}c`}><rect x="250" y="0" width="350" height="200" /></clipPath>
+        <clipPath id={`${id}ty`}><path d={`${inner} Z`} /></clipPath>
       </defs>
       <rect width="600" height="200" fill={`url(#${id}s)`} />
+      {/* jungle canopy behind, as at the site */}
+      <g fill="#3f6a3a" opacity="0.85"><circle cx="270" cy="40" r="34" /><circle cx="310" cy="20" r="26" /><circle cx="590" cy="30" r="36" /><circle cx="555" cy="8" r="24" /></g>
       <g clipPath={`url(#${id}c)`}>
-        {/* upper tier rising behind the main pediment */}
-        {pediment(425, 96, 74, 78, '#9a4c42', '#3d1a1c', '#b8685a', 'u')}
-        <path d="M411 18 q 14 -10 28 0 q -14 9 -28 0 Z" fill="#6f7d44" opacity="0.8" />
-        {/* main pediment over the sanctuary door */}
-        {pediment(425, 168, 128, 96, `url(#${id}st)`, '#4a1f20', '#e08e78', 'm')}
-        <path d="M360 84 q 30 -14 60 -6 q -26 12 -60 6 Z M 440 90 q 24 -10 46 0 q -22 8 -46 0 Z" fill="#6f7d44" opacity="0.55" />
-        {/* doorway with colonnettes */}
-        <path d="M403 168 V 140 H 447 V 168 Z" fill="#2a0f10" />
-        {[392, 451].map(x => <g key={x}><rect x={x} y="132" width="7" height="38" fill="#d27c69" />{[138, 148, 158].map(y => <rect key={y} x={x - 1} y={y} width="9" height="2" fill="#7a3632" />)}</g>)}
-        <rect x="388" y="128" width="74" height="6" fill="#b8685a" />
+        {/* stone mass of the gopura behind the pediment */}
+        <path d="M282 170 V 52 L 296 40 H 554 L 568 52 V 170 Z" fill="#8f4a3d" />
+        <path d="M282 52 H 568 M 282 92 H 568 M 282 132 H 568" stroke="#6e3428" strokeWidth="1" opacity="0.5" />
+        {/* three nested lobed frames, each with a flame fringe */}
+        {flameFringe(outer, '#e8a088', `${id}f1`)}
+        <path d={`${outer} Z`} fill="#b86a55" stroke="#5a2a24" strokeWidth="2" />
+        {flameFringe(mid, '#f0ad94', `${id}f2`)}
+        <path d={`${mid} Z`} fill="#c77a62" stroke="#5a2a24" strokeWidth="2" />
+        <path d={`${inner} Z`} fill={`url(#${id}st)`} stroke="#5a2a24" strokeWidth="2.4" />
+        {/* tympanum: tiers of carved figures around a central deity */}
+        <g clipPath={`url(#${id}ty)`}>
+          <rect x="340" y="50" width="170" height="100" fill="#8a4638" opacity="0.35" />
+          {reliefFigures(348, 502, 148, 9, '#5e2a20', 'r1')}
+          {reliefFigures(356, 494, 134, 8.5, '#5e2a20', 'r2')}
+          {reliefFigures(366, 484, 120, 8, '#5e2a20', 'r3')}
+          {reliefFigures(378, 472, 106, 7.5, '#5e2a20', 'r4')}
+          {/* foliage scrolls filling the gaps between the figures */}
+          {Array.from({ length: 18 }, (_, i) => {
+            const x = 352 + (i * 37) % 146, y = 96 + ((i * 23) % 50)
+            return <path key={i} d={`M${x} ${y} c 0 -3 4 -4 5 -1 c 1 2 -1 3 -2.4 2.4`} fill="none" stroke="#f0ad94" strokeWidth="0.8" opacity="0.7" />
+          })}
+          <path d="M346 141 H 504 M 352 127 H 498 M 362 113 H 488 M 374 99 H 476" stroke="#e9a68c" strokeWidth="1" opacity="0.8" />
+          <g fill="#6e3428"><circle cx={cx} cy="74" r="5" /><path d={`M${cx} 62 l -3 6 h 6 Z`} /><path d={`M${cx - 9} 88 C ${cx - 9} 80, ${cx - 5} 78, ${cx} 78 C ${cx + 5} 78, ${cx + 9} 80, ${cx + 9} 88 Z`} /></g>
+        </g>
+        {/* crown finial */}
+        <path d={`M${cx} 2 C ${cx + 6} 8, ${cx + 4} 14, ${cx} 16 C ${cx - 4} 14, ${cx - 6} 8, ${cx} 2 Z`} fill="#e8a088" />
+        {/* spirals (makara curls) where the frames end */}
+        {[[cx - 132, 150, -1], [cx + 132, 150, 1], [cx - 104, 150, -1], [cx + 104, 150, 1]].map(([x, y, d], i) => (
+          <path key={i} d={`M${x} ${y} c ${10 * d} -2 ${14 * d} -12 ${6 * d} -18 c ${-6 * d} -4 ${-12 * d} 2 ${-8 * d} 7 c ${3 * d} 3 ${7 * d} 0 ${5 * d} -3`} fill="none" stroke="#f0ad94" strokeWidth="3.5" strokeLinecap="round" />
+        ))}
+        {/* lintel: garlands looping from a central figure, medallions in the loops */}
+        <rect x="292" y="150" width="266" height="34" fill="#b86a55" stroke="#5a2a24" strokeWidth="1.5" />
+        <path d="M300 156 Q 340 188 380 158 Q 404 150 425 158 Q 446 150 470 158 Q 510 188 550 156" fill="none" stroke="#5a2a24" strokeWidth="8" />
+        <path d="M300 156 Q 340 188 380 158 Q 404 150 425 158 Q 446 150 470 158 Q 510 188 550 156" fill="none" stroke="#e8a088" strokeWidth="5" strokeDasharray="2 2" />
+        {[318, 362, 488, 532].map(x => <path key={x} d={`M${x} ${x < 425 ? 170 : 170} v 8 l -3 4 h 6 l -3 -4`} stroke="#5a2a24" strokeWidth="1.2" fill="#e8a088" />)}
+        {[340, 510].map(x => <g key={x} transform={`translate(${x} 164)`}><circle r="7" fill="#d98a6e" stroke="#5a2a24" strokeWidth="1.2" /><path d="M-4 0 c 0 -3 4 -4 5 -1 c 1 2 -1 3 -2.5 2.5" fill="none" stroke="#5a2a24" strokeWidth="1.2" /></g>)}
+        <g fill="#6e3428"><circle cx={cx} cy="160" r="4" /><path d={`M${cx - 7} 176 C ${cx - 7} 168, ${cx - 4} 166, ${cx} 166 C ${cx + 4} 166, ${cx + 7} 168, ${cx + 7} 176 Z`} /></g>
+        <path d="M292 184 H 558" stroke="#5a2a24" strokeWidth="2" />
+        <rect x="292" y="184" width="266" height="16" fill="#8a4638" />
+        {Array.from({ length: 22 }, (_, i) => <path key={i} d={`M${296 + i * 12} 196 c 2 -6 6 -6 8 0`} fill="none" stroke="#e8a088" strokeWidth="1.2" />)}
         <rect className="kw-rake" x="200" y="0" width="80" height="200" fill={`url(#${id}l)`} />
-        <rect x="262" y="170" width="330" height="30" fill={`url(#${id}ck)`} />
-        <rect x="262" y="168" width="330" height="3" fill="#f0a08a" />
       </g>
     </svg>
   )
@@ -393,63 +419,112 @@ export function TonleSapScene({ className }: P) {
   )
 }
 
-/* ── Bayon: serene carved faces on the towers ────────────────────────── */
-function face(cx: number, top: number, s: number, stone: string, carve: string, light: string) {
-  // a face built from stacked sandstone courses, carved with the Bayon smile
-  const w = 46 * s, h = 64 * s
-  const courses = Array.from({ length: 7 }, (_, i) => (
-    <path key={i} d={`M${cx - w} ${top + 18 * s + i * 9 * s} H ${cx + w}`} stroke={carve} strokeWidth={0.8} opacity="0.45" />
-  ))
+/* ── Bayon: weathered face towers in a forest of towers ─────────────── */
+// rough outline: jitter the edges so the stone reads as eroded blocks
+function rough(points: [number, number][], amp: number, seed: number) {
+  let r = seed
+  const rnd = () => { r = (r * 9301 + 49297) % 233280; return r / 233280 - 0.5 }
+  return 'M' + points.map(([x, y]) => `${(x + rnd() * amp).toFixed(1)} ${(y + rnd() * amp).toFixed(1)}`).join(' L ') + ' Z'
+}
+
+function towerSilhouette(cx: number, base: number, w: number, h: number, seed: number) {
+  // stacked, shrinking courses ending in a lotus-bud top
+  const pts: [number, number][] = []
+  const steps = 9
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps, y = base - t * h
+    const hw = w * (t < 0.55 ? 1 - t * 0.12 : (1 - 0.066) * Math.pow(1 - (t - 0.55) / 0.45, 0.6))
+    pts.push([cx - hw, y]); if (i < steps) pts.push([cx - hw * 0.94, y - h / steps * 0.5])
+  }
+  const right = pts.map(([x, y]) => [2 * cx - x, y] as [number, number]).reverse()
+  return rough([...pts, [cx, base - h - 6], ...right], 2.4, seed)
+}
+
+function bayonFace(cx: number, top: number, s: number, key: string) {
+  const L = '#b9ae92', M = '#8c826c', D = '#4a4336', K = '#2a261f'
+  const w = 40 * s
   return (
-    <g>
-      {/* tower above the face */}
-      {[0, 1, 2, 3].map(i => <rect key={i} x={cx - (w * 0.9 - i * 8 * s)} y={top - (i + 1) * 12 * s} width={(w * 0.9 - i * 8 * s) * 2} height={12 * s} fill={stone} stroke={carve} strokeWidth="0.8" />)}
-      <path d={`M${cx - 10 * s} ${top - 48 * s} Q ${cx} ${top - 70 * s} ${cx + 10 * s} ${top - 48 * s} Z`} fill={stone} />
-      {/* crown band with lotus petals */}
-      <rect x={cx - w} y={top} width={w * 2} height={16 * s} fill={stone} stroke={carve} strokeWidth="1" />
-      {Array.from({ length: 7 }, (_, i) => <path key={i} d={`M${cx - w + (i + 0.5) * (w * 2 / 7)} ${top + 14 * s} l ${-4 * s} ${-7 * s} q ${4 * s} ${-6 * s} ${8 * s} 0 Z`} fill={light} opacity="0.7" />)}
-      {/* face block */}
-      <rect x={cx - w} y={top + 16 * s} width={w * 2} height={h} fill={stone} />
-      {courses}
-      {/* brows, lowered eyes, nose, the smile */}
-      <g fill="none" stroke={carve} strokeLinecap="round">
-        <path d={`M${cx - 30 * s} ${top + 34 * s} q ${12 * s} ${-7 * s} ${24 * s} 0 M ${cx + 6 * s} ${top + 34 * s} q ${12 * s} ${-7 * s} ${24 * s} 0`} strokeWidth={2.4 * s} />
-        <path d={`M${cx - 27 * s} ${top + 42 * s} q ${9 * s} ${5 * s} ${18 * s} 0 M ${cx + 9 * s} ${top + 42 * s} q ${9 * s} ${5 * s} ${18 * s} 0`} strokeWidth={2.2 * s} />
-        <path d={`M${cx} ${top + 36 * s} V ${top + 54 * s} q ${-7 * s} ${4 * s} ${-9 * s} ${2 * s} M ${cx} ${top + 54 * s} q ${7 * s} ${4 * s} ${9 * s} ${2 * s}`} strokeWidth={2 * s} />
-        <path d={`M${cx - 17 * s} ${top + 63 * s} q ${17 * s} ${9 * s} ${34 * s} 0`} strokeWidth={2.8 * s} />
-        <path d={`M${cx - 13 * s} ${top + 64 * s} q ${13 * s} ${-3 * s} ${26 * s} 0`} strokeWidth={1.4 * s} />
+    <g key={key}>
+      {/* tall diadem with floral pendants */}
+      <rect x={cx - w} y={top} width={w * 2} height={20 * s} fill={M} />
+      {Array.from({ length: 8 }, (_, i) => {
+        const x = cx - w + (i + 0.5) * (w * 2 / 8)
+        return <g key={i}><path d={`M${x} ${top + 3 * s} l ${-3 * s} ${6 * s} l ${3 * s} ${8 * s} l ${3 * s} ${-8 * s} Z`} fill={L} /><circle cx={x} cy={top + 18 * s} r={1.6 * s} fill={D} /></g>
+      })}
+      <rect x={cx - w} y={top + 20 * s} width={w * 2} height={2.5 * s} fill={K} opacity="0.6" />
+      {/* cheeks and jaw */}
+      <path d={`M${cx - w} ${top + 34 * s} C ${cx - w} ${top + 62 * s}, ${cx - 30 * s} ${top + 80 * s}, ${cx - 14 * s} ${top + 86 * s} H ${cx + 14 * s} C ${cx + 30 * s} ${top + 80 * s}, ${cx + w} ${top + 62 * s}, ${cx + w} ${top + 34 * s}`} fill={L} />
+      <path d={`M${cx + 8 * s} ${top + 44 * s} C ${cx + 30 * s} ${top + 48 * s}, ${cx + 36 * s} ${top + 66 * s}, ${cx + 14 * s} ${top + 86 * s} H ${cx + 8 * s} Z`} fill={M} opacity="0.7" />
+      {/* forehead and brow ridge in shadow */}
+      <path d={`M${cx - w} ${top + 22 * s} H ${cx + w} V ${top + 34 * s} Q ${cx} ${top + 28 * s} ${cx - w} ${top + 34 * s} Z`} fill={M} />
+      <path d={`M${cx - 33 * s} ${top + 34 * s} Q ${cx - 18 * s} ${top + 27 * s} ${cx - 3 * s} ${top + 34 * s} L ${cx - 3 * s} ${top + 38 * s} Q ${cx - 18 * s} ${top + 32 * s} ${cx - 33 * s} ${top + 38 * s} Z M ${cx + 3 * s} ${top + 34 * s} Q ${cx + 18 * s} ${top + 27 * s} ${cx + 33 * s} ${top + 34 * s} L ${cx + 33 * s} ${top + 38 * s} Q ${cx + 18 * s} ${top + 32 * s} ${cx + 3 * s} ${top + 38 * s} Z`} fill={D} />
+      {/* lowered eyelids */}
+      <path d={`M${cx - 30 * s} ${top + 42 * s} Q ${cx - 18 * s} ${top + 38 * s} ${cx - 6 * s} ${top + 42 * s} Q ${cx - 18 * s} ${top + 46 * s} ${cx - 30 * s} ${top + 42 * s} Z M ${cx + 6 * s} ${top + 42 * s} Q ${cx + 18 * s} ${top + 38 * s} ${cx + 30 * s} ${top + 42 * s} Q ${cx + 18 * s} ${top + 46 * s} ${cx + 6 * s} ${top + 42 * s} Z`} fill={K} />
+      {/* broad flat nose with shadowed sides */}
+      <path d={`M${cx - 4 * s} ${top + 36 * s} L ${cx - 12 * s} ${top + 60 * s} Q ${cx} ${top + 66 * s} ${cx + 12 * s} ${top + 60 * s} L ${cx + 4 * s} ${top + 36 * s} Z`} fill={L} />
+      <path d={`M${cx + 4 * s} ${top + 36 * s} L ${cx + 12 * s} ${top + 60 * s} Q ${cx + 6 * s} ${top + 64 * s} ${cx + 2 * s} ${top + 63 * s} Z`} fill={D} opacity="0.8" />
+      <path d={`M${cx - 11 * s} ${top + 61 * s} q ${4 * s} ${3 * s} ${7 * s} ${1 * s} M ${cx + 4 * s} ${top + 62 * s} q ${3 * s} ${2 * s} ${7 * s} ${-1 * s}`} stroke={K} strokeWidth={2 * s} fill="none" strokeLinecap="round" />
+      {/* the smile: full lips, upturned corners */}
+      <path d={`M${cx - 20 * s} ${top + 70 * s} Q ${cx} ${top + 66 * s} ${cx + 20 * s} ${top + 70 * s} Q ${cx} ${top + 74 * s} ${cx - 20 * s} ${top + 70 * s} Z`} fill={M} />
+      <path d={`M${cx - 20 * s} ${top + 70 * s} Q ${cx} ${top + 76 * s} ${cx + 20 * s} ${top + 70 * s}`} stroke={K} strokeWidth={2.2 * s} fill="none" strokeLinecap="round" />
+      <path d={`M${cx - 20 * s} ${top + 70 * s} q ${-3 * s} ${-2 * s} ${-4 * s} ${-5 * s} M ${cx + 20 * s} ${top + 70 * s} q ${3 * s} ${-2 * s} ${4 * s} ${-5 * s}`} stroke={K} strokeWidth={1.6 * s} fill="none" strokeLinecap="round" />
+      <path d={`M${cx - 15 * s} ${top + 77 * s} Q ${cx} ${top + 84 * s} ${cx + 15 * s} ${top + 77 * s}`} fill={M} />
+      {/* the face is carved across stacked blocks: course lines and joints */}
+      <g stroke={K} strokeWidth={0.9} opacity="0.45">
+        {[46, 58, 72].map(y => <path key={y} d={`M${cx - w} ${top + y * s} H ${cx + w}`} />)}
+        <path d={`M${cx - 22 * s} ${top + 22 * s} V ${top + 46 * s} M ${cx + 26 * s} ${top + 46 * s} V ${top + 58 * s} M ${cx - 28 * s} ${top + 58 * s} V ${top + 72 * s} M ${cx + 18 * s} ${top + 72 * s} V ${top + 86 * s}`} />
       </g>
-      {/* raking light: one cheek in shadow, as the carving turns from the sun */}
-      <rect x={cx} y={top + 16 * s} width={w} height={h} fill="#000" opacity="0.14" />
-      <path d={`M${cx - w} ${top + 16 * s + h} H ${cx + w}`} stroke={carve} strokeWidth="2" />
-      {/* ear lobes */}
-      <rect x={cx - w - 6 * s} y={top + 30 * s} width={6 * s} height={30 * s} rx={3 * s} fill={stone} stroke={carve} strokeWidth="0.8" />
-      <rect x={cx + w} y={top + 30 * s} width={6 * s} height={30 * s} rx={3 * s} fill={stone} stroke={carve} strokeWidth="0.8" />
+      {/* long ear lobes */}
+      <path d={`M${cx - w - 2 * s} ${top + 34 * s} q ${-7 * s} ${12 * s} ${-2 * s} ${40 * s} q ${4 * s} ${2 * s} ${5 * s} ${-4 * s} V ${top + 34 * s} Z`} fill={M} />
+      <path d={`M${cx + w + 2 * s} ${top + 34 * s} q ${7 * s} ${12 * s} ${2 * s} ${40 * s} q ${-4 * s} ${2 * s} ${-5 * s} ${-4 * s} V ${top + 34 * s} Z`} fill={D} />
     </g>
   )
 }
 
 export function BayonScene({ className }: P) {
   const id = useSid()
+  const stone = '#6f685a', dark = '#3d382f'
+  const courses = (x0: number, x1: number, y0: number, y1: number, k: string) =>
+    Array.from({ length: Math.floor((y1 - y0) / 8) }, (_, i) => (
+      <path key={`${k}${i}`} d={`M${x0} ${y0 + i * 8} H ${x1}`} stroke={dark} strokeWidth="0.7" opacity="0.5" />
+    ))
   return (
     <svg className={className} viewBox="0 0 600 200" preserveAspectRatio="xMidYMid slice" aria-hidden>
       <defs>
-        <linearGradient id={`${id}s`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3a6ea8" /><stop offset="1" stopColor="#a9c8e0" /></linearGradient>
-        <linearGradient id={`${id}sh`} x1="0" x2="1"><stop offset="0" stopColor="#000" stopOpacity="0" /><stop offset="0.5" stopColor="#000" stopOpacity="0.28" /><stop offset="1" stopColor="#000" stopOpacity="0" /></linearGradient>
+        <linearGradient id={`${id}s`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2f73c8" /><stop offset="1" stopColor="#8fbfe6" /></linearGradient>
+        <linearGradient id={`${id}lit`} x1="0" x2="1"><stop offset="0" stopColor="#fff2d0" stopOpacity="0.18" /><stop offset="1" stopColor="#000" stopOpacity="0.3" /></linearGradient>
+        <linearGradient id={`${id}sh`} x1="0" x2="1"><stop offset="0" stopColor="#000" stopOpacity="0" /><stop offset="0.5" stopColor="#000" stopOpacity="0.22" /><stop offset="1" stopColor="#000" stopOpacity="0" /></linearGradient>
         <clipPath id={`${id}c`}><rect x="240" y="0" width="360" height="200" /></clipPath>
       </defs>
       <rect width="600" height="200" fill={`url(#${id}s)`} />
       <g clipPath={`url(#${id}c)`}>
-        {face(300, 104, 0.62, '#7d7a66', '#3e3c30', '#a7a38a')}
-        {face(560, 98, 0.7, '#7d7a66', '#3e3c30', '#a7a38a')}
-        {face(430, 78, 1.05, '#9a9580', '#3e3c30', '#c9c2a4')}
-        {/* moss and lichen */}
-        {[[402, 126], [470, 160], [548, 150], [292, 160], [440, 100]].map(([x, y], i) => <ellipse key={i} cx={x} cy={y} rx="9" ry="4" fill="#5f7a3a" opacity="0.5" />)}
-        <rect y="176" width="600" height="24" fill="#4a4a3a" />
+        {/* far towers, the forest of faces */}
+        <g fill="#5d584c" opacity="0.75">
+          <path d={towerSilhouette(292, 160, 22, 112, 3)} /><path d={towerSilhouette(348, 160, 20, 96, 7)} />
+          <path d={towerSilhouette(520, 160, 22, 118, 11)} /><path d={towerSilhouette(588, 160, 20, 100, 5)} />
+        </g>
+        {/* side tower turned three quarters, its face catching the light */}
+        <clipPath id={`${id}tb`}><path d={towerSilhouette(530, 176, 44, 150, 17)} /></clipPath>
+        <clipPath id={`${id}ta`}><path d={towerSilhouette(420, 184, 60, 176, 23)} /></clipPath>
+        <path d={towerSilhouette(530, 176, 44, 150, 17)} fill={stone} />
+        <g clipPath={`url(#${id}tb)`}>
+          {courses(480, 580, 30, 176, 'b')}
+          <g transform="translate(530 0) scale(0.78 1) translate(-530 0)">{bayonFace(530, 70, 0.95, 'side')}</g>
+          <rect x="480" y="20" width="100" height="160" fill={`url(#${id}lit)`} />
+        </g>
+        {/* main tower and its face */}
+        <path d={towerSilhouette(420, 184, 60, 176, 23)} fill={stone} />
+        <g clipPath={`url(#${id}ta)`}>{courses(356, 484, 14, 184, 'a')}</g>
+        {bayonFace(420, 52, 1.32, 'main')}
+        {/* lichen and moss in the crevices */}
+        {[[372, 64], [470, 150], [384, 168], [452, 40], [540, 60], [500, 160], [300, 120]].map(([x, y], i) => <ellipse key={i} cx={x} cy={y} rx="10" ry="4" fill="#6f7d44" opacity="0.55" />)}
+        {/* gallery and doorway at the foot */}
+        <rect x="240" y="168" width="360" height="32" fill="#4d4739" />
+        {[262, 318, 560].map(x => <path key={x} d={`M${x} 200 V 180 L ${x + 8} 174 L ${x + 16} 180 V 200 Z`} fill="#1f1c17" />)}
         <rect className="kw-shadow" x="250" y="0" width="120" height="200" fill={`url(#${id}sh)`} />
       </g>
       <g fill="none" stroke="#1b2430" strokeWidth="1.5" className="kw-birds">
-        <path d="M300 30 q 5 -5 10 0 q 5 -5 10 0" /><path d="M330 20 q 4 -4 8 0 q 4 -4 8 0" />
+        <path d="M300 26 q 5 -5 10 0 q 5 -5 10 0" /><path d="M330 16 q 4 -4 8 0 q 4 -4 8 0" />
       </g>
     </svg>
   )
