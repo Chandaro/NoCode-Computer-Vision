@@ -232,7 +232,7 @@ export default function RoadSafety() {
 
           {/* Preview / result canvas */}
           <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden',
-            background: '#07070a', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: '#0b0919', display: 'flex', alignItems: 'center', justifyContent: 'center',
             minHeight: 200 }}>
             {mode === 'image' && file
               ? <canvas ref={canvasRef} style={{ maxWidth: '100%', maxHeight: 340, display: 'block', objectFit: 'contain' }} />

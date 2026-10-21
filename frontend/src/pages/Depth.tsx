@@ -480,7 +480,7 @@ export default function Depth() {
               padding: '8px 18px', border: 'none', cursor: 'pointer',
               fontSize: 12, fontWeight: pageMode === key ? 600 : 400,
               background: pageMode === key ? 'var(--accent)' : 'var(--surface)',
-              color: pageMode === key ? '#fff' : 'var(--text2)',
+              color: pageMode === key ? 'var(--on-accent)' : 'var(--text2)',
               transition: 'all 0.15s',
             }}>
             {icon}{label}
@@ -558,8 +558,8 @@ export default function Depth() {
                   min={1} max={12} step={0.5} format={v => String(v)} />
               )}
             </Card>
-            <Card style={{ padding: 12, background: 'rgba(94,106,210,0.06)',
-              border: '1px solid rgba(94,106,210,0.2)' }}>
+            <Card style={{ padding: 12, background: 'rgba(224,168,58,0.06)',
+              border: '1px solid rgba(224,168,58,0.2)' }}>
               <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>First-time setup</p>
               <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.6 }}>
                 Run <code style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>setup_dust3r.bat</code> then
@@ -621,7 +621,7 @@ export default function Depth() {
                   border: `2px dashed ${reconFiles.length >= 2 ? 'var(--accent)' : 'var(--border2)'}`,
                   borderRadius: 8, padding: '20px 16px', textAlign: 'center',
                   cursor: reconFiles.length < 12 ? 'pointer' : 'default', marginBottom: 12,
-                  background: reconFiles.length >= 2 ? 'rgba(94,106,210,0.04)' : 'transparent',
+                  background: reconFiles.length >= 2 ? 'rgba(224,168,58,0.04)' : 'transparent',
                 }}>
                 <Camera size={26} style={{ color: 'var(--text3)', opacity: 0.5, marginBottom: 6 }} />
                 <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 2 }}>
@@ -947,7 +947,7 @@ export default function Depth() {
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between',
                   fontSize: 12, marginBottom: 5 }}>
                   <span style={{ color: 'var(--text3)' }}>{label}</span>
-                  <span style={{ color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+                  <span style={{ color: 'var(--text)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', fontSize: 11 }}>
                     {val}
                   </span>
                 </div>
@@ -1122,7 +1122,7 @@ export default function Depth() {
                               background: 'var(--surface2)', border: '1px solid var(--border)' }}>
                               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
                                 <span style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)',
-                                  fontFamily: 'JetBrains Mono, monospace' }}>
+                                  fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                                   {measureResult.distance_m < 1
                                     ? `${(measureResult.distance_m * 100).toFixed(1)} cm`
                                     : `${measureResult.distance_m.toFixed(2)} m`}
@@ -1377,7 +1377,7 @@ export default function Depth() {
 
               {/* Info about two-pass */}
               <div style={{ padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 12,
-                background: 'rgba(94,106,210,0.08)', border: '1px solid rgba(94,106,210,0.18)',
+                background: 'rgba(224,168,58,0.08)', border: '1px solid rgba(224,168,58,0.18)',
                 color: 'var(--text2)', lineHeight: 1.6 }}>
                 <strong style={{ color: 'var(--accent)', display: 'block', marginBottom: 2, fontSize: 11 }}>
                   Two-pass processing

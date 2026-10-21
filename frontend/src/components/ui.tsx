@@ -1,16 +1,21 @@
 import { type ReactNode, type CSSProperties } from 'react'
+import { KbachFrame, NagaRail, Rosette } from './Kbach'
 
 // ── Card ─────────────────────────────────────────────────────────────────────
 export function Card({ children, style, className = '' }: {
   children: ReactNode; style?: CSSProperties; className?: string
 }) {
   return (
-    <div className={`card-hover ${className}`} style={{
+    <div className={`card-hover kh-card ${className}`} style={{
       background: 'var(--surface)',
       border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)',
+      borderRadius: 'var(--radius-lg)',
+      position: 'relative', isolation: 'isolate',
       ...style,
     }}>
+      <span aria-hidden style={{ position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none' }}>
+        <KbachFrame size={22} inset={5} opacity={0.32} />
+      </span>
       {children}
     </div>
   )
@@ -20,8 +25,8 @@ export function Card({ children, style, className = '' }: {
 export function Label({ children }: { children: ReactNode }) {
   return (
     <p style={{
-      fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-      textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 10,
+      fontSize: 12, fontWeight: 600, letterSpacing: '0.01em',
+      color: 'var(--text2)', marginBottom: 10,
     }}>
       {children}
     </p>
@@ -40,11 +45,11 @@ export function StatTile({ label, value, sub }: {
   return (
     <div style={{
       background: 'var(--surface2)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)', padding: '16px 20px',
+      borderRadius: 'var(--radius-lg)', padding: '16px 20px',
     }}>
       <p style={{
-        fontSize: 28, fontWeight: 700, color: 'var(--text)',
-        letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+        fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)',
+        lineHeight: 1, fontVariantNumeric: 'tabular-nums',
       }}>{value}</p>
       <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6, fontWeight: 500 }}>{label}</p>
       {sub && <p style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4, fontWeight: 500 }}>{sub}</p>}
@@ -68,16 +73,16 @@ export function Btn({
     opacity: disabled ? 0.35 : 1,
     border: '1px solid transparent',
     textDecoration: 'none',
-    fontFamily: 'inherit', fontWeight: 500,
-    borderRadius: 'var(--radius-sm)',
+    fontFamily: 'inherit', fontWeight: 600,
+    borderRadius: 999,
     fontSize: size === 'sm' ? 12 : 13,
-    padding: size === 'sm' ? '5px 12px' : '8px 16px',
+    padding: size === 'sm' ? '5px 13px' : '8px 18px',
     whiteSpace: 'nowrap', letterSpacing: '0.01em',
     lineHeight: 1.4,
   }
   const variants: Record<BtnVariant, CSSProperties> = {
-    primary:   { background: 'var(--accent)', color: '#fff', borderColor: 'transparent' },
-    secondary: { background: 'var(--secondary-t)', color: 'var(--secondary)', borderColor: 'rgba(0,144,255,0.30)' },
+    primary:   { background: 'var(--accent)', color: 'var(--on-accent)', borderColor: 'transparent' },
+    secondary: { background: 'var(--secondary-t)', color: 'var(--secondary)', borderColor: 'rgba(234,143,162,0.35)' },
     ghost:     { background: 'transparent', color: 'var(--text2)', borderColor: 'transparent' },
     danger:    { background: 'transparent', color: 'var(--danger)', borderColor: 'var(--danger)' },
   }
@@ -95,18 +100,18 @@ export function Btn({
 type BadgeColor = 'green' | 'red' | 'yellow' | 'gray' | 'blue' | 'purple'
 export function Badge({ children, color = 'gray' }: { children: ReactNode; color?: BadgeColor }) {
   const colors: Record<BadgeColor, CSSProperties> = {
-    green:  { background: 'var(--success-s)',   color: 'var(--success)', border: '1px solid rgba(74,222,128,0.15)' },
-    red:    { background: 'var(--danger-s)',     color: 'var(--danger)',  border: '1px solid rgba(248,113,113,0.15)' },
-    yellow: { background: 'var(--warn-s)',       color: 'var(--warn)',    border: '1px solid rgba(251,191,36,0.15)' },
+    green:  { background: 'var(--success-s)',   color: 'var(--success)', border: '1px solid rgba(134,194,122,0.22)' },
+    red:    { background: 'var(--danger-s)',     color: 'var(--danger)',  border: '1px solid rgba(239,106,85,0.22)' },
+    yellow: { background: 'var(--accent-s)',     color: 'var(--accent)',  border: '1px solid rgba(224,168,58,0.25)' },
     gray:   { background: 'var(--surface2)',     color: 'var(--text2)',   border: '1px solid var(--border)' },
-    blue:   { background: 'var(--secondary-s)', color: 'var(--secondary)', border: '1px solid rgba(0,144,255,0.20)' },
-    purple: { background: 'var(--accent-s)',    color: '#8299ff',          border: '1px solid rgba(94,106,210,0.25)' },
+    blue:   { background: 'var(--secondary-s)', color: 'var(--secondary)', border: '1px solid rgba(234,143,162,0.25)' },
+    purple: { background: 'rgba(155,127,209,0.14)', color: '#c3adf0',      border: '1px solid rgba(155,127,209,0.32)' },
   }
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '2px 7px',
-      borderRadius: 'var(--radius-sm)',
+      padding: '2px 8px',
+      borderRadius: 999,
       fontSize: 11, fontWeight: 600, lineHeight: '18px',
       ...colors[color],
     }}>
@@ -124,7 +129,7 @@ export function Select({ value, onChange, children, style }: {
     <select value={value} onChange={e => onChange(e.target.value)} style={{
       width: '100%', padding: '7px 12px',
       background: 'var(--surface2)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-sm)', color: 'var(--text)',
+      borderRadius: 'var(--radius)', color: 'var(--text)',
       fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
       ...style,
     }}>
@@ -144,37 +149,31 @@ export function Slider({ label, value, onChange, min, max, step = 0.05, format }
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
         <span style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>{label}</span>
-        <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' }}>
+        <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
           {display}
         </span>
       </div>
       <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'center' }}>
         {/* Track */}
-        <div style={{ position: 'absolute', left: 0, right: 0, height: 3, background: 'var(--border2)' }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 4, background: 'var(--surface3)' }} />
         {/* Fill */}
-        <div style={{ position: 'absolute', left: 0, width: `${pct}%`, height: 3, background: 'var(--accent)', opacity: 0.45 }} />
+        <div style={{ position: 'absolute', left: 0, width: `${pct}%`, height: 4, borderRadius: 4,
+          background: 'linear-gradient(90deg, var(--secondary), var(--accent))' }} />
         {/* Native input — invisible, handles all interaction */}
         <input
           type="range" min={min} max={max} step={step} value={value}
           onChange={e => onChange(Number(e.target.value))}
           style={{ position: 'absolute', width: '100%', opacity: 0, cursor: 'grab', height: '100%', margin: 0, padding: 0, zIndex: 2 } as CSSProperties}
         />
-        {/* Sword thumb — real DOM element, always renders */}
+        {/* Thumb: gold disc with a lotus-pink core */}
         <div style={{
           position: 'absolute',
           left: `calc(${pct}% - 9px)`,
-          width: 18, height: 18,
-          pointerEvents: 'none',
-          userSelect: 'none',
-          zIndex: 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 15,
-          lineHeight: 1,
-          filter: 'drop-shadow(0 0 4px rgba(94,106,210,0.7))',
-          transition: 'left 0s',
-        }}>
-          ⚔️
-        </div>
+          width: 18, height: 18, borderRadius: '50%',
+          pointerEvents: 'none', zIndex: 1,
+          background: 'radial-gradient(circle, var(--secondary) 0 3px, var(--accent) 3.5px 8px, var(--bg) 8.5px)',
+          boxShadow: '0 0 0 1px var(--accent), 0 2px 8px rgba(0,0,0,0.5)',
+        }} />
       </div>
     </div>
   )
@@ -209,7 +208,7 @@ export function TextInput({ value, onChange, placeholder, onKeyDown, type = 'tex
       style={{
         width: '100%', padding: '7px 12px',
         background: 'var(--surface2)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-sm)', color: 'var(--text)',
+        borderRadius: 'var(--radius)', color: 'var(--text)',
         fontSize: 13, fontFamily: 'inherit', outline: 'none',
       }}
     />
@@ -217,51 +216,69 @@ export function TextInput({ value, onChange, placeholder, onKeyDown, type = 'tex
 }
 
 // ── PageHeader ────────────────────────────────────────────────────────────────
-export function PageHeader({ back, title, subtitle, actions }: {
-  back?: () => void; title: string; subtitle?: string; actions?: ReactNode
+// Khmer line shown under each page title. Keyed by the English title.
+const KHMER_TITLES: Record<string, string> = {
+  'Dataset Analytics': 'វិភាគទិន្នន័យ',
+  'Image Classification': 'ការចាត់ថ្នាក់រូបភាព',
+  'Multi-View 3D Reconstruction': 'ការបង្កើតរូបបីវិមាត្រ',
+  'Depth Estimation': 'ការប៉ាន់ស្មានជម្រៅ',
+  'Model Evaluation': 'ការវាយតម្លៃម៉ូដែល',
+  'Pose Estimation': 'ការប៉ាន់ស្មានឥរិយាបថ',
+  'Instance Segmentation': 'ការបែងចែករូបភាព',
+  'Instance Segmentation Training': 'បង្ហាត់ការបែងចែករូបភាព',
+  'Object Detection Training': 'បង្ហាត់ការរកវត្ថុ',
+  'Live Webcam Inference': 'សាកល្បងតាមកាមេរ៉ា',
+  'Road Safety': 'សុវត្ថិភាពចរាចរណ៍',
+  'Steering Guide': 'ការណែនាំចង្កូត',
+}
+
+export function PageHeader({ back, title, subtitle, actions, khmer }: {
+  back?: () => void; title: string; subtitle?: string; actions?: ReactNode; khmer?: string
 }) {
+  const km = khmer ?? KHMER_TITLES[title] ?? (title.startsWith('Conv Builder') ? 'សង់បណ្តាញសរសៃប្រសាទ' : undefined)
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 14,
-      marginBottom: 24,
-      paddingBottom: 16,
-      borderBottom: '1px solid var(--border)',
-    }}>
-      {back && (
-        <button
-          onClick={back}
-          className="btn-ghost"
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 28, height: 28,
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--surface2)',
-            color: 'var(--text2)', cursor: 'pointer', flexShrink: 0,
-            fontSize: 14,
-          }}
-          aria-label="Go back"
-        >
-          ←
-        </button>
-      )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h1 className="font-display" style={{
-          fontSize: 16, fontWeight: 700, color: 'var(--text)',
-          letterSpacing: '0.02em', lineHeight: 1.25,
-        }}>
-          {title}
-        </h1>
-        {subtitle && (
-          <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2, fontWeight: 400 }}>{subtitle}</p>
+    <header className="kh-banner">
+      <div className="kh-hol" aria-hidden />
+      <Rosette size={220} className="kh-banner-rosette" />
+      <div className="kh-banner-inner">
+        {back && (
+          <button
+            onClick={back}
+            className="btn-ghost"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 36, height: 36,
+              border: '1px solid var(--border2)',
+              borderRadius: '50%',
+              background: 'var(--surface2)',
+              color: 'var(--text2)', cursor: 'pointer', flexShrink: 0,
+              fontSize: 14,
+            }}
+            aria-label="Go back"
+          >
+            ←
+          </button>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 className="font-display kh-title" style={{
+            fontSize: 36, color: 'var(--text)', lineHeight: 1, paddingTop: 4,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {title}
+          </h1>
+          {km && <p className="font-khmer" lang="km" style={{ fontSize: 14, color: 'var(--accent)', marginTop: 2 }}>{km}</p>}
+          {subtitle && (
+            <p style={{ fontSize: 13, color: 'var(--text2)', marginTop: km ? 0 : 4, fontWeight: 400 }}>{subtitle}</p>
+          )}
+        </div>
+        {actions && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+            {actions}
+          </div>
         )}
       </div>
-      {actions && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-          {actions}
-        </div>
-      )}
-    </div>
+      <NagaRail />
+    </header>
   )
 }
 
@@ -274,13 +291,16 @@ export function Empty({ icon: Icon, message, sub }: {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       justifyContent: 'center', padding: '56px 24px', gap: 14,
     }}>
-      <div style={{
-        width: 44, height: 44,
-        background: 'var(--surface2)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Icon size={20} style={{ color: 'var(--text3)' }} strokeWidth={1.5} />
+      <div style={{ position: 'relative', width: 96, height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Rosette size={96} style={{ position: 'absolute', inset: 0, color: 'var(--accent)', opacity: 0.35 }} />
+        <div style={{
+          position: 'relative', width: 46, height: 46,
+          background: 'var(--surface2)', border: '1px solid var(--border2)',
+          borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon size={19} style={{ color: 'var(--accent)' }} strokeWidth={1.5} />
+        </div>
       </div>
       <div style={{ textAlign: 'center', maxWidth: 280 }}>
         <p style={{ color: 'var(--text2)', fontSize: 14, fontWeight: 600 }}>{message}</p>
@@ -295,13 +315,13 @@ import { type RefObject } from 'react'
 
 function termColor(l: string): string {
   const lo = l.toLowerCase()
-  if (l.startsWith('[ERROR]') || lo.includes('error') || lo.includes('traceback')) return '#ff5555'
-  if (l.startsWith('[DONE]')  || lo.includes('finished') || lo.includes('complete')) return '#50fa7b'
-  if (l.startsWith('[WARN]')  || l.startsWith('[STOPPED]') || lo.includes('warning')) return '#f1fa8c'
-  if (lo.includes('epoch'))  return '#8be9fd'
-  if (lo.includes('loss') || lo.includes('map') || lo.includes('precision') || lo.includes('recall')) return '#bd93f9'
-  if (l.startsWith('[INFO]')) return '#8be9fd'
-  return '#cdd6f4'
+  if (l.startsWith('[ERROR]') || lo.includes('error') || lo.includes('traceback')) return '#ef6a55'
+  if (l.startsWith('[DONE]')  || lo.includes('finished') || lo.includes('complete')) return '#86c27a'
+  if (l.startsWith('[WARN]')  || l.startsWith('[STOPPED]') || lo.includes('warning')) return '#f0913a'
+  if (lo.includes('epoch'))  return '#4fb3a9'
+  if (lo.includes('loss') || lo.includes('map') || lo.includes('precision') || lo.includes('recall')) return '#e0a83a'
+  if (l.startsWith('[INFO]')) return '#4fb3a9'
+  return '#d9cfbf'
 }
 
 export function LogTerminal({ logs, logRef }: {
@@ -309,31 +329,26 @@ export function LogTerminal({ logs, logRef }: {
 }) {
   return (
     <div style={{
-      border: '1px solid #222',
-      borderRadius: 'var(--radius)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-lg)',
       overflow: 'hidden',
       flexShrink: 0,
     }}>
-      {/* ── macOS title bar ── */}
+      {/* ── Title bar ── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
+        display: 'flex', alignItems: 'center', gap: 10,
         padding: '9px 14px',
-        background: '#161616',
-        borderBottom: '1px solid #222',
+        background: 'var(--surface2)',
+        borderBottom: '1px solid var(--border)',
         userSelect: 'none',
       }}>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#ff5f57', flexShrink: 0 }} />
-          <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#febc2e', flexShrink: 0 }} />
-          <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#28c840', flexShrink: 0 }} />
-        </div>
-        <span style={{
-          flex: 1, textAlign: 'center', marginRight: 45,
-          fontSize: 11, color: '#444',
-          fontFamily: "'JetBrains Mono','SF Mono',Menlo,Monaco,monospace",
-          letterSpacing: '0.04em',
-        }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: logs.length ? 'var(--success)' : 'var(--text3)',
+          boxShadow: logs.length ? '0 0 0 3px rgba(134,194,122,0.18)' : 'none' }} />
+        <span style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'var(--font-mono)' }}>
           training.log
+        </span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+          {logs.length} lines
         </span>
       </div>
 
@@ -342,30 +357,28 @@ export function LogTerminal({ logs, logRef }: {
         ref={logRef}
         style={{
           height: 220, overflowY: 'auto',
-          background: '#0d0d0d',
+          background: '#0b0919',
           padding: '12px 16px',
-          fontFamily: "'JetBrains Mono','SF Mono',Menlo,Monaco,Consolas,monospace",
+          fontFamily: 'var(--font-mono)',
           fontSize: 11.5, lineHeight: 2,
         }}
       >
         {logs.length === 0 ? (
-          <span style={{ color: '#444' }}>
-            <span style={{ color: '#50fa7b' }}>➜</span>
-            {'  '}
-            <span style={{ color: '#8be9fd' }}>nocode-cv</span>
-            <span style={{ color: '#ff79c6' }}> $ </span>
-            <span style={{ color: '#555' }}>waiting for training to start</span>
-            <span style={{ display: 'inline-block', width: 7, height: '1.1em', background: '#6272a4', marginLeft: 3, verticalAlign: 'text-bottom', opacity: 0.8 }} />
+          <span style={{ color: 'var(--text3)' }}>
+            <span style={{ color: 'var(--secondary)' }}>nocode-cv</span>
+            <span style={{ color: 'var(--accent)' }}> $ </span>
+            <span>waiting for training to start</span>
+            <span style={{ display: 'inline-block', width: 7, height: '1.1em', background: 'var(--accent)', marginLeft: 3, verticalAlign: 'text-bottom', opacity: 0.7 }} />
           </span>
         ) : logs.map((l, i) => (
           <div key={i} style={{ display: 'flex', gap: 0 }}>
             <span style={{
-              color: '#2d2d2d', userSelect: 'none', flexShrink: 0, minWidth: 34,
+              color: '#3b3266', userSelect: 'none', flexShrink: 0, minWidth: 34,
               fontVariantNumeric: 'tabular-nums', textAlign: 'right', paddingRight: 14,
             }}>
               {i + 1}
             </span>
-            <span style={{ color: '#3d3d3d', flexShrink: 0, marginRight: 14 }}>│</span>
+            <span style={{ color: '#29234a', flexShrink: 0, marginRight: 14 }}>│</span>
             <span style={{ color: termColor(l), wordBreak: 'break-all' }}>{l}</span>
           </div>
         ))}
@@ -384,16 +397,16 @@ export function ProgressBar({ value, max, label, sublabel }: {
       {(label || sublabel) && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
           <span style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 500 }}>{label}</span>
-          <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+          <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
             {sublabel ?? `${pct}%`}
           </span>
         </div>
       )}
-      <div style={{ height: 3, background: 'var(--surface3)', borderRadius: 0, overflow: 'hidden' }}>
-        <div style={{
-          height: '100%', width: `${pct}%`,
-          background: 'var(--accent)',
-          transition: 'width 0.2s',
+      <div style={{ height: 5, background: 'var(--surface3)', borderRadius: 5, overflow: 'hidden' }}>
+        <div className={pct > 0 && pct < 100 ? 'kh-progress-live' : undefined} style={{
+          height: '100%', width: `${pct}%`, borderRadius: 5,
+          background: 'linear-gradient(90deg, var(--secondary), var(--accent))',
+          transition: 'width 0.3s',
         }} />
       </div>
     </div>
@@ -407,15 +420,14 @@ export function MetricPill({ label, value, color = 'var(--accent)' }: {
   return (
     <div style={{
       background: 'var(--surface2)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)', padding: '14px 18px', textAlign: 'center',
+      borderRadius: 'var(--radius-lg)', padding: '14px 18px', textAlign: 'center',
     }}>
       <p style={{
-        fontSize: 10, color: 'var(--text3)', marginBottom: 6,
-        letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
+        fontSize: 12, color: 'var(--text2)', marginBottom: 6, fontWeight: 600,
       }}>{label}</p>
       <p style={{
-        fontSize: 22, fontWeight: 700, color,
-        fontFamily: 'JetBrains Mono, monospace', letterSpacing: '-0.03em',
+        fontSize: 22, fontWeight: 600, color,
+        fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em',
         fontVariantNumeric: 'tabular-nums',
       }}>{value}</p>
     </div>
@@ -427,8 +439,7 @@ export function SectionHeader({ children }: { children: ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0' }}>
       <span style={{
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-        textTransform: 'uppercase', color: 'var(--text3)', whiteSpace: 'nowrap',
+        fontSize: 12, fontWeight: 600, color: 'var(--text2)', whiteSpace: 'nowrap',
       }}>{children}</span>
       <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
     </div>
@@ -444,7 +455,7 @@ export function Toggle({ checked, onChange, label }: {
       <div
         onClick={() => onChange(!checked)}
         style={{
-          width: 30, height: 16, borderRadius: 0,
+          width: 32, height: 18, borderRadius: 18,
           background: checked ? 'var(--accent)' : 'var(--surface3)',
           border: `1px solid ${checked ? 'var(--accent)' : 'var(--border2)'}`,
           position: 'relative', flexShrink: 0,
@@ -452,8 +463,8 @@ export function Toggle({ checked, onChange, label }: {
         }}
       >
         <div style={{
-          position: 'absolute', top: 2, left: checked ? 13 : 2,
-          width: 10, height: 10, borderRadius: 0, background: '#fff',
+          position: 'absolute', top: 2, left: checked ? 15 : 2,
+          width: 12, height: 12, borderRadius: '50%', background: checked ? 'var(--on-accent)' : 'var(--text2)',
           transition: 'left 0.1s',
         }} />
       </div>
@@ -468,7 +479,8 @@ export function InfoBanner({ children }: { children: ReactNode }) {
     <div style={{
       padding: '10px 14px',
       background: 'var(--accent-t)',
-      border: '1px solid rgba(94,106,210,0.20)',
+      border: '1px solid rgba(224,168,58,0.22)',
+      borderLeft: '3px solid var(--accent)',
       borderRadius: 'var(--radius)',
       marginBottom: 20,
       fontSize: 13, color: 'var(--text2)', lineHeight: 1.6,

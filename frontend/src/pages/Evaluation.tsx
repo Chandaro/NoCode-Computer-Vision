@@ -4,7 +4,7 @@ import { Loader, Image as ImageIcon, Upload, Zap } from 'lucide-react'
 import api, { type EvalData, type InferResult } from '../api'
 import { Card, Label, PageHeader, MetricPill, Empty, Btn, Slider } from '../components/ui'
 
-const PALETTE = ['#5865f2','#22c55e','#f59e0b','#06b6d4','#a855f7','#ec4899','#64748b','#ef4444']
+const PALETTE = ['#e0a83a','#ea8fa2','#4fb3a9','#f0913a','#9b7fd1','#86c27a','#8f86a3','#ef6a55']
 
 const PLOT_LABELS: Record<string, string> = {
   'confusion_matrix.png':            'Confusion Matrix',
@@ -105,7 +105,7 @@ export default function Evaluation() {
       ctx.strokeRect(x, y, w, h)
       ctx.fillStyle = color + 'cc'
       ctx.fillRect(x, y - 18, Math.min(w, ctx.measureText(`${d.class_name} ${(d.conf*100).toFixed(0)}%`).width + 8), 18)
-      ctx.fillStyle = '#fff'; ctx.font = '12px Inter, sans-serif'
+      ctx.fillStyle = '#fff'; ctx.font = '12px "Kantumruy Pro Variable", sans-serif'
       ctx.fillText(`${d.class_name} ${(d.conf*100).toFixed(0)}%`, x + 4, y - 5)
     })
   }
@@ -292,12 +292,12 @@ export default function Evaluation() {
                             {d.class_name}
                           </td>
                           <td style={{ padding: '5px 0', textAlign: 'right',
-                            fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>
+                            fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--accent)' }}>
                             {(d.conf * 100).toFixed(1)}%
                           </td>
                           {[d.x, d.y, d.w, d.h].map((v, j) => (
                             <td key={j} style={{ padding: '5px 0', textAlign: 'right',
-                              fontFamily: 'JetBrains Mono, monospace', color: 'var(--text2)' }}>
+                              fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--text2)' }}>
                               {v.toFixed(3)}
                             </td>
                           ))}
@@ -343,15 +343,15 @@ export default function Evaluation() {
                 <tr key={cls} style={{ borderTop: '1px solid var(--border)' }}>
                   <td style={{ padding: '9px 0', fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{cls}</td>
                   <td style={{ padding: '9px 0', textAlign: 'right', fontSize: 13,
-                    fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>
+                    fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--accent)' }}>
                     {(m.ap50 * 100).toFixed(1)}%
                   </td>
                   <td style={{ padding: '9px 0', textAlign: 'right', fontSize: 13,
-                    fontFamily: 'JetBrains Mono, monospace', color: 'var(--success)' }}>
+                    fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--success)' }}>
                     {(m.precision * 100).toFixed(1)}%
                   </td>
                   <td style={{ padding: '9px 0', textAlign: 'right', fontSize: 13,
-                    fontFamily: 'JetBrains Mono, monospace', color: '#f59e0b' }}>
+                    fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: '#f59e0b' }}>
                     {(m.recall * 100).toFixed(1)}%
                   </td>
                 </tr>

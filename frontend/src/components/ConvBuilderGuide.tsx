@@ -212,7 +212,7 @@ const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
       flexShrink: 0, width: 20, height: 20, borderRadius: '50%',
       background: 'var(--accent-s)', color: 'var(--accent)', fontSize: 11, fontWeight: 700,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'JetBrains Mono, monospace',
+      fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
     }}>{n}</span>
     <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.55, margin: 0 }}>{children}</p>
   </div>
@@ -225,7 +225,7 @@ const LayerRow = ({ name, color, children }:
     <span style={{
       flexShrink: 0, marginTop: 1, padding: '2px 8px', borderRadius: 5, height: 'fit-content',
       fontSize: 10, fontWeight: 700, color, background: `${color}22`, border: `1px solid ${color}55`,
-      fontFamily: 'JetBrains Mono, monospace', minWidth: 64, textAlign: 'center',
+      fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', minWidth: 64, textAlign: 'center',
     }}>{name}</span>
     <p style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.6, margin: 0 }}>{children}</p>
   </div>

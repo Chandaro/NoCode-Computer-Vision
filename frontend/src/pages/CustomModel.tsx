@@ -465,11 +465,11 @@ function makeLabel(text1: string, text2: string, color: string): THREE.Sprite {
   canvas.height = H
   const ctx = canvas.getContext('2d')!
   ctx.clearRect(0, 0, W, H)
-  ctx.font      = '700 20px "Orbitron", "JetBrains Mono", monospace'
+  ctx.font      = '400 22px "Koulen", Impact, sans-serif'
   ctx.fillStyle = color
   ctx.textAlign = 'center'
   ctx.fillText(text1, W / 2, 26)
-  ctx.font      = '17px "JetBrains Mono", monospace'
+  ctx.font      = '17px "JetBrains Mono Variable", monospace'
   ctx.fillStyle = 'rgba(200,200,220,0.7)'
   ctx.fillText(text2, W / 2, 52)
   const tex    = new THREE.CanvasTexture(canvas)
@@ -798,7 +798,7 @@ function draw2DScene(
   const CW   = canvas.width
   const CH   = canvas.height
 
-  ctx.fillStyle = '#0d0d0f'
+  ctx.fillStyle = '#0b0919'
   ctx.fillRect(0, 0, CW, CH)
 
   const shapes   = [...computeAllShapes(layers, inputH, inputW), [numClasses]]
@@ -943,7 +943,7 @@ function draw2DScene(
     const lx = blobX[i] + PLANE_W / 2 + ((nPl - 1) * DX) / 2
     const ly = CENTER_Y + visH / 2 + 18
 
-    ctx.font      = 'bold 10px "JetBrains Mono", monospace'
+    ctx.font      = 'bold 10px "JetBrains Mono Variable", monospace'
     ctx.fillStyle = color
     ctx.textAlign = 'center'
     ctx.shadowColor = color
@@ -951,7 +951,7 @@ function draw2DScene(
     ctx.fillText(label, lx, ly)
     ctx.shadowBlur  = 0
 
-    ctx.font      = '9px "JetBrains Mono", monospace'
+    ctx.font      = '9px "JetBrains Mono Variable", monospace'
     ctx.fillStyle = 'rgba(140,140,160,0.65)'
     ctx.fillText(shapeStr, lx, ly + 13)
   }
@@ -2290,8 +2290,8 @@ export default function CustomModel() {
 
       <div style={{ padding: '8px 0 10px', flexShrink: 0 }}>
         <ConvBuilderGuide />
-        <div style={{ padding: '9px 14px', background: 'rgba(88,101,242,0.08)',
-          border: '1px solid rgba(88,101,242,0.22)', borderRadius: 8,
+        <div style={{ padding: '9px 14px', background: 'rgba(224,168,58,0.08)',
+          border: '1px solid rgba(224,168,58,0.22)', borderRadius: 8,
           fontSize: 12, color: '#a5b4fc', lineHeight: 1.6 }}>
           ℹ️ Uses the same classification dataset as the <strong>Image Classification</strong> page — upload images per class there first, then come back to build and train your custom CNN.
         </div>
@@ -2309,7 +2309,7 @@ export default function CustomModel() {
           {/* ── Header: model name + params + input size ────────────────────── */}
           <div style={{ padding: '12px 13px 10px', borderBottom: '1px solid rgba(255,255,255,0.055)', flexShrink: 0 }}>
             <input
-              className="font-display"
+              className="font-tech"
               value={modelName} onChange={e => setModelName(e.target.value)}
               placeholder="Model name"
               style={{
@@ -2319,7 +2319,7 @@ export default function CustomModel() {
               }}
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 10, color: 'rgba(100,100,125,0.85)', fontFamily: 'JetBrains Mono, monospace', flex: 1 }}>
+              <span style={{ fontSize: 10, color: 'rgba(100,100,125,0.85)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', flex: 1 }}>
                 {totalParams.toLocaleString()} params
               </span>
               {[['H', inputH, setInputH], ['W', inputW, setInputW]].map(([lbl, val, set]) => (
@@ -2333,7 +2333,7 @@ export default function CustomModel() {
                       width: 38, padding: '3px 5px', textAlign: 'center',
                       background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)',
                       borderRadius: 4, color: 'rgba(200,200,218,0.9)', fontSize: 10,
-                      fontFamily: 'JetBrains Mono, monospace', outline: 'none',
+                      fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', outline: 'none',
                     }}
                   />
                 </div>
@@ -2355,7 +2355,7 @@ export default function CustomModel() {
                     flex: 1, padding: '7px 4px', border: 'none', cursor: 'pointer',
                     fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
                     background: archMode === key ? 'var(--accent)' : 'transparent',
-                    color: archMode === key ? '#fff' : 'var(--text3)',
+                    color: archMode === key ? 'var(--on-accent)' : 'var(--text3)',
                     transition: 'all 0.15s',
                   }}>
                   {label}
@@ -2371,7 +2371,7 @@ export default function CustomModel() {
                 background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(99,102,241,0.03))',
                 border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, padding: 14, marginBottom: 12,
               }}>
-                <p className="font-display" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)',
+                <p className="font-tech" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)',
                   marginBottom: 4 }}>Pretrained Backbone</p>
                 <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.6 }}>
                   Start from a model already trained on millions of images. It learns your
@@ -2401,7 +2401,7 @@ export default function CustomModel() {
                       border: `2px solid ${backbone === b.i ? 'var(--accent)' : 'var(--border2)'}`,
                       background: backbone === b.i ? 'var(--accent)' : 'transparent' }} />
                     <span className="font-tech" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', flex: 1 }}>{b.name}</span>
-                    <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>{b.params}</span>
+                    <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{b.params}</span>
                   </div>
                   <p style={{ fontSize: 11, color: 'var(--text3)', margin: '3px 0 0 20px', lineHeight: 1.4 }}>{b.desc}</p>
                 </button>
@@ -2450,7 +2450,7 @@ export default function CustomModel() {
               {PRESETS.map(p => (
                 <button key={p.name} title={p.desc}
                   onClick={() => { if (window.confirm(`Load "${p.name}"?\n\n${p.desc}\n\nThis replaces your current layers.`)) { setLayers(p.make()); setSelectedId(null) } }}
-                  style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 5, background: `${p.color}14`, border: `1px solid ${p.color}2e`, color: p.color, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.02em', transition: 'all 0.12s' }}
+                  style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 5, background: `${p.color}14`, border: `1px solid ${p.color}2e`, color: p.color, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', letterSpacing: '0.02em', transition: 'all 0.12s' }}
                   onMouseEnter={e => { e.currentTarget.style.background = `${p.color}2c`; e.currentTarget.style.borderColor = `${p.color}66` }}
                   onMouseLeave={e => { e.currentTarget.style.background = `${p.color}14`; e.currentTarget.style.borderColor = `${p.color}2e` }}
                 >{p.name}</button>
@@ -2467,7 +2467,7 @@ export default function CustomModel() {
             {/* INPUT terminal */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 7, border: '1px dashed rgba(139,139,154,0.16)', background: 'rgba(139,139,154,0.035)' }}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#8b8b9a', flexShrink: 0 }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(139,139,154,0.75)', letterSpacing: '0.09em', fontFamily: 'JetBrains Mono, monospace', flex: 1 }}>INPUT</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(139,139,154,0.75)', letterSpacing: '0.09em', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', flex: 1 }}>INPUT</span>
               <span style={{ fontSize: 9, color: 'rgba(130,130,150,0.45)', fontFamily: 'monospace' }}>{`3×${inputH}×${inputW}`}</span>
             </div>
 
@@ -2578,7 +2578,7 @@ export default function CustomModel() {
                         {valid && (
                           <span style={{
                             fontSize: 9, fontWeight: 700, letterSpacing: '0.07em',
-                            fontFamily: 'JetBrains Mono, monospace',
+                            fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                             color: color,
                             background: `${color}26`,
                             border: `1px solid ${color}55`,
@@ -2590,7 +2590,7 @@ export default function CustomModel() {
                           </span>
                         )}
                         <span style={{
-                          fontSize: 10, fontFamily: 'JetBrains Mono, monospace',
+                          fontSize: 10, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                           lineHeight: 1, color: 'var(--text3)', flexShrink: 0,
                           fontVariantNumeric: 'tabular-nums',
                         }}>
@@ -2615,7 +2615,7 @@ export default function CustomModel() {
                         <div style={{
                           fontSize: 10, marginTop: 4,
                           color: 'var(--text3)',
-                          fontFamily: 'JetBrains Mono, monospace',
+                          fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                           letterSpacing: '-0.01em',
                           overflow: 'hidden', textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap', lineHeight: 1.3,
@@ -2658,7 +2658,7 @@ export default function CustomModel() {
             {/* OUTPUT terminal */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 7, border: '1px dashed rgba(34,197,94,0.18)', background: 'rgba(34,197,94,0.04)' }}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(34,197,94,0.75)', letterSpacing: '0.09em', fontFamily: 'JetBrains Mono, monospace', flex: 1 }}>OUTPUT</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(34,197,94,0.75)', letterSpacing: '0.09em', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', flex: 1 }}>OUTPUT</span>
               <span style={{ fontSize: 9, color: 'rgba(34,197,94,0.45)', fontFamily: 'monospace' }}>{numClasses} classes</span>
             </div>
           </div>
@@ -2726,8 +2726,8 @@ export default function CustomModel() {
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; setHoveredAddType(null) }}
                   >
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: LAYER_CSS[lt] ?? '#8b8b9a', flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{LAYER_DISPLAY[lt] ?? lt}</span>
-                    <span style={{ fontSize: 9, color: 'rgba(100,100,125,0.6)', fontFamily: 'JetBrains Mono, monospace' }}>
+                    <span style={{ flex: 1, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', fontSize: 11 }}>{LAYER_DISPLAY[lt] ?? lt}</span>
+                    <span style={{ fontSize: 9, color: 'rgba(100,100,125,0.6)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                       {Object.keys(DEFAULT_PARAMS[lt]).length > 0 ? Object.entries(DEFAULT_PARAMS[lt]).map(([k, v]) => `${k}=${v}`).join(' ') : 'no params'}
                     </span>
                   </button>
@@ -2739,7 +2739,7 @@ export default function CustomModel() {
         </div>
 
         {/* ── Center: Canvas (3D or 2D) ───────────────────────────────────── */}
-        <div style={{ flex: 1, position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: '#0d0d0f' }}>
+        <div style={{ flex: 1, position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: '#0b0919' }}>
           {archMode === 'pretrained' ? (
             <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
               alignItems: 'center', justifyContent: 'center', gap: 22, padding: 24 }}>
@@ -2760,11 +2760,11 @@ export default function CustomModel() {
                         background: `linear-gradient(135deg, ${s.c}26, ${s.c}0a)`,
                         border: `2px solid ${s.c}`, boxShadow: `0 0 28px ${s.c}44`,
                       }}>
-                        <span className="font-display" style={{ fontSize: (s as any).big ? 13 : 11,
+                        <span className="font-tech" style={{ fontSize: (s as any).big ? 13 : 11,
                           fontWeight: 700, color: s.c, textAlign: 'center', padding: '0 8px' }}>{s.label}</span>
                       </div>
                       <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6,
-                        fontFamily: 'JetBrains Mono, monospace' }}>{s.sub}</p>
+                        fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{s.sub}</p>
                     </div>
                     {i < arr.length - 1 && (
                       <span style={{ fontSize: 26, color: 'var(--text3)' }}>→</span>
@@ -2833,7 +2833,7 @@ export default function CustomModel() {
                 disabled={flyMode}
                 style={{
                   padding: '4px 10px', borderRadius: 5,
-                  background: autoRotate && !flyMode ? 'rgba(88,101,242,0.25)' : 'rgba(15,15,18,0.85)',
+                  background: autoRotate && !flyMode ? 'rgba(224,168,58,0.25)' : 'rgba(15,15,18,0.85)',
                   border: `1px solid ${autoRotate && !flyMode ? 'var(--accent)' : 'var(--border2)'}`,
                   color: autoRotate && !flyMode ? 'var(--accent)' : 'var(--text2)',
                   fontSize: 11, cursor: flyMode ? 'default' : 'pointer',
@@ -3046,7 +3046,7 @@ export default function CustomModel() {
               height: 200, overflowY: 'auto', margin: '0 10px 10px',
               background: '#07070a', border: '1px solid var(--border)',
               borderRadius: 5, padding: '8px 10px',
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 1.65,
+              fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', fontSize: 11, lineHeight: 1.65,
               flexShrink: 0,
             }}
           >
@@ -3122,7 +3122,7 @@ export default function CustomModel() {
                     />
                     <Bar dataKey="acc" radius={[3, 3, 0, 0]}>
                       {allRuns.filter(r => r.status === 'done').map((_, i) => (
-                        <Cell key={i} fill={['#5865f2','#22c55e','#f59e0b','#06b6d4','#a855f7','#ec4899'][i % 6]} />
+                        <Cell key={i} fill={['#e0a83a','#ea8fa2','#4fb3a9','#f0913a','#9b7fd1','#86c27a'][i % 6]} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -3193,7 +3193,7 @@ export default function CustomModel() {
                         <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 52 }}>
                           {acc1 !== null ? (
                             <>
-                              <p className="font-display" style={{ fontSize: 18, fontWeight: 800,
+                              <p className="font-tech" style={{ fontSize: 18, fontWeight: 800,
                                 color: accColor, lineHeight: 1, margin: 0,
                                 textShadow: `0 0 12px ${accColor}55` }}>
                                 {(acc1 * 100).toFixed(0)}<span style={{ fontSize: 10 }}>%</span>
@@ -3213,13 +3213,13 @@ export default function CustomModel() {
                         {/* Middle: id + config + accuracy bar */}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <span className="font-display" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                            <span className="font-tech" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
                               Run #{run.id}
                             </span>
                             {isBest && <span style={{ fontSize: 10, color: '#22c55e' }} title="Best run">★</span>}
                             <Badge color={statusColor(run.status)}>{run.status}</Badge>
                           </div>
-                          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace', marginBottom: 5 }}>
+                          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', marginBottom: 5 }}>
                             {run.epochs} ep · lr {run.lr}
                           </div>
                           {/* accuracy bar */}
@@ -3283,13 +3283,13 @@ export default function CustomModel() {
                                         {(['accuracy','precision','recall','f1'] as const).map(k => {
                                           const v = m[k] as number
                                           return (
-                                            <td key={k} style={{ padding: '3px 6px', textAlign: 'center', fontFamily: 'JetBrains Mono, monospace',
+                                            <td key={k} style={{ padding: '3px 6px', textAlign: 'center', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                                               color: v >= 0.7 ? 'var(--success,#22c55e)' : v < 0.4 ? 'var(--danger,#f87171)' : 'var(--warn,#f59e0b)' }}>
                                               {(v * 100).toFixed(0)}%
                                             </td>
                                           )
                                         })}
-                                        <td style={{ padding: '3px 6px', textAlign: 'center', color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>{m.support}</td>
+                                        <td style={{ padding: '3px 6px', textAlign: 'center', color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{m.support}</td>
                                       </tr>
                                     ))}
                                   </tbody>
@@ -3313,7 +3313,7 @@ export default function CustomModel() {
                                               <td key={j} style={{ padding: '2px 6px', textAlign: 'center',
                                                 background: i === j ? `rgba(34,197,94,${intensity * 0.6})` : intensity > 0.1 ? `rgba(248,113,113,${intensity * 0.5})` : 'transparent',
                                                 color: intensity > 0.4 ? '#fff' : 'var(--text2)',
-                                                fontFamily: 'JetBrains Mono, monospace', borderRadius: 3 }}>
+                                                fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', borderRadius: 3 }}>
                                                 {val}
                                               </td>
                                             )
@@ -3385,14 +3385,14 @@ export default function CustomModel() {
                     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 5, padding: '8px 10px', marginBottom: 6 }}>
                       <p style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Top prediction</p>
                       <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{inferResult.top1?.class_name}</p>
-                      <p style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>
+                      <p style={{ fontSize: 13, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--accent)' }}>
                         {((inferResult.top1?.probability ?? 0) * 100).toFixed(1)}%
                       </p>
                     </div>
                     {inferResult.top5.slice(1).map((p, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text2)', padding: '2px 0', borderTop: i === 0 ? '1px solid var(--border)' : 'none' }}>
                         <span>{p.class_name}</span>
-                        <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text3)', fontSize: 10 }}>
+                        <span style={{ fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--text3)', fontSize: 10 }}>
                           {(p.probability * 100).toFixed(1)}%
                         </span>
                       </div>

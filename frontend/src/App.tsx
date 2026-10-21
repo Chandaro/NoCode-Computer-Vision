@@ -1,7 +1,9 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
-import { Eye, Loader } from 'lucide-react'
+import { BrowserRouter, Routes, Route, NavLink, useLocation, matchPath } from 'react-router-dom'
+import { lazy, Suspense, type ReactNode } from 'react'
 import Projects from './pages/Projects'   // landing page — keep eager for instant first paint
+import { PrasatMark, Lotus } from './components/Sigil'
+import ProjectRail, { useProject } from './components/ProjectRail'
+import AmbientPetals from './components/AmbientPetals'
 
 // Heavy / less-frequent pages are code-split so the initial bundle stays small.
 // Each becomes its own chunk, fetched on first navigation.
@@ -19,26 +21,43 @@ const RoadSafety    = lazy(() => import('./pages/RoadSafety'))
 const Guidance      = lazy(() => import('./pages/Guidance'))
 const Depth         = lazy(() => import('./pages/Depth'))
 
-function Nav() {
+// Pages that need the full width (canvas editors) skip the tool rail.
+const FULL_BLEED = new Set(['annotate', 'custom'])
+
+function useProjectRoute() {
+  const { pathname } = useLocation()
+  const m = matchPath('/projects/:id/:section/*', pathname)
+  return m ? { id: m.params.id!, section: m.params.section! } : null
+}
+
+function TopBar() {
+  const route = useProjectRoute()
+  const project = useProject(route?.id)
   return (
-    <header style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}
-      className="sticky top-0 z-40">
-      <div className="flex items-center gap-6 px-6 h-12">
-        <NavLink to="/" className="flex items-center gap-2 no-underline">
-          <Eye size={16} style={{ color: 'var(--accent)' }} strokeWidth={1.8} />
-          <span className="font-display" style={{ color: 'var(--text)', fontWeight: 700, fontSize: 15, letterSpacing: '0.04em' }}>
+    <header className="sticky top-0 z-40" style={{
+      background: 'rgba(16, 14, 34, 0.84)', backdropFilter: 'blur(10px)',
+      borderBottom: '1px solid var(--border)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '0 24px', height: 56 }}>
+        <NavLink to="/" aria-label="NoCode CV home" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <PrasatMark size={28} />
+          <span className="font-display" style={{ color: 'var(--text)', fontSize: 23, lineHeight: 1, paddingTop: 3 }}>
             NoCode CV
           </span>
         </NavLink>
-        <div style={{ width: 1, height: 16, background: 'var(--border2)' }} />
-        <NavLink to="/" end style={({ isActive }) => ({
-          fontSize: 13,
-          color: isActive ? 'var(--text)' : 'var(--text2)',
-          textDecoration: 'none',
-          fontWeight: isActive ? 500 : 400,
-        })}>
-          Projects
-        </NavLink>
+        <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, fontSize: 13 }}>
+          <span aria-hidden style={{ color: 'var(--border2)' }}>/</span>
+          <NavLink to="/" end style={({ isActive }) => ({
+            color: isActive ? 'var(--text)' : 'var(--text2)', textDecoration: 'none',
+          })}>Projects</NavLink>
+          {route && <>
+            <span aria-hidden style={{ color: 'var(--border2)' }}>/</span>
+            <NavLink to={`/projects/${route.id}/images`} style={{
+              color: 'var(--text)', textDecoration: 'none',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260,
+            }}>{project?.name ?? '…'}</NavLink>
+          </>}
+        </nav>
       </div>
     </header>
   )
@@ -46,20 +65,37 @@ function Nav() {
 
 function PageFallback() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '80px 0', color: 'var(--text3)', gap: 10 }}>
-      <Loader size={18} className="animate-spin" style={{ color: 'var(--accent)' }} />
-      <span style={{ fontSize: 13 }}>Loading…</span>
+    <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '96px 0', color: 'var(--text3)', gap: 12 }}>
+      <span className="kh-blink"><Lotus size={24} seed="loading" /></span>
+      <span style={{ fontSize: 13 }}>Opening…</span>
     </div>
+  )
+}
+
+function Frame({ children }: { children: ReactNode }) {
+  const route = useProjectRoute()
+  const { pathname } = useLocation()
+  const withRail = route && !FULL_BLEED.has(route.section)
+  return (
+    <main style={{ flex: 1, padding: '28px 24px 48px', width: '100%' }}>
+      {withRail ? (
+        <div className="kh-layout" style={{ maxWidth: 1340, margin: '0 auto' }}>
+          <ProjectRail projectId={route.id} section={route.section} />
+          <div key={pathname} className="kh-page" style={{ minWidth: 0 }}>{children}</div>
+        </div>
+      ) : children}
+    </main>
   )
 }
 
 export default function App() {
   return (
     <BrowserRouter>
-      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-        <Nav />
-        <main style={{ flex: 1, padding: '32px 24px' }}>
+      <AmbientRoute />
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
+        <TopBar />
+        <Frame>
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route path="/"                               element={<Projects />} />
@@ -76,10 +112,29 @@ export default function App() {
               <Route path="/projects/:id/road-safety"       element={<RoadSafety />} />
               <Route path="/projects/:id/guidance"          element={<Guidance />} />
               <Route path="/projects/:id/depth"             element={<Depth />} />
+              <Route path="*"                               element={<NotFound />} />
             </Routes>
           </Suspense>
-        </main>
+        </Frame>
       </div>
     </BrowserRouter>
   )
+}
+
+function NotFound() {
+  return (
+    <div style={{ maxWidth: 520, margin: '80px auto', textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}><Lotus size={60} seed="lost" /></div>
+      <h1 className="font-display" style={{ fontSize: 40 }}>Nothing to see here</h1>
+      <p style={{ color: 'var(--text2)', marginTop: 8 }}>This page doesn't exist. Go back to your projects to pick up where you left off.</p>
+      <NavLink to="/" style={{ display: 'inline-block', marginTop: 20, color: 'var(--accent)' }}>Open projects</NavLink>
+    </div>
+  )
+}
+
+// Drifting petals everywhere except the canvas editors, where nothing should move behind the work.
+function AmbientRoute() {
+  const route = useProjectRoute()
+  if (route && FULL_BLEED.has(route.section)) return null
+  return <AmbientPetals density={route ? 0.7 : 1} />
 }

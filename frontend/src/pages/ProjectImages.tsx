@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Pencil, Trash2, BarChart2, Zap, Brain, CheckSquare, Square, X, Cpu, FolderInput, Tags, Camera, Activity, Layers, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon, FileArchive, ImagePlus, ScanLine, Crosshair, Video, Bike, Navigation } from 'lucide-react'
+import { Upload, Pencil, Trash2, CheckSquare, Square, X, FolderInput, Tags, Info, ChevronDown, ChevronUp, Folder, FileText, Image as ImageIcon, FileArchive, ImagePlus, ScanLine, Crosshair, Video } from 'lucide-react'
 import api, { type ImageItem, type Project } from '../api'
 import { PageHeader, Btn, Empty } from '../components/ui'
 
@@ -11,70 +11,6 @@ interface ImportResult {
   classes_updated: boolean
 }
 
-// ── Grouped navigation dropdown ───────────────────────────────────────────────
-interface NavItem { label: string; desc: string; icon: React.ReactNode; onClick: () => void }
-function NavDropdown({ label, icon, items }:
-  { label: string; icon: React.ReactNode; items: NavItem[] }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [open])
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6, padding: '6px 11px',
-          borderRadius: 7, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit',
-          background: open ? 'var(--surface2)' : 'transparent',
-          border: `1px solid ${open ? 'var(--border2)' : 'var(--border)'}`,
-          color: 'var(--text)', transition: 'background 0.12s, border-color 0.12s',
-        }}
-        onMouseEnter={e => { if (!open) e.currentTarget.style.background = 'var(--surface2)' }}
-        onMouseLeave={e => { if (!open) e.currentTarget.style.background = 'transparent' }}>
-        <span style={{ color: 'var(--accent)', display: 'flex' }}>{icon}</span>
-        {label}
-        <ChevronDown size={12} style={{ color: 'var(--text3)',
-          transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
-          minWidth: 230, background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', padding: 5,
-          display: 'flex', flexDirection: 'column', gap: 2,
-        }}>
-          {items.map(it => (
-            <button key={it.label} onClick={() => { setOpen(false); it.onClick() }}
-              style={{
-                display: 'flex', alignItems: 'flex-start', gap: 9, textAlign: 'left',
-                padding: '8px 10px', border: 'none', borderRadius: 6, cursor: 'pointer',
-                background: 'transparent', color: 'var(--text)', width: '100%',
-                transition: 'background 0.1s', fontFamily: 'inherit',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface2)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-              <span style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 1,
-                display: 'flex' }}>{it.icon}</span>
-              <span>
-                <span style={{ display: 'block', fontSize: 13, fontWeight: 500 }}>{it.label}</span>
-                <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)',
-                  lineHeight: 1.4 }}>{it.desc}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 export default function ProjectImages() {
   const { id } = useParams<{ id: string }>()
@@ -560,40 +496,8 @@ export default function ProjectImages() {
       <PageHeader
         back={() => navigate('/')}
         title={project?.name ?? '…'}
+        khmer="រូបភាព និងស្លាក"
         subtitle={`${total} images · ${annotated} annotated · ${pct}%`}
-        actions={<>
-          {/* Detection family — uses bounding-box / polygon annotations */}
-          <NavDropdown label="Detection" icon={<Crosshair size={13} />} items={[
-            { label: 'Detect & Train', desc: 'Train a YOLO object detector',
-              icon: <Zap size={14} />, onClick: () => navigate(`/projects/${projectId}/train`) },
-            { label: 'Segmentation', desc: 'Pixel-mask instance segmentation',
-              icon: <Layers size={14} />, onClick: () => navigate(`/projects/${projectId}/segment`) },
-            { label: 'Pose', desc: '17-keypoint skeleton estimation',
-              icon: <Activity size={14} />, onClick: () => navigate(`/projects/${projectId}/pose`) },
-          ]} />
-
-          {/* Classification family — uses the classification image dataset */}
-          <NavDropdown label="Classification" icon={<ScanLine size={13} />} items={[
-            { label: 'Classify', desc: 'Transfer-learning image classifier',
-              icon: <Brain size={14} />, onClick: () => navigate(`/projects/${projectId}/classify`) },
-            { label: 'Conv Builder', desc: 'Design & train a custom CNN',
-              icon: <Cpu size={14} />, onClick: () => navigate(`/projects/${projectId}/custom`) },
-          ]} />
-
-          {/* Tools — analysis & standalone inference (any image) */}
-          <NavDropdown label="Tools" icon={<BarChart2 size={13} />} items={[
-            { label: 'Analytics', desc: 'Dataset distribution & statistics',
-              icon: <BarChart2 size={14} />, onClick: () => navigate(`/projects/${projectId}/analytics`) },
-            { label: 'Depth & 3D', desc: 'Depth maps, point cloud, measure',
-              icon: <Layers size={14} />, onClick: () => navigate(`/projects/${projectId}/depth`) },
-            { label: 'Webcam', desc: 'Live real-time inference',
-              icon: <Camera size={14} />, onClick: () => navigate(`/projects/${projectId}/webcam`) },
-            { label: 'Road Safety', desc: 'Track road users & check helmets',
-              icon: <Bike size={14} />, onClick: () => navigate(`/projects/${projectId}/road-safety`) },
-            { label: 'Steering Guide', desc: 'Which way to move the wheel',
-              icon: <Navigation size={14} />, onClick: () => navigate(`/projects/${projectId}/guidance`) },
-          ]} />
-        </>}
       />
 
       {/* Class labels editor */}
@@ -608,7 +512,7 @@ export default function ProjectImages() {
           <div style={{ flex: 1 }} />
           {(project?.classes.length ?? 0) === 0 && annotated > 0 && (
             <button onClick={deriveClasses} disabled={derivingClasses}
-              style={{ fontSize: 11, color: '#fff', background: 'var(--accent)', border: 'none',
+              style={{ fontSize: 11, color: 'var(--on-accent)', background: 'var(--accent)', border: 'none',
                 cursor: derivingClasses ? 'wait' : 'pointer', padding: '3px 10px', borderRadius: 5,
                 marginRight: 6 }}>
               {derivingClasses ? 'Deriving…' : '⚡ Derive from annotations'}
@@ -684,7 +588,7 @@ export default function ProjectImages() {
               border: 'none', borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
               fontSize: 12, fontWeight: datasetMode === key ? 600 : 400,
               background: datasetMode === key ? 'var(--accent)' : 'transparent',
-              color: datasetMode === key ? '#fff' : 'var(--text2)',
+              color: datasetMode === key ? 'var(--on-accent)' : 'var(--text2)',
               transition: 'background 0.15s, color 0.15s',
             }}>
             {icon} {label}
@@ -745,7 +649,7 @@ export default function ProjectImages() {
                 <div style={{ padding: '14px 16px', borderRight: '1px solid var(--border)' }}>
                   <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>📁 Folder / ZIP structure</p>
                   <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6,
-                    padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 2 }}>
+                    padding: '10px 12px', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', fontSize: 11, lineHeight: 2 }}>
                     <div style={{ color: 'var(--secondary)' }}>📁 dataset/</div>
                     <div style={{ paddingLeft: 16, color: 'var(--accent)' }}>📁 cats/</div>
                     <div style={{ paddingLeft: 32, color: 'var(--text3)' }}>🖼 cat1.jpg</div>
@@ -858,7 +762,7 @@ export default function ProjectImages() {
                   <button onClick={() => setClsFilter('all')}
                     style={{ padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                       border: `1px solid ${clsFilter === 'all' ? 'var(--accent)' : 'var(--border)'}`,
-                      background: clsFilter === 'all' ? 'rgba(88,101,242,0.12)' : 'transparent',
+                      background: clsFilter === 'all' ? 'rgba(224,168,58,0.12)' : 'transparent',
                       color: clsFilter === 'all' ? 'var(--accent)' : 'var(--text2)',
                       fontWeight: clsFilter === 'all' ? 500 : 400, transition: 'all 0.12s' }}>
                     All <span style={{ marginLeft: 5, color: 'var(--text3)' }}>{clsImages.length}</span>
@@ -871,7 +775,7 @@ export default function ProjectImages() {
                         style={{ display: 'flex', alignItems: 'center', gap: 6,
                           padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
                           border: `1px solid ${clsFilter === cls ? 'var(--accent)' : 'var(--border)'}`,
-                          background: clsFilter === cls ? 'rgba(88,101,242,0.12)' : 'transparent',
+                          background: clsFilter === cls ? 'rgba(224,168,58,0.12)' : 'transparent',
                           color: clsFilter === cls ? 'var(--accent)' : 'var(--text2)',
                           fontWeight: clsFilter === cls ? 500 : 400, transition: 'all 0.12s',
                           fontFamily: 'monospace' }}>
@@ -890,8 +794,8 @@ export default function ProjectImages() {
                   {shown.map(img => {
                     const key = `${img.class_name}/${img.filename}`
                     return (
-                      <div key={key}
-                        style={{ background: '#0d0d0f', borderRadius: 10, overflow: 'hidden',
+                      <div key={key} className="kh-tile"
+                        style={{ background: '#0b0919', borderRadius: 10, overflow: 'hidden',
                           position: 'relative', aspectRatio: '1 / 1', outline: '1px solid var(--border)',
                           outlineOffset: -1, transition: 'transform 0.12s ease, box-shadow 0.12s ease' }}
                         onMouseEnter={e => {
@@ -964,9 +868,9 @@ export default function ProjectImages() {
                   border: 'none', borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
                   cursor: 'pointer', fontSize: 12, transition: 'background 0.12s, color 0.12s',
                   background: active ? 'var(--accent)' : 'transparent',
-                  color: active ? '#fff' : 'var(--text2)', fontWeight: active ? 600 : 400 }}>
+                  color: active ? 'var(--on-accent)' : 'var(--text2)', fontWeight: active ? 600 : 400 }}>
                 {f.label}
-                <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace',
+                <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                   opacity: active ? 0.85 : 0.55 }}>{f.count}</span>
               </button>
             )
@@ -1117,12 +1021,12 @@ export default function ProjectImages() {
                 </div>
               </div>
               <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.6 }}>
-                Your folder must contain two sub-folders: <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>images/</code> and <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>labels/</code> with matching filenames.
+                Your folder must contain two sub-folders: <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>images/</code> and <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>labels/</code> with matching filenames.
               </p>
               {/* Folder tree */}
               <div style={{
                 background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-                padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 1.9,
+                padding: '10px 12px', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', fontSize: 11, lineHeight: 1.9,
                 color: 'var(--text2)',
               }}>
                 <div style={{ color: 'var(--secondary)' }}>📁 my-dataset/</div>
@@ -1151,11 +1055,11 @@ export default function ProjectImages() {
                 </div>
               </div>
               <p style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.6 }}>
-                Select both your <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>.jpg/.png</code> images and their matching <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono, monospace' }}>.txt</code> label files in one file-picker selection.
+                Select both your <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>.jpg/.png</code> images and their matching <code style={{ color: 'var(--accent)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>.txt</code> label files in one file-picker selection.
               </p>
               <div style={{
                 background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-                padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 1.9,
+                padding: '10px 12px', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', fontSize: 11, lineHeight: 1.9,
                 color: 'var(--text2)',
               }}>
                 <div style={{ color: 'var(--text3)', fontSize: 10, marginBottom: 4 }}>// Select all of these at once:</div>
@@ -1185,7 +1089,7 @@ export default function ProjectImages() {
               </p>
               <div style={{
                 background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-                padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, lineHeight: 2,
+                padding: '10px 12px', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', fontSize: 11, lineHeight: 2,
               }}>
                 <div style={{ color: 'var(--text3)', fontSize: 10 }}>// class_id  cx  cy  width  height</div>
                 <div>
@@ -1226,9 +1130,9 @@ export default function ProjectImages() {
           {filteredImages.map(img => {
             const isSelected = selected.has(img.id)
             return (
-              <div key={img.id}
+              <div key={img.id} className="kh-tile"
                 onClick={selectMode ? () => toggleSelect(img.id) : undefined}
-                style={{ background: '#0d0d0f', borderRadius: 10, overflow: 'hidden',
+                style={{ background: '#0b0919', borderRadius: 10, overflow: 'hidden',
                   position: 'relative', cursor: selectMode ? 'pointer' : 'default', aspectRatio: '1 / 1',
                   outline: isSelected ? '2px solid var(--accent)' : '1px solid var(--border)',
                   outlineOffset: isSelected ? -2 : -1,
@@ -1266,7 +1170,7 @@ export default function ProjectImages() {
                     border: `2px solid ${isSelected ? 'var(--accent)' : 'rgba(255,255,255,0.6)'}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     backdropFilter: 'blur(2px)' }}>
-                    {isSelected && <span style={{ color: '#fff', fontSize: 11, lineHeight: 1 }}>✓</span>}
+                    {isSelected && <span style={{ color: 'var(--on-accent)', fontSize: 11, lineHeight: 1 }}>✓</span>}
                   </div>
                 )}
 

@@ -89,10 +89,10 @@ function KeypointDiagram() {
           {KP.map(k => (
             <g key={k.i}>
               <circle cx={k.x} cy={k.y} r={9} fill={sideColor(k.side)}
-                stroke="#0d1117" strokeWidth={2} />
+                stroke="#100e22" strokeWidth={2} />
               <text x={k.x} y={k.y + 3.5} textAnchor="middle" fontSize={9.5}
-                fontWeight={700} fill="#0d1117"
-                fontFamily="JetBrains Mono, monospace">{k.i}</text>
+                fontWeight={700} fill="#100e22"
+                fontFamily="JetBrains Mono Variable, JetBrains Mono, monospace">{k.i}</text>
             </g>
           ))}
         </svg>
@@ -108,7 +108,7 @@ function KeypointDiagram() {
               <div key={k.i} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                 <span style={{
                   width: 18, textAlign: 'right', fontSize: 12.5, fontWeight: 700,
-                  color: sideColor(k.side), fontFamily: 'JetBrains Mono, monospace',
+                  color: sideColor(k.side), fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                 }}>{k.i}</span>
                 <span style={{ fontSize: 12.5, color: 'var(--text2)' }}>{k.name}</span>
               </div>
@@ -144,7 +144,7 @@ const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
       background: 'var(--accent-s)', color: 'var(--accent)',
       fontSize: 11, fontWeight: 700, display: 'flex',
       alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'JetBrains Mono, monospace',
+      fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
     }}>{n}</span>
     <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.55, margin: 0 }}>{children}</p>
   </div>
@@ -166,7 +166,7 @@ const Term = ({ children }: { children: React.ReactNode }) => (
 )
 
 const Mono = ({ children }: { children: React.ReactNode }) => (
-  <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>{children}</span>
+  <span style={{ fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--accent)' }}>{children}</span>
 )
 
 // ── The full guide content (rendered inside the modal) ───────────────────────

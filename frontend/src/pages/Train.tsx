@@ -109,7 +109,7 @@ function TestImageCard({ file, src, result }: { file?: File; src?: string; resul
                       fill={color} rx={3} />
                     <text x={bx + 3} y={by - 4}
                       fill="#fff" fontSize={9} fontWeight={600}
-                      fontFamily="JetBrains Mono, monospace">
+                      fontFamily="JetBrains Mono Variable, JetBrains Mono, monospace">
                       {d.class_name} {Math.round(d.conf * 100)}%
                     </text>
                   </g>
@@ -126,7 +126,7 @@ function TestImageCard({ file, src, result }: { file?: File; src?: string; resul
         <span style={{
           fontSize: 11, fontWeight: 600,
           color: result.count > 0 ? 'var(--success)' : 'var(--text3)',
-          fontFamily: 'JetBrains Mono, monospace', flexShrink: 0,
+          fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', flexShrink: 0,
         }}>
           {result.count} {hasMasks ? 'seg' : 'det'}
         </span>
@@ -465,7 +465,7 @@ export default function Train() {
   const S = ({ label, value, clr = 'var(--text)' }: { label: string; value: string; clr?: string }) => (
     <div style={{ textAlign: 'center' }}>
       <p style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</p>
-      <p style={{ fontSize: 15, fontWeight: 600, color: clr, fontFamily: 'JetBrains Mono, monospace' }}>{value}</p>
+      <p style={{ fontSize: 15, fontWeight: 600, color: clr, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{value}</p>
     </div>
   )
 
@@ -782,7 +782,7 @@ export default function Train() {
                     formatter={(v: unknown) => [`${(v as number).toFixed(1)}%`, 'mAP50']} />
                   <Bar dataKey="mAP50" radius={[3, 3, 0, 0]}>
                     {runs.filter(r => r.status === 'done').map((_, i) => (
-                      <Cell key={i} fill={['#5865f2','#22c55e','#f59e0b','#06b6d4','#a855f7','#ec4899'][i % 6]} />
+                      <Cell key={i} fill={['#e0a83a','#ea8fa2','#4fb3a9','#f0913a','#9b7fd1','#86c27a'][i % 6]} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -815,7 +815,7 @@ export default function Train() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {run.results.mAP50 !== undefined && run.results.mAP50 > 0 && (
-                            <span style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'JetBrains Mono, monospace' }}>
+                            <span style={{ fontSize: 12, color: 'var(--text2)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                               {(run.results.mAP50 * 100).toFixed(1)}%
                             </span>
                           )}
@@ -1020,7 +1020,7 @@ export default function Train() {
                         background: 'var(--surface3)', borderRadius: 6,
                         padding: '10px 12px', textAlign: 'center',
                       }}>
-                        <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+                        <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', fontVariantNumeric: 'tabular-nums' }}>{value}</p>
                         <p style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{label}</p>
                       </div>
                     ))}
@@ -1042,7 +1042,7 @@ export default function Train() {
                               <div style={{ width: 80, height: 4, background: 'var(--surface3)', borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
                                 <div style={{ width: `${pct}%`, height: '100%', background: getClsColor(i), borderRadius: 99 }} />
                               </div>
-                              <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace', flexShrink: 0, minWidth: 24, textAlign: 'right' }}>{count}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', flexShrink: 0, minWidth: 24, textAlign: 'right' }}>{count}</span>
                             </div>
                           )
                         })}
@@ -1188,7 +1188,7 @@ export default function Train() {
                         {videoStatus === 'uploading' ? (videoInputMode === 'url' ? 'Downloading video…' : 'Uploading…') : 'Processing frames…'}
                       </span>
                       {videoStatus === 'running' && videoProgress.total > 0 && (
-                        <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                           {videoProgress.processed} / {videoProgress.total}
                         </span>
                       )}
@@ -1257,7 +1257,7 @@ export default function Train() {
                     </p>
                     <p style={{ color: 'var(--text2)', lineHeight: 1.6 }}>{videoError}</p>
                     {videoError.toLowerCase().includes('opencv') && (
-                      <p style={{ color: 'var(--text3)', marginTop: 6, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+                      <p style={{ color: 'var(--text3)', marginTop: 6, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', fontSize: 11 }}>
                         → pip install opencv-python
                       </p>
                     )}

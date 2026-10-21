@@ -8,7 +8,7 @@ import {
 import api, { type AnalyticsData, type Project } from '../api'
 import { Card, StatTile, PageHeader, Label } from '../components/ui'
 
-const PALETTE = ['#5865f2','#22c55e','#f59e0b','#06b6d4','#a855f7','#ec4899','#64748b','#ef4444']
+const PALETTE = ['#e0a83a','#ea8fa2','#4fb3a9','#f0913a','#9b7fd1','#86c27a','#8f86a3','#ef6a55']
 const TT = { contentStyle: { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 } }
 
 export default function Analytics() {
@@ -161,11 +161,11 @@ export default function Analytics() {
                       <span style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 500 }}>{ch}</span>
                     </td>
                     <td style={{ padding: '8px 0', textAlign: 'right', fontSize: 13,
-                      fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)' }}>
+                      fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--text)' }}>
                       {data.channel_stats!.mean[ch].toFixed(4)}
                     </td>
                     <td style={{ padding: '8px 0', textAlign: 'right', fontSize: 13,
-                      fontFamily: 'JetBrains Mono, monospace', color: 'var(--text2)' }}>
+                      fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace', color: 'var(--text2)' }}>
                       {data.channel_stats!.std[ch].toFixed(4)}
                     </td>
                   </tr>

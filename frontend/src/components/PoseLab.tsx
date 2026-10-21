@@ -43,7 +43,7 @@ export default function PoseLab({ keypoints, kpConf }: Props) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {gestures.map(g => (
               <span key={g} style={{ fontSize: 13, padding: '4px 10px', borderRadius: 6,
-                background: 'rgba(94,106,210,0.15)', border: '1px solid rgba(94,106,210,0.3)',
+                background: 'rgba(224,168,58,0.15)', border: '1px solid rgba(224,168,58,0.3)',
                 color: 'var(--text)' }}>{g}</span>
             ))}
           </div>
@@ -66,7 +66,7 @@ export default function PoseLab({ keypoints, kpConf }: Props) {
               background: 'var(--surface)', opacity: a.valid ? 1 : 0.4 }}>
               <span style={{ fontSize: 11, color: 'var(--text3)' }}>{a.name}</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)',
-                fontFamily: 'JetBrains Mono, monospace' }}>
+                fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                 {a.valid ? `${Math.round(a.angle)}°` : '—'}
               </span>
             </div>
@@ -87,7 +87,7 @@ export default function PoseLab({ keypoints, kpConf }: Props) {
                 <Scale size={11} /> Left / Right Symmetry
               </p>
               <span style={{ fontSize: 13, fontWeight: 700, color: col,
-                fontFamily: 'JetBrains Mono, monospace' }}>{sc}/100</span>
+                fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{sc}/100</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {symmetry.rows.map(r => (
@@ -96,11 +96,11 @@ export default function PoseLab({ keypoints, kpConf }: Props) {
                   <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
                     background: r.balanced ? '#22c55e' : '#f59e0b' }} />
                   <span style={{ fontSize: 11, color: 'var(--text2)', flex: 1 }}>{r.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                     {Math.round(r.left)}° / {Math.round(r.right)}°
                   </span>
                   <span style={{ fontSize: 11, fontWeight: 600, minWidth: 38, textAlign: 'right',
-                    fontFamily: 'JetBrains Mono, monospace',
+                    fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace',
                     color: r.balanced ? 'var(--text3)' : '#f59e0b' }}>
                     Δ{Math.round(r.diff)}°
                   </span>
@@ -132,7 +132,7 @@ export default function PoseLab({ keypoints, kpConf }: Props) {
         {showInspector && (
           <div style={{ padding: '0 12px 12px', maxHeight: 280, overflowY: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11,
-              fontFamily: 'JetBrains Mono, monospace' }}>
+              fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
               <thead>
                 <tr style={{ color: 'var(--text3)', textAlign: 'left' }}>
                   <th style={{ padding: '4px 6px', position: 'sticky', top: 0, background: 'var(--surface2)' }}>#</th>

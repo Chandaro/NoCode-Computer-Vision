@@ -73,10 +73,10 @@ function SkeletonOverlay({ persons, width, height, skeleton, showAngles }:
             {jointAngles.filter(a => a.valid).map((a, ai) => (
               <g key={`ang${ai}`}>
                 <rect x={a.vx * width + 6} y={a.vy * height - 9} width={34} height={15}
-                  rx={3} fill="rgba(94,106,210,0.85)" />
+                  rx={3} fill="rgba(224,168,58,0.85)" />
                 <text x={a.vx * width + 8} y={a.vy * height + 2}
                   fill="#fff" fontSize={11} fontWeight={700}
-                  fontFamily="JetBrains Mono, monospace">{Math.round(a.angle)}°</text>
+                  fontFamily="JetBrains Mono Variable, JetBrains Mono, monospace">{Math.round(a.angle)}°</text>
               </g>
             ))}
           </g>
@@ -571,7 +571,7 @@ export default function Pose() {
                       {videoStatus === 'uploading' ? (videoInputMode === 'url' ? 'Downloading video…' : 'Uploading…') : 'Processing frames…'}
                     </span>
                     {videoStatus === 'running' && videoProgress.total > 0 && (
-                      <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                         {videoProgress.processed} / {videoProgress.total}
                       </span>
                     )}
@@ -611,7 +611,7 @@ export default function Pose() {
                 {camActive && <Badge color="green"><Activity size={9} /> Live</Badge>}
                 {camActive && camFps > 0 && (
                   <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.6)', color: '#fff',
-                    padding: '3px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace' }}>
+                    padding: '3px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>
                     {camFps} fps
                   </span>
                 )}
@@ -650,9 +650,9 @@ export default function Pose() {
                           {EXERCISES.find(e => e.id === exerciseId)?.label} reps
                         </p>
                         <p style={{ fontSize: 32, fontWeight: 800, color: '#fff', lineHeight: 1,
-                          fontFamily: 'JetBrains Mono, monospace' }}>{repState.count}</p>
+                          fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{repState.count}</p>
                         <p style={{ fontSize: 10, color: '#3fb950', marginTop: 2,
-                          fontFamily: 'JetBrains Mono, monospace' }}>{repState.goodReps} clean</p>
+                          fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{repState.goodReps} clean</p>
                       </div>
                       <div style={{ textAlign: 'center' }}>
                         <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 5,
@@ -662,7 +662,7 @@ export default function Pose() {
                         </span>
                         {!isNaN(repState.angle) && (
                           <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 3,
-                            fontFamily: 'JetBrains Mono, monospace' }}>{Math.round(repState.angle)}°</p>
+                            fontFamily: 'JetBrains Mono Variable, JetBrains Mono, monospace' }}>{Math.round(repState.angle)}°</p>
                         )}
                       </div>
                     </div>
