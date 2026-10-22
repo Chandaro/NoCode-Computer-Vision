@@ -29,6 +29,7 @@ export default function ScanWorld() {
   const { id: projectId } = useParams()
   const navigate = useNavigate()
   const [ms, setMs] = useState<ModelStatus | null>(null)
+  const [msErr, setMsErr] = useState(false)
   const [files, setFiles] = useState<File[]>([])
   const [source, setSource] = useState<'file' | 'link'>('file')
   const [url, setUrl] = useState('')
@@ -51,7 +52,7 @@ export default function ScanWorld() {
   const [mode, setMode] = useState<ViewMode>('highlight')
   const dropRef = useRef<HTMLLabelElement>(null)
 
-  useEffect(() => { api.get('/scan3d/model-status').then(r => setMs(r.data)).catch(() => setMs(null)) }, [])
+  useEffect(() => { api.get('/scan3d/model-status').then(r => { setMs(r.data); setMsErr(false) }).catch(() => { setMs(null); setMsErr(true) }) }, [])
 
   // poll the running job
   useEffect(() => {
@@ -72,6 +73,15 @@ export default function ScanWorld() {
   const isVideo = source === 'link' || files.some(f => f.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(f.name))
   const t0 = trim ? toSec(from) : undefined, t1 = trim ? toSec(to) : undefined
   const rangeBad = Number.isNaN(t0) || Number.isNaN(t1) || (t0 !== undefined && t1 !== undefined && t1 - t0 < 2)
+  const hasInput = source === 'link' ? /^https?:\/\/\S+/i.test(url.trim()) : files.length > 0
+  const blockReason =
+    msErr ? "The app can't reach the 3D scan service. Close NoCode CV and start it again (after git pull)."
+    : !ms ? 'Checking the 3D models…'
+    : !ms.ready ? `3D models are not installed yet (${[!ms.mapanything && 'MapAnything', !ms.sam2 && 'SAM 2'].filter(Boolean).join(' and ')} missing). Run setup_scan3d.bat, then restart NoCode CV.`
+    : job?.status === 'running' ? 'A scan is already running.'
+    : rangeBad ? 'Fix the trim times first.'
+    : !hasInput ? (source === 'link' ? 'Paste a link that starts with http.' : 'Add a video or photos first.')
+    : ''
   const canStart = !!ms?.ready && job?.status !== 'running' && !rangeBad && (source === 'link' ? /^https?:\/\/\S+/i.test(url.trim()) : files.length > 0)
 
   const start = async () => {
@@ -238,6 +248,7 @@ export default function ScanWorld() {
           <Btn variant="primary" onClick={start} disabled={!canStart} style={{ justifyContent: 'center' }}>
             <Box size={14} /> {job?.status === 'running' ? 'Scanning…' : 'Build 3D scene'}
           </Btn>
+          {blockReason && <p role="status" style={{ fontSize: 11.5, color: 'var(--secondary)', marginTop: -4, lineHeight: 1.5 }}>{blockReason}</p>}
           <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>
             <b style={{ color: 'var(--text)' }}>For a good scan:</b> walk slowly around the subject, keep it in frame, use even light.
             Avoid glass, mirrors and plain white walls. Things that move (people, cars) will blur. 20–60 seconds of video is plenty.
