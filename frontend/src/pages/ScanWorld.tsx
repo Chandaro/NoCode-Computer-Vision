@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Box, Crosshair, Download, Film, Loader, MousePointerClick, RotateCcw, Upload } from 'lucide-react'
+import { Box, Crosshair, Download, Film, Link2, Loader, MousePointerClick, RotateCcw, Upload } from 'lucide-react'
 import api from '../api'
 import { PageHeader, Card, Btn, Slider, InfoBanner, ProgressBar, Badge } from '../components/ui'
 import SplatViewer, { type ViewMode } from '../components/SplatViewer'
@@ -13,8 +13,15 @@ interface Job {
 }
 interface Click { x: number; y: number; label: 0 | 1 }
 
-const STAGES = [['frames', 'Frames'], ['model', 'Model'], ['geometry', '3D geometry'], ['splats', 'Splats']] as const
+const STAGES = [['download', 'Download'], ['frames', 'Frames'], ['model', 'Model'], ['geometry', '3D geometry'], ['splats', 'Splats']] as const
 const keyFor = (pid?: string) => `kh-scan-job-${pid}`
+// "1:20", "80" or "1:02:03" -> seconds; empty -> undefined
+const toSec = (t: string): number | undefined => {
+  const v = t.trim(); if (!v) return undefined
+  const parts = v.split(':').map(Number)
+  if (parts.some(n => !Number.isFinite(n) || n < 0)) return NaN
+  return parts.reduce((a, n) => a * 60 + n, 0)
+}
 const fmt = (m: number) => m >= 1 ? `${m.toFixed(2)} m` : `${(m * 100).toFixed(0)} cm`
 
 export default function ScanWorld() {
@@ -22,6 +29,10 @@ export default function ScanWorld() {
   const navigate = useNavigate()
   const [ms, setMs] = useState<ModelStatus | null>(null)
   const [files, setFiles] = useState<File[]>([])
+  const [source, setSource] = useState<'file' | 'link'>('file')
+  const [url, setUrl] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [frames, setFrames] = useState(40)
   const [detail, setDetail] = useState(2)
   const [jobId, setJobId] = useState<string | null>(() => { try { return localStorage.getItem(keyFor(projectId)) } catch { return null } })
@@ -52,14 +63,26 @@ export default function ScanWorld() {
     return () => { live = false }
   }, [jobId])
 
+  const isVideo = source === 'link' || files.some(f => f.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(f.name))
+  const t0 = toSec(from), t1 = toSec(to)
+  const rangeBad = Number.isNaN(t0) || Number.isNaN(t1) || (t0 !== undefined && t1 !== undefined && t1 - t0 < 2)
+  const canStart = !!ms?.ready && job?.status !== 'running' && !rangeBad && (source === 'link' ? /^https?:\/\/\S+/i.test(url.trim()) : files.length > 0)
+
   const start = async () => {
-    if (!files.length) return
+    if (!canStart) return
     setErr(''); setActive(null); setClicks([])
-    const fd = new FormData()
-    files.forEach(f => fd.append('files', f))
-    fd.append('frames', String(frames)); fd.append('detail', String(detail))
     try {
-      const r = await api.post('/scan3d/start', fd)
+      let r
+      if (source === 'link') {
+        r = await api.post('/scan3d/start-url', { url: url.trim(), frames, detail, start: t0, end: t1 })
+      } else {
+        const fd = new FormData()
+        files.forEach(f => fd.append('files', f))
+        fd.append('frames', String(frames)); fd.append('detail', String(detail))
+        if (t0 !== undefined) fd.append('start', String(t0))
+        if (t1 !== undefined) fd.append('end', String(t1))
+        r = await api.post('/scan3d/start', fd)
+      }
       setJobId(r.data.job_id)
       try { localStorage.setItem(keyFor(projectId), r.data.job_id) } catch { /* ignore */ }
     } catch (e: unknown) {
@@ -106,20 +129,55 @@ export default function ScanWorld() {
         {/* ── capture ─────────────────────────────────────────────── */}
         <Card style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Film size={15} style={{ color: 'var(--accent)' }} /><b style={{ fontSize: 13.5 }}>1. Capture</b></div>
+          <div role="tablist" style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 999, padding: 3, gap: 3 }}>
+            {([['file', 'Upload', Upload], ['link', 'Paste a link', Link2]] as const).map(([k, label, Icon]) => (
+              <button key={k} role="tab" aria-selected={source === k} onClick={() => setSource(k)}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 10px', border: 'none', borderRadius: 999, cursor: 'pointer',
+                  fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', background: source === k ? 'var(--accent)' : 'transparent', color: source === k ? 'var(--on-accent)' : 'var(--text2)' }}>
+                <Icon size={13} /> {label}
+              </button>
+            ))}
+          </div>
+          {source === 'file' ? (
           <label ref={dropRef}
-            onDragOver={e => { e.preventDefault(); dropRef.current?.style.setProperty('border-color', 'var(--accent)') }}
-            onDragLeave={() => dropRef.current?.style.removeProperty('border-color')}
-            onDrop={e => { e.preventDefault(); dropRef.current?.style.removeProperty('border-color'); setFiles(Array.from(e.dataTransfer.files)) }}
-            style={{ border: '1.5px dashed var(--border2)', borderRadius: 'var(--radius)', padding: '20px 14px', textAlign: 'center', cursor: 'pointer', display: 'block' }}>
-            <input type="file" accept="video/*,image/*" multiple hidden onChange={e => setFiles(Array.from(e.target.files ?? []))} />
-            <Upload size={20} style={{ color: 'var(--accent)', margin: '0 auto 6px', display: 'block' }} />
-            <p style={{ fontSize: 13, color: 'var(--text)' }}>{files.length ? `${files.length} file${files.length > 1 ? 's' : ''} ready` : 'Drop a video or photos'}</p>
-            <p style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2 }}>{files.length ? files.slice(0, 2).map(f => f.name).join(', ') + (files.length > 2 ? '…' : '') : 'or click to choose'}</p>
-          </label>
+              onDragOver={e => { e.preventDefault(); dropRef.current?.style.setProperty('border-color', 'var(--accent)') }}
+              onDragLeave={() => dropRef.current?.style.removeProperty('border-color')}
+              onDrop={e => { e.preventDefault(); dropRef.current?.style.removeProperty('border-color'); setFiles(Array.from(e.dataTransfer.files)) }}
+              style={{ border: '1.5px dashed var(--border2)', borderRadius: 'var(--radius)', padding: '20px 14px', textAlign: 'center', cursor: 'pointer', display: 'block' }}>
+              <input type="file" accept="video/*,image/*" multiple hidden onChange={e => setFiles(Array.from(e.target.files ?? []))} />
+              <Upload size={20} style={{ color: 'var(--accent)', margin: '0 auto 6px', display: 'block' }} />
+              <p style={{ fontSize: 13, color: 'var(--text)' }}>{files.length ? `${files.length} file${files.length > 1 ? 's' : ''} ready` : 'Drop a video or photos'}</p>
+              <p style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2 }}>{files.length ? files.slice(0, 2).map(f => f.name).join(', ') + (files.length > 2 ? '…' : '') : 'or click to choose'}</p>
+            </label>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" aria-label="Video link"
+                onKeyDown={e => { if (e.key === 'Enter') start() }}
+                style={{ width: '100%', padding: '9px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' }} />
+              <p style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.5 }}>YouTube, Vimeo, TikTok and most video sites. Only use videos you own or that are licensed for reuse.</p>
+            </div>
+          )}
+          {isVideo && (
+            <div>
+              <p style={{ fontSize: 12.5, color: 'var(--text2)', fontWeight: 500, marginBottom: 6 }}>Part of the video to scan <span style={{ color: 'var(--text3)', fontWeight: 400 }}>optional</span></p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {([['From', from, setFrom, '0:00'], ['To', to, setTo, 'end']] as const).map(([label, val, set, ph]) => (
+                  <label key={label} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text3)' }}>
+                    {label}
+                    <input value={val} onChange={e => set(e.target.value)} placeholder={ph} inputMode="numeric" aria-label={`${label} time`}
+                      style={{ width: '100%', padding: '7px 10px', background: 'var(--surface2)', border: `1px solid ${rangeBad ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 'var(--radius)', color: 'var(--text)', fontSize: 13, fontFamily: 'var(--font-mono)' }} />
+                  </label>
+                ))}
+              </div>
+              <p style={{ fontSize: 11.5, color: rangeBad ? 'var(--danger)' : 'var(--text3)', marginTop: 5 }}>
+                {rangeBad ? 'Use times like 1:20, with the end at least 2 s after the start.' : 'Pick 20–60 s where the camera moves around one place, e.g. 1:20 to 1:50.'}
+              </p>
+            </div>
+          )}
           <Slider label="Frames to use" value={frames} onChange={v => setFrames(Math.round(v))} min={12} max={80} step={4} format={v => `${Math.round(v)}`} />
           <Slider label="Detail" value={detail} onChange={v => setDetail(Math.round(v))} min={1} max={3} step={1}
             format={v => ['', 'Fast', 'Balanced', 'Sharp'][Math.round(v)]} />
-          <Btn variant="primary" onClick={start} disabled={!files.length || !ms?.ready || job?.status === 'running'} style={{ justifyContent: 'center' }}>
+          <Btn variant="primary" onClick={start} disabled={!canStart} style={{ justifyContent: 'center' }}>
             <Box size={14} /> {job?.status === 'running' ? 'Scanning…' : 'Build 3D scene'}
           </Btn>
           <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6 }}>

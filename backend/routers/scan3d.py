@@ -18,6 +18,7 @@ Pipeline (no CUDA compiling, no per-scene training):
 Endpoints
   GET  /scan3d/model-status
   POST /scan3d/start                      (video or images) -> {job_id}
+  POST /scan3d/start-url                  {url, frames, detail, start?, end?} -> {job_id}  (YouTube etc. via yt-dlp)
   GET  /scan3d/{job}/status
   GET  /scan3d/{job}/scene.ply
   GET  /scan3d/{job}/frame/{i}.jpg
@@ -120,15 +121,21 @@ def _sharpness(img: np.ndarray) -> float:
     return float(cv2.Laplacian(g, cv2.CV_64F).var())
 
 
-def _extract_video(path: str, out_dir: str, n: int, long_side: int = 1024) -> int:
-    """Pick the sharpest frame in each of n equal time windows."""
+def _extract_video(path: str, out_dir: str, n: int, long_side: int = 1024,
+                   t0: Optional[float] = None, t1: Optional[float] = None) -> int:
+    """Pick the sharpest frame in each of n equal time windows (optionally only between t0 and t1 seconds)."""
     import cv2
     cap = cv2.VideoCapture(path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
     if total <= 0:
         raise ValueError("Could not read the video. Try an .mp4 file.")
-    n = max(4, min(n, total))
-    bounds = np.linspace(0, total, n + 1).astype(int)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    f0 = max(0, int((t0 or 0) * fps))
+    f1 = min(total, int(t1 * fps)) if t1 else total
+    if f1 - f0 < 4:
+        raise ValueError("That time range is too short. Pick at least a few seconds of video.")
+    n = max(4, min(n, f1 - f0))
+    bounds = np.linspace(f0, f1, n + 1).astype(int)
     saved = 0
     for w in range(n):
         best, best_s = None, -1.0
@@ -263,10 +270,54 @@ def _load_sam2():
 
 
 # ── the scan job ────────────────────────────────────────────────────────────────
-def _run_scan(job_id: str, n_frames: int, stride: int, max_splats: int):
+def _download_url(job_id: str, url: str, out_dir: str) -> str:
+    """Fetch a video from YouTube or any site yt-dlp supports. Video stream only (no audio, no ffmpeg merge)."""
+    try:
+        import yt_dlp
+    except ImportError:
+        raise RuntimeError("yt-dlp is not installed. Run: venv\\Scripts\\pip install yt-dlp")
+
+    def hook(d):
+        if d.get("status") == "downloading":
+            tot = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+            pct = (d.get("downloaded_bytes", 0) / tot) if tot else 0
+            _set(job_id, stage="download", progress=round(0.01 + 0.09 * pct, 3),
+                 msg=f"Downloading the video… {pct * 100:.0f}%" if tot else "Downloading the video…")
+
+    def too_long(info, *, incomplete):
+        dur = info.get("duration")
+        if dur and dur > 3 * 60 * 60:
+            return "That video is over 3 hours long. Use a shorter one."
+        return None
+
+    opts = {
+        # a single video-only stream is fine for 3D and needs no ffmpeg
+        "format": "bestvideo[height<=1080][ext=mp4]/bestvideo[height<=1080]/best[height<=1080][ext=mp4]/best[height<=1080]/best",
+        "outtmpl": os.path.join(out_dir, "in_url.%(ext)s"),
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "match_filter": too_long,
+        "progress_hooks": [hook],
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+    files = [f for f in os.listdir(out_dir) if f.startswith("in_url.") and not f.endswith(".part")]
+    if not files:
+        raise RuntimeError("The download produced no video. Check the link is public and plays in a browser.")
+    title = (info or {}).get("title") or url
+    _set(job_id, source=title)
+    return files[0]
+
+
+def _run_scan(job_id: str, n_frames: int, stride: int, max_splats: int,
+              url: Optional[str] = None, t0: Optional[float] = None, t1: Optional[float] = None):
     jd = _job_dir(job_id)
     src_dir, frames_dir = os.path.join(jd, "src"), os.path.join(jd, "frames")
     try:
+        if url:
+            _set(job_id, stage="download", progress=0.01, msg="Connecting to the video site…")
+            _download_url(job_id, url, src_dir)
         with _gpu_lock:
             import torch
             from mapanything.utils.image import load_images
@@ -276,7 +327,7 @@ def _run_scan(job_id: str, n_frames: int, stride: int, max_splats: int):
             videos = [f for f in os.listdir(src_dir) if f.lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"))]
             if videos:
                 _set(job_id, stage="frames", progress=0.05, msg="Picking the sharpest frames from the video…")
-                got = _extract_video(os.path.join(src_dir, videos[0]), src_dir, n_frames)
+                got = _extract_video(os.path.join(src_dir, videos[0]), src_dir, n_frames, t0=t0, t1=t1)
                 srcs = sorted(f for f in os.listdir(src_dir) if f.startswith("src_"))
                 if got < 4:
                     raise ValueError("The video gave fewer than 4 usable frames.")
@@ -329,7 +380,7 @@ def _run_scan(job_id: str, n_frames: int, stride: int, max_splats: int):
 
 @router.post("/start")
 async def start(files: List[UploadFile] = File(...), frames: int = Form(40), detail: int = Form(2),
-                max_splats: int = Form(1_500_000)):
+                max_splats: int = Form(1_500_000), start: Optional[float] = Form(None), end: Optional[float] = Form(None)):
     d = _deps()
     if not (d["mapanything"] and d["sam2"]):
         raise HTTPException(400, "Scan models are not installed. Run setup_scan3d.bat, then restart NoCode CV.")
@@ -344,8 +395,39 @@ async def start(files: List[UploadFile] = File(...), frames: int = Form(40), det
             shutil.copyfileobj(f.file, out)
     _set(job_id, status="running", stage="queued", progress=0.0, msg="Queued…", error=None)
     stride = 1 if detail >= 3 else 2 if detail == 2 else 3
-    threading.Thread(target=_run_scan, args=(job_id, max(4, min(int(frames), 96)), stride,
-                                             max(200_000, min(int(max_splats), 4_000_000))), daemon=True).start()
+    threading.Thread(target=_run_scan, daemon=True, args=(
+        job_id, max(4, min(int(frames), 96)), stride, max(200_000, min(int(max_splats), 4_000_000)),
+        None, start, end)).start()
+    return {"job_id": job_id}
+
+
+class UrlReq(BaseModel):
+    url: str
+    frames: int = 40
+    detail: int = 2
+    start: Optional[float] = None     # seconds into the video
+    end: Optional[float] = None
+    max_splats: int = 1_500_000
+
+
+@router.post("/start-url")
+def start_url(req: UrlReq):
+    d = _deps()
+    if not (d["mapanything"] and d["sam2"]):
+        raise HTTPException(400, "Scan models are not installed. Run setup_scan3d.bat, then restart NoCode CV.")
+    url = req.url.strip()
+    if not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(400, "Paste a full link that starts with https://")
+    if req.start is not None and req.end is not None and req.end - req.start < 2:
+        raise HTTPException(400, "The end time must be at least 2 seconds after the start.")
+    job_id = uuid.uuid4().hex[:12]
+    src_dir = os.path.join(_job_dir(job_id), "src")
+    os.makedirs(src_dir, exist_ok=True)
+    _set(job_id, status="running", stage="download", progress=0.0, msg="Queued…", error=None, source=url)
+    stride = 1 if req.detail >= 3 else 2 if req.detail == 2 else 3
+    threading.Thread(target=_run_scan, daemon=True, args=(
+        job_id, max(4, min(int(req.frames), 96)), stride, max(200_000, min(int(req.max_splats), 4_000_000)),
+        url, req.start, req.end)).start()
     return {"job_id": job_id}
 
 
