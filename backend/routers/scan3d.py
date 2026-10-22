@@ -271,44 +271,113 @@ def _load_sam2():
 
 
 # ── the scan job ────────────────────────────────────────────────────────────────
+_VIDEO_FMT = "bestvideo[height<=1080][ext=mp4]/bestvideo[height<=1080]/best[height<=1080][ext=mp4]/best[height<=1080]/best"
+# YouTube blocks some player clients from time to time (HTTP 403). Try the
+# yt-dlp default first, then clients that often still work.
+_YT_CLIENTS = [None, "tv_samsung", "visionos", "web_embedded", "mweb", "android"]
+_ytdlp_updated = False
+
+
+def _js_runtime_args() -> list:
+    """yt-dlp needs a JavaScript runtime to pass YouTube's checks. Deno comes from
+    pip (the 'deno' package puts deno.exe next to python.exe); Node also works."""
+    import sys
+    args = []
+    exe = "deno.exe" if os.name == "nt" else "deno"
+    deno = os.path.join(os.path.dirname(sys.executable), exe)
+    if not os.path.isfile(deno):
+        deno = shutil.which("deno")
+    if deno:
+        args += ["--js-runtimes", f"deno:{deno}"]
+    node = shutil.which("node")
+    if node:
+        args += ["--js-runtimes", f"node:{node}"]
+    return args
+
+
+def _pip_update_ytdlp(job_id: str) -> bool:
+    import subprocess, sys
+    _set(job_id, stage="download", msg="YouTube blocked the download. Updating the downloader and trying again…")
+    try:
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "-U", "--quiet", "yt-dlp[default]", "deno"],
+                           capture_output=True, text=True, timeout=300)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _ytdlp_once(job_id: str, url: str, out_dir: str, client: Optional[str]) -> tuple:
+    """Run yt-dlp in its own process (so an update takes effect without restarting the app).
+    Returns (ok, title, error_text)."""
+    import subprocess, sys
+    for f in os.listdir(out_dir):
+        if f.startswith("in_url."):
+            try: os.remove(os.path.join(out_dir, f))
+            except OSError: pass
+    cmd = [sys.executable, "-m", "yt_dlp", url,
+           "-f", _VIDEO_FMT, "-o", os.path.join(out_dir, "in_url.%(ext)s"),
+           "--no-playlist", "--no-part", "--newline", "--quiet", "--progress", "--no-warnings",
+           "--match-filters", "duration <=? 10800",
+           "--progress-template", "download:PCT %(progress._percent_str)s",
+           "--print", "after_move:TITLE %(title)s",
+           "--remote-components", "ejs:github", *_js_runtime_args()]
+    if client:
+        cmd += ["--extractor-args", f"youtube:player_client={client}"]
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
+    flags = 0x08000000 if os.name == "nt" else 0   # CREATE_NO_WINDOW
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                         encoding="utf-8", errors="replace", env=env, creationflags=flags)
+    title, errs = None, []
+    t = threading.Thread(target=lambda: errs.extend(p.stderr.readlines()), daemon=True)
+    t.start()
+    for line in p.stdout:
+        line = line.strip()
+        if line.startswith("PCT"):
+            try:
+                pct = float(line[3:].strip().rstrip("%")) / 100
+                _set(job_id, stage="download", progress=round(0.01 + 0.09 * pct, 3),
+                     msg=f"Downloading the video… {pct * 100:.0f}%" + (f"  (client: {client})" if client else ""))
+            except ValueError:
+                pass
+        elif line.startswith("TITLE "):
+            title = line[6:]
+    p.wait(); t.join(timeout=5)
+    err = " ".join(l.strip() for l in errs if "ERROR" in l) or " ".join(l.strip() for l in errs[-3:])
+    ok = p.returncode == 0 and any(f.startswith("in_url.") for f in os.listdir(out_dir))
+    return ok, title, err
+
+
 def _download_url(job_id: str, url: str, out_dir: str) -> str:
     """Fetch a video from YouTube or any site yt-dlp supports. Video stream only (no audio, no ffmpeg merge)."""
-    try:
-        import yt_dlp
-    except ImportError:
-        raise RuntimeError("yt-dlp is not installed. Run: venv\\Scripts\\pip install yt-dlp")
-
-    def hook(d):
-        if d.get("status") == "downloading":
-            tot = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
-            pct = (d.get("downloaded_bytes", 0) / tot) if tot else 0
-            _set(job_id, stage="download", progress=round(0.01 + 0.09 * pct, 3),
-                 msg=f"Downloading the video… {pct * 100:.0f}%" if tot else "Downloading the video…")
-
-    def too_long(info, *, incomplete):
-        dur = info.get("duration")
-        if dur and dur > 3 * 60 * 60:
-            return "That video is over 3 hours long. Use a shorter one."
-        return None
-
-    opts = {
-        # a single video-only stream is fine for 3D and needs no ffmpeg
-        "format": "bestvideo[height<=1080][ext=mp4]/bestvideo[height<=1080]/best[height<=1080][ext=mp4]/best[height<=1080]/best",
-        "outtmpl": os.path.join(out_dir, "in_url.%(ext)s"),
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-        "match_filter": too_long,
-        "progress_hooks": [hook],
-    }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-    files = [f for f in os.listdir(out_dir) if f.startswith("in_url.") and not f.endswith(".part")]
-    if not files:
-        raise RuntimeError("The download produced no video. Check the link is public and plays in a browser.")
-    title = (info or {}).get("title") or url
-    _set(job_id, source=title)
-    return files[0]
+    global _ytdlp_updated
+    import importlib.util
+    if importlib.util.find_spec("yt_dlp") is None:
+        raise RuntimeError("yt-dlp is not installed. Run setup_scan3d.bat again.")
+    is_yt = any(h in url for h in ("youtube.com", "youtu.be"))
+    clients = _YT_CLIENTS if is_yt else [None]
+    err = ""
+    for attempt in range(2):
+        for c in clients:
+            _set(job_id, stage="download", msg="Downloading the video…" + (f"  (trying client: {c})" if c else ""))
+            ok, title, err = _ytdlp_once(job_id, url, out_dir, c)
+            if ok:
+                files = [f for f in os.listdir(out_dir) if f.startswith("in_url.")]
+                _set(job_id, source=title or url)
+                return files[0]
+            blocked = "403" in err or "Forbidden" in err or "Sign in" in err or "po token" in err.lower()
+            if not blocked:
+                break   # a real error (private video, bad link…): trying other clients won't help
+        if attempt == 0 and blocked and not _ytdlp_updated:
+            _ytdlp_updated = True
+            if _pip_update_ytdlp(job_id):
+                continue
+        break
+    if not err:
+        raise RuntimeError("The download produced no video. Check the link is public, plays in a browser, and is under 3 hours.")
+    if "403" in err or "Forbidden" in err:
+        raise RuntimeError("YouTube blocked the download (HTTP 403) with every method. Try another video, "
+                           "or download it yourself and use Upload. Details: " + err[-300:])
+    raise RuntimeError(err[-400:])
 
 
 def _run_scan(job_id: str, n_frames: int, stride: int, max_splats: int,

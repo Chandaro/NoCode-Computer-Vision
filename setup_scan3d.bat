@@ -28,6 +28,8 @@ if not exist "third_party" mkdir third_party
 echo  [1/4]  Installing dependencies...
 venv\Scripts\pip.exe install hydra-core natsort orjson python-box plyfile "uniception==0.1.7" ^
     safetensors huggingface_hub iopath trimesh --quiet
+echo         Updating the video downloader (yt-dlp + Deno for YouTube)...
+venv\Scripts\pip.exe install -U "yt-dlp[default]" deno --quiet
 if !errorlevel! neq 0 ( echo  ERROR: dependency install failed. & pause & exit /b 1 )
 echo         Done.
 
