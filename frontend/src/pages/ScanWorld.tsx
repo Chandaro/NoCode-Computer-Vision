@@ -18,7 +18,7 @@ const STAGES = [['download', 'Download'], ['frames', 'Frames'], ['model', 'Model
 const keyFor = (pid?: string) => `kh-scan-job-${pid}`
 // "1:20", "80" or "1:02:03" -> seconds; empty -> undefined
 const toSec = (t: string): number | undefined => {
-  const v = t.trim(); if (!v) return undefined
+  const v = t.trim().toLowerCase(); if (!v || v === 'start' || v === 'end') return undefined
   const parts = v.split(':').map(Number)
   if (parts.some(n => !Number.isFinite(n) || n < 0)) return NaN
   return parts.reduce((a, n) => a * 60 + n, 0)
@@ -34,6 +34,7 @@ export default function ScanWorld() {
   const [url, setUrl] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [trim, setTrim] = useState(false)
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<Hit[] | null>(null)
   const [searching, setSearching] = useState(false)
@@ -69,7 +70,7 @@ export default function ScanWorld() {
   }, [jobId])
 
   const isVideo = source === 'link' || files.some(f => f.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v)$/i.test(f.name))
-  const t0 = toSec(from), t1 = toSec(to)
+  const t0 = trim ? toSec(from) : undefined, t1 = trim ? toSec(to) : undefined
   const rangeBad = Number.isNaN(t0) || Number.isNaN(t1) || (t0 !== undefined && t1 !== undefined && t1 - t0 < 2)
   const canStart = !!ms?.ready && job?.status !== 'running' && !rangeBad && (source === 'link' ? /^https?:\/\/\S+/i.test(url.trim()) : files.length > 0)
 
@@ -97,6 +98,7 @@ export default function ScanWorld() {
 
   const runSearch = async () => {
     if (q.trim().length < 2 || searching) return
+    if (/^https?:\/\/\S+$/i.test(q.trim())) { setUrl(q.trim()); setQ(''); setHits(null); return }
     setSearching(true); setErr('')
     try {
       const r = await api.get('/scan3d/search', { params: { q: q.trim() } })
@@ -106,7 +108,7 @@ export default function ScanWorld() {
       setHits(null)
     } finally { setSearching(false) }
   }
-  const pick = (h: Hit) => { setUrl(h.url); setPicked(h.id); setFrom(''); setTo('') }
+  const pick = (h: Hit) => { setUrl(h.url); setPicked(h.id); setFrom(''); setTo(''); setTrim(false) }
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   const findObject = async () => {
@@ -204,7 +206,17 @@ export default function ScanWorld() {
           )}
           {isVideo && (
             <div>
-              <p style={{ fontSize: 12.5, color: 'var(--text2)', fontWeight: 500, marginBottom: 6 }}>Part of the video to scan <span style={{ color: 'var(--text3)', fontWeight: 400 }}>optional</span></p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: trim ? 8 : 0 }}>
+                <span style={{ fontSize: 12.5, color: 'var(--text2)', fontWeight: 500 }}>Part of the video</span>
+                <div role="radiogroup" aria-label="Part of the video" style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 999, padding: 2, gap: 2 }}>
+                  {([[false, 'Whole video'], [true, 'Trim']] as const).map(([v, label]) => (
+                    <button key={label} role="radio" aria-checked={trim === v} onClick={() => setTrim(v)}
+                      style={{ padding: '4px 10px', border: 'none', borderRadius: 999, cursor: 'pointer', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit',
+                        background: trim === v ? 'var(--accent)' : 'transparent', color: trim === v ? 'var(--on-accent)' : 'var(--text2)' }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              {trim && (<>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {([['From', from, setFrom, '0:00'], ['To', to, setTo, 'end']] as const).map(([label, val, set, ph]) => (
                   <label key={label} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text3)' }}>
@@ -215,8 +227,9 @@ export default function ScanWorld() {
                 ))}
               </div>
               <p style={{ fontSize: 11.5, color: rangeBad ? 'var(--danger)' : 'var(--text3)', marginTop: 5 }}>
-                {rangeBad ? 'Use times like 1:20, with the end at least 2 s after the start.' : 'Pick 20–60 s where the camera moves around one place, e.g. 1:20 to 1:50.'}
+                {rangeBad ? 'Use times like 1:20, with the end at least 2 s after the start.' : 'Leave To empty to go to the end. Best: 20–60 s where the camera moves around one place.'}
               </p>
+              </>)}
             </div>
           )}
           <Slider label="Frames to use" value={frames} onChange={v => setFrames(Math.round(v))} min={12} max={80} step={4} format={v => `${Math.round(v)}`} />
