@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Box, Crosshair, Download, Film, Link2, Loader, MousePointerClick, RotateCcw, Upload } from 'lucide-react'
+import { Box, Crosshair, Download, Film, Link2, Loader, MousePointerClick, RotateCcw, Search, Upload } from 'lucide-react'
 import api from '../api'
 import { PageHeader, Card, Btn, Slider, InfoBanner, ProgressBar, Badge } from '../components/ui'
 import SplatViewer, { type ViewMode } from '../components/SplatViewer'
@@ -11,6 +11,7 @@ interface Job {
   status: 'running' | 'done' | 'error'; stage: string; progress: number; msg: string; error?: string | null
   n_views?: number; n_splats?: number; width?: number; height?: number; center?: number[]; radius?: number; objects?: Obj[]
 }
+interface Hit { id: string; title: string; channel: string; duration: number; thumbnail: string; url: string }
 interface Click { x: number; y: number; label: 0 | 1 }
 
 const STAGES = [['download', 'Download'], ['frames', 'Frames'], ['model', 'Model'], ['geometry', '3D geometry'], ['splats', 'Splats']] as const
@@ -33,6 +34,10 @@ export default function ScanWorld() {
   const [url, setUrl] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [q, setQ] = useState('')
+  const [hits, setHits] = useState<Hit[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [picked, setPicked] = useState<string | null>(null)
   const [frames, setFrames] = useState(40)
   const [detail, setDetail] = useState(2)
   const [jobId, setJobId] = useState<string | null>(() => { try { return localStorage.getItem(keyFor(projectId)) } catch { return null } })
@@ -89,6 +94,20 @@ export default function ScanWorld() {
       setErr((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Couldn't start the scan.")
     }
   }
+
+  const runSearch = async () => {
+    if (q.trim().length < 2 || searching) return
+    setSearching(true); setErr('')
+    try {
+      const r = await api.get('/scan3d/search', { params: { q: q.trim() } })
+      setHits(r.data.results)
+    } catch (e: unknown) {
+      setErr((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Search failed.')
+      setHits(null)
+    } finally { setSearching(false) }
+  }
+  const pick = (h: Hit) => { setUrl(h.url); setPicked(h.id); setFrom(''); setTo('') }
+  const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   const findObject = async () => {
     if (!jobId || !clicks.length) return
@@ -151,10 +170,36 @@ export default function ScanWorld() {
             </label>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search short clips, e.g. Bayon drone" aria-label="Search YouTube"
+                  onKeyDown={e => { if (e.key === 'Enter') runSearch() }}
+                  style={{ flex: 1, minWidth: 0, padding: '9px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' }} />
+                <Btn variant="secondary" onClick={runSearch} disabled={q.trim().length < 2 || searching}>
+                  {searching ? <Loader size={13} className="animate-spin" /> : <Search size={13} />}
+                </Btn>
+              </div>
+              {hits && (hits.length === 0
+                ? <p style={{ fontSize: 12, color: 'var(--text3)' }}>No clips under 3 minutes found. Try words like drone, walk around, 360.</p>
+                : <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', paddingRight: 2 }}>
+                    {hits.map(h => (
+                      <button key={h.id} onClick={() => pick(h)} title={h.title}
+                        style={{ display: 'flex', gap: 8, alignItems: 'center', padding: 4, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                          borderRadius: 8, border: `1px solid ${picked === h.id ? 'var(--accent)' : 'transparent'}`, background: picked === h.id ? 'var(--accent-t)' : 'transparent' }}>
+                        <span style={{ position: 'relative', flexShrink: 0 }}>
+                          <img src={h.thumbnail} alt="" loading="lazy" style={{ width: 96, height: 54, objectFit: 'cover', borderRadius: 5, display: 'block' }} />
+                          <span style={{ position: 'absolute', right: 3, bottom: 3, fontSize: 10, padding: '0 4px', borderRadius: 3, background: 'rgba(0,0,0,.75)', color: '#fff', fontFamily: 'var(--font-mono)' }}>{mmss(h.duration)}</span>
+                        </span>
+                        <span style={{ minWidth: 0 }}>
+                          <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 12.5, color: 'var(--text)', lineHeight: 1.35 }}>{h.title}</span>
+                          <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.channel}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>)}
               <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" aria-label="Video link"
                 onKeyDown={e => { if (e.key === 'Enter') start() }}
                 style={{ width: '100%', padding: '9px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' }} />
-              <p style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.5 }}>YouTube, Vimeo, TikTok and most video sites. Only use videos you own or that are licensed for reuse.</p>
+              <p style={{ fontSize: 11.5, color: 'var(--text3)', lineHeight: 1.5 }}>Search above, or paste a link from YouTube, Vimeo, TikTok and most video sites. Only use videos you own or that are licensed for reuse.</p>
             </div>
           )}
           {isVideo && (

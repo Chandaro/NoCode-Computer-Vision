@@ -18,6 +18,7 @@ Pipeline (no CUDA compiling, no per-scene training):
 Endpoints
   GET  /scan3d/model-status
   POST /scan3d/start                      (video or images) -> {job_id}
+  GET  /scan3d/search?q=...               short YouTube clips to scan (<= 3 min)
   POST /scan3d/start-url                  {url, frames, detail, start?, end?} -> {job_id}  (YouTube etc. via yt-dlp)
   GET  /scan3d/{job}/status
   GET  /scan3d/{job}/scene.ply
@@ -429,6 +430,41 @@ def start_url(req: UrlReq):
         job_id, max(4, min(int(req.frames), 96)), stride, max(200_000, min(int(req.max_splats), 4_000_000)),
         url, req.start, req.end)).start()
     return {"job_id": job_id}
+
+
+@router.get("/search")
+def search(q: str, max_seconds: int = 180, n: int = 12):
+    """Search YouTube for short clips (default up to 3 minutes) to scan."""
+    q = q.strip()
+    if len(q) < 2:
+        raise HTTPException(400, "Type at least 2 characters to search.")
+    try:
+        import yt_dlp
+    except ImportError:
+        raise HTTPException(500, "yt-dlp is not installed. Run: venv\\Scripts\\pip install yt-dlp")
+    want = max(1, min(int(n), 24))
+    opts = {"quiet": True, "no_warnings": True, "extract_flat": "in_playlist", "skip_download": True}
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            # ask for more than needed: long videos are filtered out below
+            res = ydl.extract_info(f"ytsearch{want * 4}:{q}", download=False) or {}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"YouTube search failed: {e}")
+    out = []
+    for e in res.get("entries") or []:
+        dur = e.get("duration")
+        if not e.get("id") or dur is None or dur > max_seconds or dur < 5:
+            continue
+        thumbs = e.get("thumbnails") or []
+        thumb = (thumbs[-1].get("url") if thumbs else None) or f"https://i.ytimg.com/vi/{e['id']}/hqdefault.jpg"
+        out.append({
+            "id": e["id"], "title": e.get("title") or "", "channel": e.get("channel") or e.get("uploader") or "",
+            "duration": int(dur), "thumbnail": thumb,
+            "url": e.get("url") if str(e.get("url", "")).startswith("http") else f"https://www.youtube.com/watch?v={e['id']}",
+        })
+        if len(out) >= want:
+            break
+    return {"query": q, "results": out}
 
 
 @router.get("/{job_id}/status")
