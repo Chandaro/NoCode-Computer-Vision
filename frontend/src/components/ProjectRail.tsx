@@ -27,6 +27,7 @@ const GROUPS: { title: string; items: { to: string; label: string; match?: strin
     { to: 'road-safety', label: 'Road safety' },
     { to: 'guidance', label: 'Steering guide' },
     { to: 'depth', label: 'Depth & 3D' },
+    { to: 'scan', label: 'Scan the world' },
   ]},
 ]
 

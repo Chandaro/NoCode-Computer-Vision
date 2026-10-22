@@ -50,3 +50,8 @@ Thumbs.db
 # Frontend build artifacts (keep dist/ — ships pre-built)
 frontend/node_modules/
 frontend/.vite/
+
+# Scan the world jobs (frames, splats, objects)
+backend/scan3d_jobs/
+# MapAnything / SAM 2 source checkouts (installed by setup_scan3d.bat)
+third_party/

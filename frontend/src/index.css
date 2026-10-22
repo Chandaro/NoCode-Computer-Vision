@@ -550,3 +550,5 @@ textarea:focus {
 @keyframes kpSpin { to { transform: rotate(360deg); } }
 .kp-dust { position: absolute; will-change: opacity; animation: kpTwinkle 6s ease-in-out infinite alternate; opacity: 0; }
 
+
+@media (max-width: 900px) { .scan-grid { grid-template-columns: minmax(0, 1fr) !important; } }
