@@ -4,6 +4,7 @@ import api, { type Project } from '../api'
 import { Lotus } from './Sigil'
 import { LotusPip } from './Kbach'
 import { WORLDS, setWorld, useCurrentWorld } from './KhmerWorlds'
+import PixelScene from './PixelScene'
 
 // Left-hand tool rail for every page inside a project. Groups follow the
 // dataset each tool needs, so it is clear which annotations feed which model.
@@ -48,7 +49,7 @@ export default function ProjectRail({ projectId, section }: { projectId: string;
   return (
     <aside className="kh-rail" aria-label="Project tools">
       <div className="kh-rail-sky" style={{ height: 116 }}>
-        {world && <world.Scene className="kw-fill kw-still" />}
+        {world && <PixelScene world={world} />}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 9,
           padding: '22px 10px 8px', background: 'linear-gradient(0deg, rgba(0,0,0,0.78), rgba(0,0,0,0))' }}>
           <Lotus size={28} seed={projectId} />

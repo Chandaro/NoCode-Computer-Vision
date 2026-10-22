@@ -6,7 +6,7 @@ import { useId, type ReactNode } from 'react'
  * art sits on the right two thirds, so banner titles stay readable.
  */
 
-type P = { className?: string }
+type P = { className?: string; layer?: 'base' | 'sprite' }
 const useSid = () => useId().replace(/:/g, '')
 
 /* ── helpers ─────────────────────────────────────────────────────────── */
@@ -371,8 +371,22 @@ export function PalaceScene({ className }: P) {
   )
 }
 
+function boatOnly() {
+  return (
+    <g transform="translate(0 166)">
+      <path d="M0 0 H 160 C 172 0, 178 -12, 178 -26 C 184 -18, 184 -6, 176 2 C 170 8, 150 9, 130 9 H 10 C 2 9, -6 4, -10 -10 C -4 -4, -2 -1, 0 0 Z" fill="#b8322a" stroke="#f2c94c" strokeWidth="1.4" />
+      <circle cx="177" cy="-23" r="1.5" fill="#f2c94c" />
+      <path d="M4 3 H 168" stroke="#f2c94c" strokeWidth="1" />
+      <g stroke="#f6e9d6" strokeWidth="1.6" strokeLinecap="round">
+        {Array.from({ length: 14 }, (_, i) => <path key={i} d={`M${14 + i * 10.5} -2 l -6 12`} />)}
+      </g>
+      <g fill="#1b1424">{Array.from({ length: 14 }, (_, i) => <circle key={i} cx={16 + i * 10.5} cy="-5" r="2.4" />)}</g>
+    </g>
+  )
+}
+
 /* ── Tonle Sap: tall stilt houses, long boats, the dragon-boat race ───── */
-export function TonleSapScene({ className }: P) {
+export function TonleSapScene({ className, layer }: P) {
   const id = useSid()
   const house = (x: number, base: number, lift: number, w: number, wall: string, trim: string) => {
     const y = base - lift
@@ -388,6 +402,11 @@ export function TonleSapScene({ className }: P) {
       </g>
     )
   }
+  if (layer === 'sprite') return (
+    <svg className={className} viewBox="0 0 600 200" preserveAspectRatio="xMidYMid slice" aria-hidden>
+      {boatOnly()}
+    </svg>
+  )
   return (
     <svg className={className} viewBox="0 0 600 200" preserveAspectRatio="xMidYMid slice" aria-hidden>
       <defs>
@@ -405,8 +424,9 @@ export function TonleSapScene({ className }: P) {
       <g fill="none" stroke="#1b1424" strokeWidth="1.6" className="kw-birds">
         <path d="M330 50 q 5 -5 10 0 q 5 -5 10 0" /><path d="M362 38 q 4 -4 8 0 q 4 -4 8 0" /><path d="M392 58 q 4 -4 8 0 q 4 -4 8 0" />
       </g>
+      {layer !== 'base' && (<>
       {/* Bon Om Touk racing boat: long hull, high curling prow, rows of paddlers */}
-      <g className="kw-boat">
+      <g className="kw-boat" transform="translate(0 166)">
         <path d="M0 0 H 160 C 172 0, 178 -12, 178 -26 C 184 -18, 184 -6, 176 2 C 170 8, 150 9, 130 9 H 10 C 2 9, -6 4, -10 -10 C -4 -4, -2 -1, 0 0 Z" fill="#b8322a" stroke="#f2c94c" strokeWidth="1.4" />
         <circle cx="177" cy="-23" r="1.5" fill="#f2c94c" />
         <path d="M4 3 H 168" stroke="#f2c94c" strokeWidth="1" />
@@ -415,6 +435,7 @@ export function TonleSapScene({ className }: P) {
         </g>
         <g fill="#1b1424">{Array.from({ length: 14 }, (_, i) => <circle key={i} cx={16 + i * 10.5} cy="-5" r="2.4" />)}</g>
       </g>
+      </>)}
     </svg>
   )
 }

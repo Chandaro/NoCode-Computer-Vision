@@ -6,6 +6,7 @@ import { Btn, TextInput, Field } from '../components/ui'
 import AngkorField from '../components/AngkorField'
 import { Lotus } from '../components/Sigil'
 import { getWorld } from '../components/KhmerWorlds'
+import PixelScene from '../components/PixelScene'
 
 export default function Projects() {
   const [projects, setProjects] = useState<Project[] | null>(null)
@@ -121,7 +122,7 @@ export default function Projects() {
                 onKeyDown={e => { if (e.key === 'Enter') navigate(`/projects/${p.id}/images`) }}
                 style={{ ['--world-accent' as string]: w.vars['--accent'], ['--world-rgb' as string]: w.vars['--world-rgb'] }}>
                 <div className="kw-card-art">
-                  <w.Scene className="kw-fill" />
+                  <PixelScene world={w} />
                   <span className="kw-card-tag"><span lang="km" className="font-khmer">{w.km}</span> {w.en}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>

@@ -1,6 +1,7 @@
 import { type ReactNode, type CSSProperties, useEffect, useRef } from 'react'
 import { KbachFrame, NagaRail, Rosette } from './Kbach'
 import { useCurrentWorld } from './KhmerWorlds'
+import PixelScene from './PixelScene'
 
 // ── Card ─────────────────────────────────────────────────────────────────────
 export function Card({ children, style, className = '' }: {
@@ -251,7 +252,7 @@ export function PageHeader({ back, title, subtitle, actions, khmer }: {
     <header ref={ref} className={`kh-banner${world ? ` kw-banner kw-${world.id}` : ''}`}>
       {world ? <>
         <div className={`kw-tex kw-tex-${world.id}${world.id === 'angkor' ? ' kh-hol' : ''}`} aria-hidden />
-        <div className="kw-banner-scene"><world.Scene className="kw-fill" /><span className="kw-scene-fade" /></div>
+        <div className="kw-banner-scene"><PixelScene world={world} live /><span className="kw-scene-fade" /></div>
         <span className="kw-world-tag" aria-hidden>
           <span lang="km" className="font-khmer">{world.km}</span> {world.en}
         </span>
