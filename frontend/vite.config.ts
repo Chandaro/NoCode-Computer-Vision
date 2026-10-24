@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:8000', rewrite: (p) => p.replace(/^\/api/, '') },
+      // No rewrite: FastAPI mounts every router under /api (see backend/main.py)
+      '/api': { target: 'http://localhost:8000' },
     },
   },
 })

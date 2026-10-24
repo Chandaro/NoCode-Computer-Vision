@@ -48,8 +48,8 @@ def startup():
 
 # ─── API routes under /api prefix ─────────────────────────────────────────────
 # The frontend uses axios baseURL='/api', so every call is /api/projects/...
-# In dev mode Vite's proxy strips /api before forwarding to FastAPI.
-# In production (single-server mode) FastAPI must handle /api/... directly.
+# Both dev (Vite proxy on :5173) and production (single server on :8000)
+# forward the /api prefix unchanged, so FastAPI handles /api/... directly.
 api = APIRouter(prefix="/api")
 api.include_router(projects.router)
 api.include_router(images.router)
