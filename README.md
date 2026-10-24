@@ -9,7 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
-[![YOLO](https://img.shields.io/badge/Ultralytics-YOLO11-FF6F00?style=flat-square)](https://ultralytics.com)
+[![YOLO](https://img.shields.io/badge/Ultralytics-YOLO26-FF6F00?style=flat-square)](https://ultralytics.com)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-8b5cf6?style=flat-square)]()
 
@@ -85,7 +85,7 @@ Bounding box, polygon, and point tools on a pannable, zoomable canvas. Per-class
 
 ![Detection Training](docs/screenshots/train.png)
 
-Pick from YOLO11, v10, v9, or v8 in any size variant. Configure epochs, batch, image size, optimizer, learning rate, and 14 augmentation controls. Training output streams live in a color-coded log, and you can stop or resume any run at any time.
+Pick from YOLO26, YOLO11, v10, v9, or v8 in any size variant. Configure epochs, batch, image size, optimizer, learning rate, and 14 augmentation controls. Training output streams live in a color-coded log, and you can stop or resume any run at any time.
 
 ---
 
@@ -110,6 +110,12 @@ Pixel-level masks using YOLO11-seg. Works on images, video files, URLs, and live
 ![Pose Estimation](docs/screenshots/pose.png)
 
 17-keypoint skeleton detection on images, video, or webcam using YOLO11-pose. Adjustable confidence threshold.
+
+---
+
+### Find Anything
+
+Type the things you want to find, like "person, helmet, safety vest", and YOLOE-26 detects and outlines them with no training. Every prompt shows a count, including zero, so you can see what the model can and can't recognise. Works on images, image URLs, video files, video links, and live webcam. The first search downloads the model and its text encoder (about 280 MB) once; after that it runs offline.
 
 ---
 
@@ -186,7 +192,7 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 |---|---|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS |
 | Backend | Python, FastAPI, SQLModel, SQLite |
-| CV / ML | Ultralytics YOLO, PyTorch, torchvision, OpenCV |
+| CV / ML | Ultralytics YOLO26 / YOLOE-26, PyTorch, torchvision, OpenCV |
 | Video | yt-dlp, OpenCV VideoWriter |
 | Charts | Recharts |
 | Icons | Lucide React |
@@ -208,6 +214,7 @@ NoCode-Computer-Vision/
 │       ├── infer.py         — image / video / URL inference
 │       ├── classify.py      — classification training
 │       ├── segment.py       — segmentation inference
+│       ├── find_anything.py — open-vocabulary search (YOLOE-26)
 │       ├── pose.py          — pose estimation
 │       └── webcam.py        — webcam streaming
 ├── frontend/
@@ -233,7 +240,7 @@ NoCode-Computer-Vision/
 
 **Annotation** — bounding box, polygon, and point tools with auto-annotate. Exports to YOLO and COCO.
 
-**Object Detection** — fine-tune YOLO11 / v10 / v9 / v8 with live training logs, augmentation controls, and stop/resume.
+**Object Detection** — fine-tune YOLO26 / YOLO11 / v10 / v9 / v8 with live training logs, augmentation controls, and stop/resume.
 
 **Image Classification** — transfer learning on ResNet, MobileNet, EfficientNet. Top-5 accuracy, confusion matrix, per-class breakdown.
 
@@ -246,6 +253,8 @@ NoCode-Computer-Vision/
 **Instance Segmentation** — pixel masks on images, video, and webcam using YOLO11-seg.
 
 **Pose Estimation** — 17-keypoint skeleton on images, video, and webcam using YOLO11-pose.
+
+**Find Anything** — type what to look for ("helmet, red car") and YOLOE-26 finds and outlines it in images, video, or webcam. No labelling or training.
 
 **Live Webcam** — real-time detection or segmentation overlay with FPS counter and per-class stats.
 

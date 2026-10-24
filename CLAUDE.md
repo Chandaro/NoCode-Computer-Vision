@@ -70,6 +70,10 @@ Quick backend check without the server: `cd backend && ../venv/Scripts/python.ex
 - Git on Windows warns "LF will be replaced by CRLF". That's harmless.
 - 3D Reconstruction (DUSt3R) lives as a mode inside `pages/Depth.tsx`, not its own page.
 - The Vite dev proxy must forward `/api` unchanged. Don't add a rewrite.
+- Ultralytics downloads weights into the **current working directory** (the server runs
+  from `backend/`), and may pip-install missing extras at runtime (YOLOE pulled in `clip`).
+  Put such deps in `requirements.txt` as zip URLs, not `git+` (users may not have Git).
+- YOLOE `set_classes()` mutates the shared model. Hold `_find_lock` around set + predict.
 
 ## Conventions
 - Commits: Conventional Commits with scope, e.g. `feat(scan): ...`, `fix(scan): ...`, `style: ...`.

@@ -17,6 +17,7 @@ backend/runs/
 
 # YOLO/PyTorch model weights (downloaded automatically at runtime)
 backend/*.pt
+backend/*.ts
 backend/*.onnx
 backend/*.engine
 

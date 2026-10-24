@@ -22,6 +22,7 @@ const RoadSafety    = lazy(() => import('./pages/RoadSafety'))
 const Guidance      = lazy(() => import('./pages/Guidance'))
 const Depth         = lazy(() => import('./pages/Depth'))
 const ScanWorld     = lazy(() => import('./pages/ScanWorld'))
+const FindAnything  = lazy(() => import('./pages/FindAnything'))
 
 // Pages that need the full width (canvas editors) skip the tool rail.
 const FULL_BLEED = new Set(['annotate', 'custom'])
@@ -119,6 +120,7 @@ export default function App() {
               <Route path="/projects/:id/guidance"          element={<Guidance />} />
               <Route path="/projects/:id/depth"             element={<Depth />} />
               <Route path="/projects/:id/scan"              element={<ScanWorld />} />
+              <Route path="/projects/:id/find"              element={<FindAnything />} />
               <Route path="*"                               element={<NotFound />} />
             </Routes>
           </Suspense>

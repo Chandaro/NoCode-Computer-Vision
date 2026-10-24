@@ -232,6 +232,7 @@ const KHMER_TITLES: Record<string, string> = {
   'Live Webcam Inference': 'សាកល្បងតាមកាមេរ៉ា',
   'Road Safety': 'សុវត្ថិភាពចរាចរណ៍',
   'Steering Guide': 'ការណែនាំចង្កូត',
+  'Find Anything': 'ស្វែងរកវត្ថុណាមួយ',
 }
 
 export function PageHeader({ back, title, subtitle, actions, khmer }: {

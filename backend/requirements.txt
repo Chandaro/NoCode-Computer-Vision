@@ -13,6 +13,13 @@ yt-dlp>=2024.1.0
 # torchvision is pulled in automatically by ultralytics (do NOT add it here — the
 # installer installs the correct CUDA build separately and pins it via constraints)
 
+# ─── Find Anything (YOLOE-26 text prompts) ───────────────────────────────────
+# YOLOE's text encoder needs Ultralytics' CLIP fork. Ultralytics would otherwise
+# pip-install it at runtime on the first prompt, which fails offline. Zip URL
+# (pinned commit) instead of git+ so users don't need Git installed.
+ftfy>=6.1.0
+clip @ https://github.com/ultralytics/CLIP/archive/7ffa84b3bfa40c42ecc1c77147a855e69cb2dd40.zip
+
 # ─── HuggingFace / Depth Estimation ──────────────────────────────────────────
 # Required for Monocular Depth Estimation (Depth Anything V2, MiDaS DPT)
 transformers>=4.41.0

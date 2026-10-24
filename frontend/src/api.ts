@@ -95,3 +95,15 @@ export interface EvalData {
   per_class: Record<string, { ap50: number; precision: number; recall: number }>
   classes: string[]
 }
+
+// ── Find Anything (YOLOE-26 open-vocabulary) ─────────────────────────────────
+export interface FindDetection {
+  x: number; y: number; w: number; h: number   // normalised 0–1, top-left origin
+  conf: number; class_id: number; class_name: string
+  mask: [number, number][]                     // normalised polygon, empty if none
+}
+
+export interface FindStatus {
+  models: string[]; default_model: string; downloaded: string[]
+  text_encoder_ready: boolean; loaded: string[]
+}

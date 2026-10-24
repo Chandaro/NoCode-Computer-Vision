@@ -27,6 +27,7 @@ from routers import segmentation as seg_router
 from routers import depth as depth_router
 from routers import reconstruct3d as recon_router
 from routers import scan3d as scan_router
+from routers import find_anything as find_router
 
 app = FastAPI(title="NoCode CV Trainer", max_upload_size=500 * 1024 * 1024)  # 500 MB per batch
 
@@ -72,6 +73,7 @@ api.include_router(seg_router.router)
 api.include_router(depth_router.router)
 api.include_router(recon_router.router)
 api.include_router(scan_router.router)
+api.include_router(find_router.router)
 app.include_router(api)
 
 

@@ -530,7 +530,14 @@ export default function Train() {
               </span>
             }>
               <Select value={modelBase} onChange={setModelBase}>
-                <optgroup label="YOLO11 (latest)">
+                <optgroup label="YOLO26 (newest · Jan 2026)">
+                  <option value="yolo26n.pt">YOLO26 Nano</option>
+                  <option value="yolo26s.pt">YOLO26 Small</option>
+                  <option value="yolo26m.pt">YOLO26 Medium</option>
+                  <option value="yolo26l.pt">YOLO26 Large</option>
+                  <option value="yolo26x.pt">YOLO26 XLarge</option>
+                </optgroup>
+                <optgroup label="YOLO11">
                   <option value="yolo11n.pt">YOLO11 Nano</option>
                   <option value="yolo11s.pt">YOLO11 Small</option>
                   <option value="yolo11m.pt">YOLO11 Medium</option>
@@ -560,6 +567,9 @@ export default function Train() {
                   <option value="yolov8x.pt">YOLOv8 XLarge</option>
                 </optgroup>
                 <optgroup label="— Segmentation —">
+                  <option value="yolo26n-seg.pt">YOLO26 Nano Seg</option>
+                  <option value="yolo26s-seg.pt">YOLO26 Small Seg</option>
+                  <option value="yolo26m-seg.pt">YOLO26 Medium Seg</option>
                   <option value="yolo11n-seg.pt">YOLO11 Nano Seg</option>
                   <option value="yolo11s-seg.pt">YOLO11 Small Seg</option>
                   <option value="yolo11m-seg.pt">YOLO11 Medium Seg</option>

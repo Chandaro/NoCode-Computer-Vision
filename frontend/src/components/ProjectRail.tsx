@@ -23,6 +23,7 @@ const GROUPS: { title: string; items: { to: string; label: string; match?: strin
     { to: 'custom', label: 'CNN builder' },
   ]},
   { title: 'Try a model', items: [
+    { to: 'find', label: 'Find anything' },
     { to: 'webcam', label: 'Webcam' },
     { to: 'road-safety', label: 'Road safety' },
     { to: 'guidance', label: 'Steering guide' },
