@@ -35,10 +35,12 @@ prefer one that runs locally on a consumer GPU *and* falls back to CPU.
 - `frontend/dist/` is **committed**; rebuild it (`npm run build`) after frontend changes.
 
 ## Adding a new feature / model (checklist)
-1. Backend: new `backend/routers/<feature>.py` with `router = APIRouter(tags=["<feature>"])`.
+Use the `add-cv-model` skill (`.claude/skills/add-cv-model/`) for the full workflow.
+1. Backend: new `backend/routers/<feature>.py` with `router = APIRouter(tags=["<feature>"])`
+   and no router prefix; each path starts with the feature name (`/depth/infer`).
    Lazy-import heavy libs inside functions and cache loaded models in a module-level dict
-   (see `routers/depth.py`). Long jobs run in a background thread with a job-status dict
-   the frontend polls.
+   (see `routers/depth.py`). Long jobs run in a background thread: `POST` returns a `job_id`,
+   the frontend polls `GET /<feature>/.../{job_id}/status`, then fetches `.../download`.
 2. Register it in `backend/main.py` (import + `api.include_router(...)`).
 3. Add new Python deps to `backend/requirements.txt` with a section comment; never add
    `torch`/`torchvision` there (the installer pins the CUDA build).
@@ -59,6 +61,15 @@ cd frontend && npm run dev        # http://localhost:5173
 cd frontend && npm run lint && npm run build
 ```
 There is no automated test suite: verify by running the app and exercising the feature.
+Quick backend check without the server: `cd backend && ../venv/Scripts/python.exe -c "from main import app"`.
+
+## Gotchas
+- Library constants: use the named constant (`cv2.COLORMAP_INFERNO`) or check the real value
+  with the venv's Python. Raw ints were wrong in `depth.py` once (inferno was COOL).
+- Always use `venv/Scripts/python.exe`, not the system Python. Torch/CUDA live only in the venv.
+- Git on Windows warns "LF will be replaced by CRLF". That's harmless.
+- 3D Reconstruction (DUSt3R) lives as a mode inside `pages/Depth.tsx`, not its own page.
+- The Vite dev proxy must forward `/api` unchanged. Don't add a rewrite.
 
 ## Conventions
 - Commits: Conventional Commits with scope, e.g. `feat(scan): ...`, `fix(scan): ...`, `style: ...`.
