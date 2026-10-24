@@ -26,10 +26,10 @@ METRIC_MAX_DEPTH = {
 }
 
 CV2_COLORMAPS = {
-    "inferno": 8,   # cv2.COLORMAP_INFERNO
-    "magma":   16,  # cv2.COLORMAP_MAGMA
+    "inferno": 14,  # cv2.COLORMAP_INFERNO
+    "magma":   13,  # cv2.COLORMAP_MAGMA
     "plasma":  15,  # cv2.COLORMAP_PLASMA
-    "viridis": 16,  # cv2.COLORMAP_VIRIDIS  (same int on most builds; fine)
+    "viridis": 16,  # cv2.COLORMAP_VIRIDIS
     "turbo":   20,  # cv2.COLORMAP_TURBO
     "jet":     2,   # cv2.COLORMAP_JET
     "hot":     11,  # cv2.COLORMAP_HOT
@@ -101,7 +101,7 @@ def _normalize_depth(depth_np, g_min=None, g_max=None):
 def _colorize(depth_uint8, colormap: str):
     """Apply OpenCV colormap to uint8 depth, return BGR ndarray."""
     import cv2
-    cv_cmap = CV2_COLORMAPS.get(colormap, 8)   # default = inferno
+    cv_cmap = CV2_COLORMAPS.get(colormap, 14)  # default = inferno
     return cv2.applyColorMap(depth_uint8, cv_cmap)
 
 
@@ -334,7 +334,7 @@ def _process_depth_video(job_id: str, video_path: str, model_id: str, colormap: 
         writer   = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*"mp4v"),
                                    fps, (width, height))
         span     = g_max - g_min if (g_max - g_min) > 1e-6 else 1.0
-        cv_cmap  = CV2_COLORMAPS.get(colormap, 8)
+        cv_cmap  = CV2_COLORMAPS.get(colormap, 14)
 
         for i, d in enumerate(all_depths):
             d_u8      = ((d - g_min) / span * 255).clip(0, 255).astype(np.uint8)
